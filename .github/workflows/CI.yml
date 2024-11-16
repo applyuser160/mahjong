@@ -22,6 +22,8 @@ jobs:
   unit-test:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/cache_cargo
       - name: test
         run: cargo test
 
