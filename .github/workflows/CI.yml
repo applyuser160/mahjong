@@ -19,6 +19,12 @@ permissions:
   contents: read
 
 jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: test
+        run: cargo test
+
   linux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
