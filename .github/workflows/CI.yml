@@ -28,6 +28,7 @@ jobs:
       - uses: ./.github/actions/cache_cargo
       - name: test
         run: cargo test
+        working-directory: server
 
   linux:
     runs-on: ${{ matrix.platform.runner }}
