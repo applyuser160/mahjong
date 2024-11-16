@@ -3,7 +3,7 @@
 mod tests {
     use std::iter::zip;
 
-    use crate::tile::{TileName, TILE_NAME_NUMBER};
+    use crate::tile::{Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER};
 
     #[test]
     fn tile_name_case01() {
@@ -54,5 +54,16 @@ mod tests {
             assert_eq!(tile_name as usize, assert_number);
             assert_eq!(tile_name.to_string(), s);
         }
+    }
+
+    #[test]
+    fn tile_case01() {
+        let tile = Tile::from(
+            TileName::FiveM,
+            TileType::Characters,
+            TileCategory::Sinples,
+            true,
+        );
+        assert_eq!(tile.to_u8(), 133);
     }
 }
