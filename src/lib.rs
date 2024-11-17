@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 mod test_tile;
+mod test_wall;
 mod tile;
+mod wall;
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
