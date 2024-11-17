@@ -233,6 +233,16 @@ impl Tile {
     }
 
     #[allow(dead_code)]
+    pub fn from_name(name: TileName, is_red: bool) -> Self {
+        Self {
+            name,
+            tile_type: TileType::from_tile_name(name),
+            category: TileCategory::from_tile_name(name),
+            is_red,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn to_u8(&self) -> u8 {
         let mut result = self.name as u8;
         result += (self.is_red as u8) << 7;

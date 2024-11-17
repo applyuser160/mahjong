@@ -58,12 +58,47 @@ mod tests {
 
     #[test]
     fn tile_case01() {
-        let tile = Tile::from(
-            TileName::FiveM,
-            TileType::Characters,
-            TileCategory::Sinples,
-            true,
-        );
-        assert_eq!(tile.to_u8(), 133);
+        let tile_numbers = 0..=TILE_NAME_NUMBER;
+        for n in tile_numbers {
+            let name = TileName::from_usize(n);
+
+            let mut tile = Tile::from(
+                name,
+                TileType::from_tile_name(name),
+                TileCategory::from_tile_name(name),
+                false,
+            );
+            assert_eq!(tile.to_u8(), n as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+
+            tile = Tile::from(
+                name,
+                TileType::from_tile_name(name),
+                TileCategory::from_tile_name(name),
+                true,
+            );
+            assert_eq!(tile.to_u8(), (n + 128) as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+        }
+    }
+
+    #[test]
+    fn tile_case02() {
+        let tile_numbers = 0..=TILE_NAME_NUMBER;
+        for n in tile_numbers {
+            let name = TileName::from_usize(n);
+
+            let mut tile = Tile::from_name(name, false);
+            assert_eq!(tile.to_u8(), n as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+
+            tile = Tile::from_name(name, true);
+            assert_eq!(tile.to_u8(), (n + 128) as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+        }
     }
 }
