@@ -41,4 +41,14 @@ mod tests {
             assert_eq!(tile.to_u8(), assert_n as u8);
         }
     }
+
+    #[test]
+    fn wall_case03() {
+        let tile_numbers: [u8; TILE_NAME_NUMBER] = [
+            1, 2, 3, 4, 3, 2, 1, 0, 0, 3, 1, 2, 3, 4, 3, 2, 1, 0, 0, 2, 1, 2, 3, 4, 3, 2, 1, 0, 0,
+            3, 4, 3, 2, 1,
+        ];
+        let wall = Wall::from_custom(tile_numbers, true);
+        assert_eq!(wall.tiles.len(), 66);
+    }
 }

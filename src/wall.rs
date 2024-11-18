@@ -39,4 +39,18 @@ impl Wall {
         }
         Self { tiles }
     }
+
+    #[allow(dead_code)]
+    pub fn from_custom(tile_numbers: [u8; TILE_NAME_NUMBER], is_red: bool) -> Self {
+        let mut tiles = Vec::new();
+        for (i, n) in tile_numbers.iter().enumerate() {
+            for _ in 0..*n {
+                let is_red_value = RED_TILE.contains(&(i as u8)) && is_red;
+                let name = TileName::from_usize(i + 1); // iは0から始まるため、1を足して正しいタイル番号を取得
+                let tile = Tile::from_name(name, is_red_value);
+                tiles.push(tile);
+            }
+        }
+        Self { tiles }
+    }
 }
