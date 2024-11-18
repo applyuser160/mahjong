@@ -1,4 +1,6 @@
 use pyo3::prelude::*;
+mod hand;
+mod test_hand;
 mod test_tile;
 mod test_wall;
 mod tile;
