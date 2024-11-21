@@ -26,4 +26,16 @@ impl Hand {
     pub fn sort(&mut self) {
         self.tiles.sort_by(|a, b| a.name.cmp(&b.name));
     }
+
+    #[allow(dead_code)]
+    pub fn get_delta(&self) -> Vec<u8> {
+        let mut result: Vec<u8> = Vec::new();
+
+        for i in 0..self.tiles.len() - 1 {
+            let delta = (self.tiles[i + 1].name as u8) - (self.tiles[i].name as u8);
+            result.push(delta);
+        }
+
+        result
+    }
 }

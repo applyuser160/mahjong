@@ -248,4 +248,38 @@ impl Tile {
         result += (self.is_red as u8) << 7;
         return result;
     }
+
+    #[allow(dead_code)]
+    pub fn is_terminal_or_honor(&self) -> bool {
+        matches!(
+            self.name,
+            TileName::OneM
+                | TileName::NineM
+                | TileName::OneP
+                | TileName::NineP
+                | TileName::OneS
+                | TileName::NineS
+                | TileName::Red
+                | TileName::Green
+                | TileName::White
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn is_yaochuu(&self) -> bool {
+        matches!(
+            self.name,
+            TileName::OneM
+                | TileName::NineM
+                | TileName::OneP
+                | TileName::NineP
+                | TileName::OneS
+                | TileName::NineS
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn is_middle_tile(&self) -> bool {
+        !self.is_terminal_or_honor()
+    }
 }
