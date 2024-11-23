@@ -38,4 +38,64 @@ impl Hand {
 
         result
     }
+
+    /// 順子を探す
+    #[allow(dead_code)]
+    pub fn get_chows(&self) -> Vec<usize> {
+        let deltas = self.get_delta();
+        let mut result: Vec<usize> = Vec::new();
+
+        for i in 0..deltas.len() - 1 {
+            if deltas[i] == 1 && deltas[i + 1] == 1 {
+                result.push(i);
+            }
+        }
+
+        result
+    }
+
+    /// 刻子を探す
+    #[allow(dead_code)]
+    pub fn get_pungs(&self) -> Vec<usize> {
+        let deltas = self.get_delta();
+        let mut result: Vec<usize> = Vec::new();
+
+        for i in 0..deltas.len() - 1 {
+            if deltas[i] == 0 && deltas[i + 1] == 0 {
+                result.push(i);
+            }
+        }
+
+        result
+    }
+
+    /// カンを探す
+    #[allow(dead_code)]
+    pub fn get_kongs(&self) -> Vec<usize> {
+        let deltas = self.get_delta();
+        let mut result: Vec<usize> = Vec::new();
+
+        for i in 0..deltas.len() - 2 {
+            if deltas[i] == 0 && deltas[i + 1] == 0 && deltas[i + 2] == 0 {
+                result.push(i);
+            }
+        }
+
+        result
+    }
+
+    /// 対子を探す
+    #[allow(dead_code)]
+    pub fn get_pairs(&self) -> Vec<usize> {
+        let deltas = self.get_delta();
+        let mut result: Vec<usize> = Vec::new();
+
+        for i in 0..deltas.len() - 1 {
+            if deltas[i] == 0 {
+                result.push(i);
+            }
+        }
+
+        result
+    }
 }
