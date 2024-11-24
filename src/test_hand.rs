@@ -42,4 +42,33 @@ mod tests {
         let pairs = hand.get_pairs();
         assert_eq!(pairs, vec![0, 1, 2, 8, 9, 11]);
     }
+
+    #[test]
+    fn get_standard_case01() {
+        let mut hand = Hand::new();
+        hand.push_tile(Tile::from_name(TileName::OneM, false));
+        hand.push_tile(Tile::from_name(TileName::OneM, false));
+        hand.push_tile(Tile::from_name(TileName::OneM, false));
+        hand.push_tile(Tile::from_name(TileName::OneS, false));
+        hand.push_tile(Tile::from_name(TileName::OneS, false));
+        hand.push_tile(Tile::from_name(TileName::OneS, false));
+        hand.push_tile(Tile::from_name(TileName::OneP, false));
+        hand.push_tile(Tile::from_name(TileName::OneP, false));
+        hand.push_tile(Tile::from_name(TileName::OneP, false));
+        hand.push_tile(Tile::from_name(TileName::East, false));
+        hand.push_tile(Tile::from_name(TileName::East, false));
+        hand.push_tile(Tile::from_name(TileName::East, false));
+        hand.push_tile(Tile::from_name(TileName::Green, false));
+        hand.push_tile(Tile::from_name(TileName::Green, false));
+
+        hand.sort();
+
+        /* sorted tiles */
+        /* 1m,1m,1m,1p,1p,1p,1s,1s,1s,東,東,東,緑, 緑 */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let standard_indexes = hand.get_standard();
+
+        assert_eq!(standard_indexes[0], vec![0, 3, 6, 9, 12]);
+    }
 }
