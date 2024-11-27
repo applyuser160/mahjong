@@ -197,4 +197,177 @@ impl Hand {
 
         enable_sets
     }
+
+    /// タンヤオの判定
+    #[allow(dead_code)]
+    pub fn is_all_simples(&self) -> bool {
+        true
+    }
+
+    /// 平和の判定
+    #[allow(dead_code)]
+    pub fn is_all_runs(&self) -> bool {
+        true
+    }
+
+    /// 一盃口の判定
+    #[allow(dead_code)]
+    pub fn is_double_runs(&self) -> bool {
+        true
+    }
+
+    /// 役牌の判定
+    #[allow(dead_code)]
+    pub fn is_value_tiles(&self) -> bool {
+        true
+    }
+
+    /// 槍槓の判定
+    #[allow(dead_code)]
+    pub fn is_robbing_a_quad(&self) -> bool {
+        true
+    }
+
+    /// 嶺上開花の判定
+    #[allow(dead_code)]
+    pub fn is_king_tile_draw(&self) -> bool {
+        true
+    }
+
+    /// 七対子の判定
+    #[allow(dead_code)]
+    pub fn is_seven_pairs(&self) -> bool {
+        true
+    }
+
+    /// 対々和の判定
+    #[allow(dead_code)]
+    pub fn is_all_triples(&self) -> bool {
+        true
+    }
+
+    /// 三暗刻の判定
+    #[allow(dead_code)]
+    pub fn is_three_concealed_triples(&self) -> bool {
+        true
+    }
+
+    /// 三色同刻の判定
+    #[allow(dead_code)]
+    pub fn is_three_color_triples(&self) -> bool {
+        true
+    }
+
+    /// 三色同順の判定
+    #[allow(dead_code)]
+    pub fn is_three_color_runs(&self) -> bool {
+        true
+    }
+
+    /// 混老頭の判定
+    #[allow(dead_code)]
+    pub fn is_all_terminals_and_honors(&self) -> bool {
+        true
+    }
+
+    /// 一気通貫の判定
+    #[allow(dead_code)]
+    pub fn is_full_straight(&self) -> bool {
+        true
+    }
+
+    /// チャンタの判定
+    #[allow(dead_code)]
+    pub fn is_mixed_outside_hand(&self) -> bool {
+        true
+    }
+
+    /// 小三元の判定
+    #[allow(dead_code)]
+    pub fn is_little_dragons(&self) -> bool {
+        true
+    }
+
+    /// 三槓子の判定
+    #[allow(dead_code)]
+    pub fn is_three_quads(&self) -> bool {
+        true
+    }
+
+    /// 混一色の判定
+    #[allow(dead_code)]
+    pub fn is_half_flash(&self) -> bool {
+        true
+    }
+
+    /// 純チャンの判定
+    #[allow(dead_code)]
+    pub fn is_pure_outside_hand(&self) -> bool {
+        true
+    }
+
+    /// 二盃口の判定
+    #[allow(dead_code)]
+    pub fn is_two_double_runs(&self) -> bool {
+        true
+    }
+
+    /// 清一色の判定
+    #[allow(dead_code)]
+    pub fn is_full_flash(&self) -> bool {
+        true
+    }
+
+    /// 緑一色の判定
+    #[allow(dead_code)]
+    pub fn is_all_green(&self) -> bool {
+        true
+    }
+
+    /// 大三元の判定
+    #[allow(dead_code)]
+    pub fn is_big_dragons(&self) -> bool {
+        true
+    }
+    /// 小四喜の判定
+    #[allow(dead_code)]
+    pub fn is_little_four_winds(&self) -> bool {
+        true
+    }
+
+    /// 字一色の判定
+    #[allow(dead_code)]
+    pub fn is_all_honors(&self) -> bool {
+        true
+    }
+
+    /// 国士無双の判定
+    #[allow(dead_code)]
+    pub fn is_thirteen_orphans(&self) -> bool {
+        true
+    }
+
+    /// 九蓮宝燈の判定
+    #[allow(dead_code)]
+    pub fn is_nine_treasure(&self) -> bool {
+        true
+    }
+
+    /// 四暗刻の判定
+    #[allow(dead_code)]
+    pub fn is_four_concealed_triples(&self) -> bool {
+        true
+    }
+
+    /// 清老頭の判定
+    #[allow(dead_code)]
+    pub fn is_all_terminals(&self) -> bool {
+        true
+    }
+
+    /// 四槓子の判定
+    #[allow(dead_code)]
+    pub fn is_four_quads(&self) -> bool {
+        true
+    }
 }
