@@ -12,44 +12,214 @@ pub const TILE_COUNT: usize = 14;
 pub const STANDARD_SET_COUNT: usize = 4;
 
 #[allow(dead_code)]
+pub const KONG_TILE_COUNT: usize = 4;
+
+#[allow(dead_code)]
 pub const SET_TILE_COUNT: usize = 3;
 
 #[allow(dead_code)]
 pub const PAIR_TILE_COUNT: usize = 2;
 
 #[allow(dead_code)]
+pub enum HandName {
+    AllSimples,
+    AllRuns,
+    DoubleRuns,
+    ValueTiles,
+    SevenPairs,
+    AllTriples,
+    ThreeConcealedTriples,
+    ThreeColorTriples,
+    ThreeColorRuns,
+    AllTerminalsAndHonors,
+    FullStraight,
+    MixedOutsideHand,
+    LittleDragons,
+    ThreeQuads,
+    HalfFlash,
+    PureOutsideHand,
+    TwoDoubleRuns,
+    FullFlash,
+    AllGreen,
+    BigDragons,
+    LittleFourWinds,
+    AllHonors,
+    ThirteenOrphans,
+    NineTreasure,
+    FourConcealedTriples,
+    AllTerminals,
+    FourQuads,
+}
+
+impl HandName {
+    pub fn get_calling_length(&self) -> usize {
+        match self {
+            HandName::AllSimples => 1,
+            HandName::AllRuns => 0,
+            HandName::DoubleRuns => 0,
+            HandName::ValueTiles => 1,
+            HandName::SevenPairs => 0,
+            HandName::AllTriples => 2,
+            HandName::ThreeConcealedTriples => 2,
+            HandName::ThreeColorTriples => 2,
+            HandName::ThreeColorRuns => 1,
+            HandName::AllTerminalsAndHonors => 2,
+            HandName::FullStraight => 1,
+            HandName::MixedOutsideHand => 1,
+            HandName::LittleDragons => 2,
+            HandName::ThreeQuads => 2,
+            HandName::HalfFlash => 2,
+            HandName::PureOutsideHand => 2,
+            HandName::TwoDoubleRuns => 0,
+            HandName::FullFlash => 5,
+            HandName::AllGreen => 5,
+            HandName::BigDragons => 5,
+            HandName::LittleFourWinds => 5,
+            HandName::AllHonors => 5,
+            HandName::ThirteenOrphans => 0,
+            HandName::NineTreasure => 0,
+            HandName::FourConcealedTriples => 0,
+            HandName::AllTerminals => 5,
+            HandName::FourQuads => 5,
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub enum HonorType {
+    Chow,
+    Pung,
+    Kong,
+    Pair,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Honor {
+    pub chows: Vec<usize>,
+    pub pungs: Vec<usize>,
+    pub kongs: Vec<usize>,
+    pub pairs: Vec<usize>,
+}
+
+impl Honor {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Self {
+            chows: Vec::new(),
+            pungs: Vec::new(),
+            kongs: Vec::new(),
+            pairs: Vec::new(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from(
+        chows: Vec<usize>,
+        pungs: Vec<usize>,
+        kongs: Vec<usize>,
+        pairs: Vec<usize>,
+    ) -> Self {
+        Self {
+            chows,
+            pungs,
+            kongs,
+            pairs,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct HonorBit {
+    pub chows: Vec<BitVec>,
+    pub pungs: Vec<BitVec>,
+    pub kongs: Vec<BitVec>,
+    pub pairs: Vec<BitVec>,
+}
+
+impl HonorBit {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Self {
+            chows: Vec::new(),
+            pungs: Vec::new(),
+            kongs: Vec::new(),
+            pairs: Vec::new(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_index(
+        chows: Vec<usize>,
+        pungs: Vec<usize>,
+        kongs: Vec<usize>,
+        pairs: Vec<usize>,
+    ) -> Self {
+        Self {
+            chows: Hand::convert_to_bit(&chows, SET_TILE_COUNT),
+            pungs: Hand::convert_to_bit(&pungs, SET_TILE_COUNT),
+            kongs: Hand::convert_to_bit(&kongs, KONG_TILE_COUNT),
+            pairs: Hand::convert_to_bit(&pairs, PAIR_TILE_COUNT),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_honor(honor: Honor) -> Self {
+        Self {
+            chows: Hand::convert_to_bit(&honor.chows, SET_TILE_COUNT),
+            pungs: Hand::convert_to_bit(&honor.pungs, SET_TILE_COUNT),
+            kongs: Hand::convert_to_bit(&honor.kongs, KONG_TILE_COUNT),
+            pairs: Hand::convert_to_bit(&honor.pairs, PAIR_TILE_COUNT),
+        }
+    }
+}
+
+#[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Hand {
     pub tiles: Vec<Tile>,
+    pub draw: Option<Tile>,
+    pub chows: Vec<Tile>,
+    pub pungs: Vec<Tile>,
+    pub kongs: Vec<Tile>,
+    pub pairs: Vec<Tile>,
 }
 
 impl Hand {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self { tiles: Vec::new() }
+        Self {
+            tiles: Vec::new(),
+            draw: None,
+            chows: Vec::new(),
+            pungs: Vec::new(),
+            kongs: Vec::new(),
+            pairs: Vec::new(),
+        }
     }
 
     #[allow(dead_code)]
-    pub fn push_tile(&mut self, tile: Tile) {
-        self.tiles.push(tile);
+    pub fn push_tile(tiles: &mut Vec<Tile>, tile: Tile) {
+        tiles.push(tile);
     }
 
     #[allow(dead_code)]
-    pub fn pop_tile(&mut self, index: usize) {
-        self.tiles.remove(index);
+    pub fn pop_tile(tiles: &mut Vec<Tile>, index: usize) {
+        tiles.remove(index);
     }
 
     #[allow(dead_code)]
-    pub fn sort(&mut self) {
-        self.tiles.sort_by(|a, b| a.name.cmp(&b.name));
+    pub fn sort(tiles: &mut Vec<Tile>) {
+        tiles.sort_by(|a, b| a.name.cmp(&b.name));
     }
 
     #[allow(dead_code)]
-    pub fn get_delta(&self) -> Vec<u8> {
+    pub fn get_delta(tiles: &Vec<Tile>) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
 
-        for i in 0..self.tiles.len() - 1 {
-            let delta = (self.tiles[i + 1].name as u8) - (self.tiles[i].name as u8);
+        for i in 0..tiles.len() - 1 {
+            let delta = (tiles[i + 1].name as u8) - (tiles[i].name as u8);
             result.push(delta);
         }
 
@@ -58,8 +228,8 @@ impl Hand {
 
     /// 順子を探す
     #[allow(dead_code)]
-    pub fn get_chows(&self) -> Vec<usize> {
-        let deltas = self.get_delta();
+    pub fn get_chows(tiles: &Vec<Tile>) -> Vec<usize> {
+        let deltas = Hand::get_delta(tiles);
         let mut result: Vec<usize> = Vec::new();
 
         for i in 0..deltas.len() - 1 {
@@ -73,8 +243,8 @@ impl Hand {
 
     /// 刻子を探す
     #[allow(dead_code)]
-    pub fn get_pungs(&self) -> Vec<usize> {
-        let deltas = self.get_delta();
+    pub fn get_pungs(tiles: &Vec<Tile>) -> Vec<usize> {
+        let deltas = Hand::get_delta(tiles);
         let mut result: Vec<usize> = Vec::new();
 
         for i in 0..deltas.len() - 1 {
@@ -88,8 +258,8 @@ impl Hand {
 
     /// カンを探す
     #[allow(dead_code)]
-    pub fn get_kongs(&self) -> Vec<usize> {
-        let deltas = self.get_delta();
+    pub fn get_kongs(tiles: &Vec<Tile>) -> Vec<usize> {
+        let deltas = Hand::get_delta(tiles);
         let mut result: Vec<usize> = Vec::new();
 
         for i in 0..deltas.len() - 2 {
@@ -103,8 +273,8 @@ impl Hand {
 
     /// 対子を探す
     #[allow(dead_code)]
-    pub fn get_pairs(&self) -> Vec<usize> {
-        let deltas = self.get_delta();
+    pub fn get_pairs(tiles: &Vec<Tile>) -> Vec<usize> {
+        let deltas = Hand::get_delta(tiles);
         let mut result: Vec<usize> = Vec::new();
 
         for i in 0..deltas.len() {
@@ -142,11 +312,115 @@ impl Hand {
         }
     }
 
+    /// 槓子、刻子、順子、対子を指定して、探索する
+    /// 優先順位は、槓子->刻子->順子->対子の順
+    #[allow(dead_code)]
+    pub fn find_honors(
+        tiles: &Vec<Tile>,
+        has_kong: bool,
+        has_pung: bool,
+        has_chow: bool,
+        has_pair: bool,
+    ) -> Honor {
+        // 各面子ができるインデックスを取得する
+        let simple_honor = Honor::from(
+            if has_chow {
+                Hand::get_chows(tiles)
+            } else {
+                Vec::new()
+            },
+            if has_pung {
+                Hand::get_pungs(tiles)
+            } else {
+                Vec::new()
+            },
+            if has_kong {
+                Hand::get_kongs(tiles)
+            } else {
+                Vec::new()
+            },
+            if has_pair {
+                Hand::get_pairs(tiles)
+            } else {
+                Vec::new()
+            },
+        );
+
+        // bitvecを生成する
+        let honor_bit = HonorBit::from_honor(simple_honor.clone());
+
+        // 優先順位が高い順にマッチする組み合わせを探す
+        let mut result = Honor::new();
+
+        let kongs_len = honor_bit.kongs.len();
+        let pungs_len = honor_bit.pungs.len();
+        let chows_len = honor_bit.chows.len();
+        let pairs_len = honor_bit.pairs.len();
+
+        for i in 0..=3 {
+            let len = match i {
+                0 => kongs_len,
+                1 => kongs_len + pungs_len,
+                2 => kongs_len + pungs_len + chows_len,
+                3 => kongs_len + pungs_len + chows_len + pairs_len,
+                _ => unreachable!(),
+            };
+
+            // 重ね合わせ用のbit
+            let mut used_tiles = bitvec![0; tiles.len()];
+
+            for j in 0..=len {
+                // TODO: この方法だと、pung -> kongのような組み合わせに対応できない
+                let index: usize;
+                let bits: &Vec<BitVec>;
+                let honor_type: HonorType;
+                if j < kongs_len {
+                    index = j;
+                    bits = &honor_bit.kongs;
+                    honor_type = HonorType::Kong;
+                } else if j < kongs_len + pungs_len {
+                    index = j - kongs_len;
+                    bits = &honor_bit.pungs;
+                    honor_type = HonorType::Pung;
+                } else if j < kongs_len + pungs_len + chows_len {
+                    index = j - (kongs_len + pungs_len);
+                    bits = &honor_bit.chows;
+                    honor_type = HonorType::Chow;
+                } else {
+                    index = j - (kongs_len + pungs_len + chows_len);
+                    bits = &honor_bit.pairs;
+                    honor_type = HonorType::Pair;
+                }
+
+                if bits.len() == 0 {
+                    continue;
+                }
+
+                let or = Hand::get_able_or(&used_tiles, &bits[index]);
+
+                if or.is_none() {
+                    continue;
+                }
+
+                used_tiles = or.unwrap();
+
+                match honor_type {
+                    HonorType::Chow => result.chows.push(simple_honor.chows[index].clone()),
+                    HonorType::Pung => result.pungs.push(simple_honor.pungs[index].clone()),
+                    HonorType::Kong => result.kongs.push(simple_honor.kongs[index].clone()),
+                    HonorType::Pair => result.pairs.push(simple_honor.pairs[index].clone()),
+                }
+            }
+        }
+
+        return result;
+    }
+
     /// 4面子、1雀頭の形を探す
     #[allow(dead_code)]
-    pub fn get_standard(&self) -> Vec<Vec<usize>> {
-        let chows = self.get_chows();
-        let pungs = self.get_pungs();
+    pub fn get_standard(tiles: &mut Vec<Tile>) -> Vec<Vec<usize>> {
+        let chows = Hand::get_chows(tiles);
+        let pungs = Hand::get_pungs(tiles);
 
         let union: HashSet<usize> = chows.iter().chain(pungs.iter()).cloned().collect();
         let mut sets: Vec<usize> = union.into_iter().collect();
@@ -181,7 +455,7 @@ impl Hand {
                 continue;
             }
 
-            let pairs = self.get_pairs();
+            let pairs = Hand::get_pairs(tiles);
             let pair_bits = Hand::convert_to_bit(&pairs, PAIR_TILE_COUNT);
 
             for (i, bit) in zip(pairs, pair_bits) {
@@ -198,9 +472,35 @@ impl Hand {
         enable_sets
     }
 
+    /// 鳴きの数を取得する
+    #[allow(dead_code)]
+    pub fn get_calling_length(&self) -> usize {
+        self.chows.len() + self.pungs.len() + self.kongs.len()
+    }
+
+    /// 鳴きの制限を満たしているか
+    #[allow(dead_code)]
+    pub fn is_over_calling_limit(&self, calling_limig: usize) -> bool {
+        self.get_calling_length() > calling_limig
+    }
+
     /// タンヤオの判定
     #[allow(dead_code)]
     pub fn is_all_simples(&self) -> bool {
+        let hand_name = HandName::AllSimples;
+
+        // 鳴き回数を可能回数を超過している場合は、偽
+        let calling_length = self.get_calling_length();
+        if calling_length > hand_name.get_calling_length() {
+            return false;
+        }
+
+        // ツモと手牌を足す
+        let mut tiles = self.tiles.clone();
+        if let Some(draw) = self.draw {
+            tiles.push(draw);
+        }
+
         true
     }
 
@@ -219,18 +519,6 @@ impl Hand {
     /// 役牌の判定
     #[allow(dead_code)]
     pub fn is_value_tiles(&self) -> bool {
-        true
-    }
-
-    /// 槍槓の判定
-    #[allow(dead_code)]
-    pub fn is_robbing_a_quad(&self) -> bool {
-        true
-    }
-
-    /// 嶺上開花の判定
-    #[allow(dead_code)]
-    pub fn is_king_tile_draw(&self) -> bool {
         true
     }
 
