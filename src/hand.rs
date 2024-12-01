@@ -86,6 +86,7 @@ impl HandName {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum HonorType {
     Chow,
     Pung,
@@ -171,6 +172,25 @@ impl HonorBit {
             pungs: Hand::convert_to_bit(&honor.pungs, SET_TILE_COUNT),
             kongs: Hand::convert_to_bit(&honor.kongs, KONG_TILE_COUNT),
             pairs: Hand::convert_to_bit(&honor.pairs, PAIR_TILE_COUNT),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct HonorInfo {
+    index: usize,
+    bit: BitVec,
+    honor_type: HonorType,
+}
+
+impl HonorInfo {
+    #[allow(dead_code)]
+    pub fn from(index: usize, bit: BitVec, honor_type: HonorType) -> Self {
+        Self {
+            index,
+            bit,
+            honor_type,
         }
     }
 }
@@ -321,7 +341,7 @@ impl Hand {
         has_pung: bool,
         has_chow: bool,
         has_pair: bool,
-    ) -> Honor {
+    ) -> Vec<Honor> {
         // 各面子ができるインデックスを取得する
         let simple_honor = Honor::from(
             if has_chow {
@@ -350,7 +370,7 @@ impl Hand {
         let honor_bit = HonorBit::from_honor(simple_honor.clone());
 
         // 優先順位が高い順にマッチする組み合わせを探す
-        let mut result = Honor::new();
+        let mut result: Vec<Honor> = Vec::new();
 
         let kongs_len = honor_bit.kongs.len();
         let pungs_len = honor_bit.pungs.len();
@@ -366,28 +386,31 @@ impl Hand {
                 _ => unreachable!(),
             };
 
-            // 重ね合わせ用のbit
-            let mut used_tiles = bitvec![0; tiles.len()];
-
-            for j in 0..=len {
-                // TODO: この方法だと、pung -> kongのような組み合わせに対応できない
-                let index: usize;
+            // 可能性のある面子を昇順に並べる
+            let mut honor_infos: Vec<HonorInfo> = Vec::new();
+            for j in 0..len {
+                let ind: usize;
+                let start_indexs: &Vec<usize>;
                 let bits: &Vec<BitVec>;
                 let honor_type: HonorType;
                 if j < kongs_len {
-                    index = j;
+                    ind = j;
+                    start_indexs = &simple_honor.kongs;
                     bits = &honor_bit.kongs;
                     honor_type = HonorType::Kong;
                 } else if j < kongs_len + pungs_len {
-                    index = j - kongs_len;
+                    ind = j - kongs_len;
+                    start_indexs = &simple_honor.pungs;
                     bits = &honor_bit.pungs;
                     honor_type = HonorType::Pung;
                 } else if j < kongs_len + pungs_len + chows_len {
-                    index = j - (kongs_len + pungs_len);
+                    ind = j - (kongs_len + pungs_len);
+                    start_indexs = &simple_honor.chows;
                     bits = &honor_bit.chows;
                     honor_type = HonorType::Chow;
                 } else {
-                    index = j - (kongs_len + pungs_len + chows_len);
+                    ind = j - (kongs_len + pungs_len + chows_len);
+                    start_indexs = &simple_honor.pairs;
                     bits = &honor_bit.pairs;
                     honor_type = HonorType::Pair;
                 }
@@ -396,19 +419,83 @@ impl Hand {
                     continue;
                 }
 
-                let or = Hand::get_able_or(&used_tiles, &bits[index]);
+                let honor_info =
+                    HonorInfo::from(start_indexs[ind], bits[ind].clone(), honor_type.clone());
+                honor_infos.push(honor_info);
+            }
 
-                if or.is_none() {
-                    continue;
+            honor_infos.sort_by(|a, b| a.index.cmp(&b.index));
+
+            // 重ね合わせ用のbit
+            let mut used_tile_bits: Vec<BitVec>;
+
+            // indexが若い順に重ね合わせる
+            for top_honor_info in &honor_infos {
+                // indexが0のみ(1以降は、組み合わせが見つかっても、重複となる)
+                if top_honor_info.index != 0 {
+                    break;
                 }
 
-                used_tiles = or.unwrap();
+                used_tile_bits = vec![top_honor_info.bit.clone()];
+                let mut top_honor = Honor::new();
+                match top_honor_info.honor_type {
+                    HonorType::Chow => top_honor.chows = vec![top_honor_info.index],
+                    HonorType::Pung => top_honor.pungs = vec![top_honor_info.index],
+                    HonorType::Kong => top_honor.kongs = vec![top_honor_info.index],
+                    HonorType::Pair => top_honor.pairs = vec![top_honor_info.index],
+                }
+                let mut draft_results = vec![top_honor];
 
-                match honor_type {
-                    HonorType::Chow => result.chows.push(simple_honor.chows[index].clone()),
-                    HonorType::Pung => result.pungs.push(simple_honor.pungs[index].clone()),
-                    HonorType::Kong => result.kongs.push(simple_honor.kongs[index].clone()),
-                    HonorType::Pair => result.pairs.push(simple_honor.pairs[index].clone()),
+                while used_tile_bits.len() > 0 {
+                    let used_tile_bit = used_tile_bits[0].clone();
+
+                    for honor_info in &honor_infos {
+                        let or = Hand::get_able_or(&used_tile_bit, &honor_info.bit);
+
+                        // 重なりがあった場合
+                        if or.is_none() {
+                            continue;
+                        }
+
+                        let unwrap_or = or.unwrap();
+
+                        // 隙間があった場合
+                        let mut copied_or = unwrap_or.clone();
+                        let copied_or_len = copied_or.len();
+                        copied_or.iter_mut().for_each(|mut b| *b = !*b);
+                        copied_or.shift_right(copied_or_len - honor_info.index);
+                        if copied_or.any() {
+                            continue;
+                        }
+
+                        used_tile_bits.push(unwrap_or);
+
+                        let mut draft_result = draft_results[0].clone();
+
+                        match honor_info.honor_type {
+                            HonorType::Chow => draft_result.chows.push(honor_info.index),
+                            HonorType::Pung => draft_result.pungs.push(honor_info.index),
+                            HonorType::Kong => draft_result.kongs.push(honor_info.index),
+                            HonorType::Pair => draft_result.pairs.push(honor_info.index),
+                        }
+
+                        draft_results.push(draft_result);
+                    }
+
+                    // すべて埋めきった場合
+                    let mut copied_used_tile_bit = used_tile_bits[0].clone();
+                    copied_used_tile_bit.iter_mut().for_each(|mut b| *b = !*b);
+
+                    used_tile_bits.remove(0);
+
+                    if copied_used_tile_bit.any() {
+                        draft_results.remove(0);
+                    }
+                    if copied_used_tile_bit.not_any() {
+                        if let Some(last_result) = draft_results.last() {
+                            result.push(last_result.clone());
+                        }
+                    }
                 }
             }
         }
