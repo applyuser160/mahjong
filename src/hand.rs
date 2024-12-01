@@ -2,7 +2,7 @@ use std::{collections::HashSet, iter::zip};
 
 use bitvec::prelude::*;
 
-use crate::tile::Tile;
+use crate::tile::{Tile, TileName};
 
 /// 手牌の数
 #[allow(dead_code)]
@@ -330,6 +330,25 @@ impl Hand {
         } else {
             None
         }
+    }
+
+    /// 先頭の牌と、面子のタイプを指定して、残りの牌を含めた面子を返す
+    #[allow(dead_code)]
+    pub fn get_all_tiles(tile: Tile, honor_type: HonorType) -> Vec<Tile> {
+        let addtion: usize = if honor_type == HonorType::Chow { 1 } else { 0 };
+        let length = match honor_type {
+            HonorType::Chow => SET_TILE_COUNT,
+            HonorType::Pung => SET_TILE_COUNT,
+            HonorType::Kong => KONG_TILE_COUNT,
+            HonorType::Pair => PAIR_TILE_COUNT,
+        };
+        let mut result: Vec<Tile> = Vec::new();
+        for i in 0..length {
+            let tile_name = TileName::from_usize((tile.name as usize) + (i * addtion));
+            let new_tile = Tile::from_name(tile_name, false);
+            result.push(new_tile);
+        }
+        result
     }
 
     /// 槓子、刻子、順子、対子を指定して、探索する
