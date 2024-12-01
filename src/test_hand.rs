@@ -1,0 +1,140 @@
+#[cfg(test)]
+
+mod tests {
+    use crate::{
+        hand::{Hand, Honor},
+        tile::{Tile, TileName},
+    };
+
+    #[test]
+    fn get_chows_case01() {
+        let mut tiles: Vec<Tile> = Vec::new();
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::NineP, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::NineP, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::White, false));
+        tiles.push(Tile::from_name(TileName::TwoM, false));
+        tiles.push(Tile::from_name(TileName::EightP, false));
+        tiles.push(Tile::from_name(TileName::NineP, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::SevenP, false));
+        tiles.push(Tile::from_name(TileName::ThreeM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+
+        tiles.sort();
+
+        /* sorted tiles */
+        /* 1m,1m,1m,1m,2m,3m,7p,8p,9p,9p,9p,��,東,白 */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let chows = Hand::get_chows(&tiles);
+        assert_eq!(chows, vec![3, 6]);
+
+        let pungs = Hand::get_pungs(&tiles);
+        assert_eq!(pungs, vec![0, 1, 8]);
+
+        let kongs = Hand::get_kongs(&tiles);
+        assert_eq!(kongs, vec![0]);
+
+        let pairs = Hand::get_pairs(&tiles);
+        assert_eq!(pairs, vec![0, 1, 2, 8, 9, 11]);
+    }
+
+    #[test]
+    fn get_standard_case01() {
+        let mut tiles: Vec<Tile> = Vec::new();
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+
+        Hand::sort(&mut tiles);
+
+        /* sorted tiles */
+        /* 1m,1m,1m,1p,1p,1p,1s,1s,1s,東,東,東,緑, 緑 */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let standard_indexes = Hand::get_standard(&mut tiles);
+
+        assert_eq!(standard_indexes[0], vec![0, 3, 6, 9, 12]);
+    }
+
+    #[test]
+    fn find_honors_case01() {
+        let mut tiles: Vec<Tile> = Vec::new();
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+
+        Hand::sort(&mut tiles);
+
+        /* sorted tiles */
+        /* 1m,1m,1m,1p,1p,1p,1s,1s,1s,東,東,東,緑, 緑 */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let honor = Hand::find_honors(&mut tiles, false, true, true, true);
+
+        let honor_assert = Honor::from(Vec::new(), vec![0, 3, 6, 9], Vec::new(), vec![12]);
+        assert_eq!(honor[0], honor_assert);
+    }
+
+    #[test]
+    fn find_honors_case02() {
+        let mut tiles: Vec<Tile> = Vec::new();
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneM, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneP, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::OneS, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::East, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+        tiles.push(Tile::from_name(TileName::Green, false));
+
+        Hand::sort(&mut tiles);
+
+        /* sorted tiles */
+        /* 1m,1m,1m,1m,1p,1p,1p,1s,1s,東,東,東,緑, 緑 */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let honor = Hand::find_honors(&mut tiles, true, true, true, true);
+
+        assert_eq!(
+            honor[0],
+            Honor::from(Vec::new(), vec![4, 9], vec![0], vec![7, 12],),
+        );
+        assert_eq!(
+            honor[1],
+            Honor::from(Vec::new(), vec![4, 9], Vec::new(), vec![0, 2, 7, 12],),
+        );
+    }
+}

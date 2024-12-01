@@ -144,6 +144,27 @@ pub enum TileType {
     Dragons,    /* 三元牌    */
 }
 
+impl TileType {
+    #[allow(dead_code)]
+    pub fn from_tile_name(name: TileName) -> Self {
+        if name == TileName::None {
+            return Self::None;
+        } else if name <= TileName::NineM {
+            Self::Characters
+        } else if name <= TileName::NineP {
+            Self::Circles
+        } else if name <= TileName::NineS {
+            Self::Bamboos
+        } else if name <= TileName::North {
+            Self::Winds
+        } else if name <= TileName::White {
+            Self::Dragons
+        } else {
+            Self::None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(usize)]
@@ -153,13 +174,112 @@ pub enum TileCategory {
     Honors,  /* 字牌      */
 }
 
+impl TileCategory {
+    #[allow(dead_code)]
+    pub fn from_tile_name(name: TileName) -> Self {
+        if name == TileName::None {
+            return Self::None;
+        } else if name <= TileName::NineS {
+            Self::Sinples
+        } else if name <= TileName::White {
+            Self::Honors
+        } else {
+            Self::None
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_tile_type(tile_type: TileType) -> Self {
+        if tile_type == TileType::None {
+            return Self::None;
+        } else if tile_type <= TileType::Bamboos {
+            Self::Sinples
+        } else if tile_type <= TileType::Dragons {
+            Self::Honors
+        } else {
+            Self::None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Tile {
     pub name: TileName,
     pub tile_type: TileType,
     pub category: TileCategory,
-    pub is_read: bool,
+    pub is_red: bool,
 }
 
-impl Tile {}
+impl Tile {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Self {
+            name: TileName::None,
+            tile_type: TileType::None,
+            category: TileCategory::None,
+            is_red: false,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from(name: TileName, tile_type: TileType, category: TileCategory, is_red: bool) -> Self {
+        Self {
+            name,
+            tile_type,
+            category,
+            is_red,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_name(name: TileName, is_red: bool) -> Self {
+        Self {
+            name,
+            tile_type: TileType::from_tile_name(name),
+            category: TileCategory::from_tile_name(name),
+            is_red,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn to_u8(&self) -> u8 {
+        let mut result = self.name as u8;
+        result += (self.is_red as u8) << 7;
+        return result;
+    }
+
+    #[allow(dead_code)]
+    pub fn is_terminal_or_honor(&self) -> bool {
+        matches!(
+            self.name,
+            TileName::OneM
+                | TileName::NineM
+                | TileName::OneP
+                | TileName::NineP
+                | TileName::OneS
+                | TileName::NineS
+                | TileName::Red
+                | TileName::Green
+                | TileName::White
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn is_yaochuu(&self) -> bool {
+        matches!(
+            self.name,
+            TileName::OneM
+                | TileName::NineM
+                | TileName::OneP
+                | TileName::NineP
+                | TileName::OneS
+                | TileName::NineS
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn is_middle_tile(&self) -> bool {
+        !self.is_terminal_or_honor()
+    }
+}

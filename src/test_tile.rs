@@ -3,7 +3,7 @@
 mod tests {
     use std::iter::zip;
 
-    use crate::tile::{TileName, TILE_NAME_NUMBER};
+    use crate::tile::{Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER};
 
     #[test]
     fn tile_name_case01() {
@@ -53,6 +53,52 @@ mod tests {
             let assert_number = if n > TILE_NAME_NUMBER { 0 } else { n };
             assert_eq!(tile_name as usize, assert_number);
             assert_eq!(tile_name.to_string(), s);
+        }
+    }
+
+    #[test]
+    fn tile_case01() {
+        let tile_numbers = 0..=TILE_NAME_NUMBER;
+        for n in tile_numbers {
+            let name = TileName::from_usize(n);
+
+            let mut tile = Tile::from(
+                name,
+                TileType::from_tile_name(name),
+                TileCategory::from_tile_name(name),
+                false,
+            );
+            assert_eq!(tile.to_u8(), n as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+
+            tile = Tile::from(
+                name,
+                TileType::from_tile_name(name),
+                TileCategory::from_tile_name(name),
+                true,
+            );
+            assert_eq!(tile.to_u8(), (n + 128) as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+        }
+    }
+
+    #[test]
+    fn tile_case02() {
+        let tile_numbers = 0..=TILE_NAME_NUMBER;
+        for n in tile_numbers {
+            let name = TileName::from_usize(n);
+
+            let mut tile = Tile::from_name(name, false);
+            assert_eq!(tile.to_u8(), n as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
+
+            tile = Tile::from_name(name, true);
+            assert_eq!(tile.to_u8(), (n + 128) as u8);
+            assert_eq!(tile.tile_type, TileType::from_tile_name(name));
+            assert_eq!(tile.category, TileCategory::from_tile_name(name));
         }
     }
 }
