@@ -94,6 +94,19 @@ pub enum HonorType {
     Pair,
 }
 
+impl HonorType {
+    #[allow(dead_code)]
+    pub fn from_usize(n: usize) -> Self {
+        match n {
+            0 => HonorType::Chow,
+            1 => HonorType::Pung,
+            2 => HonorType::Kong,
+            3 => HonorType::Pair,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Honor {
@@ -348,6 +361,38 @@ impl Hand {
             let new_tile = Tile::from_name(tile_name, false);
             result.push(new_tile);
         }
+        result
+    }
+
+    /// get_all_tilesのinputをHonorに変えた関数
+    #[allow(dead_code)]
+    pub fn get_all_tiles_from_honor(honor: Honor, tiles: &Vec<Tile>) -> Vec<Tile> {
+        let mut honor_infos: Vec<HonorInfo> = Vec::new();
+        for i in 0..=3 {
+            let indexes = match i {
+                0 => &honor.chows,
+                1 => &honor.pungs,
+                2 => &honor.kongs,
+                3 => &honor.pairs,
+                _ => unreachable!(),
+            };
+            let mut append_honor_infos: Vec<HonorInfo> = Vec::new();
+            for index in indexes {
+                append_honor_infos.push(HonorInfo::from(
+                    *index,
+                    BitVec::new(),
+                    HonorType::from_usize(i),
+                ));
+            }
+            honor_infos.extend(append_honor_infos);
+        }
+
+        let mut result: Vec<Tile> = Vec::new();
+        for honor_info in honor_infos {
+            let a_result = Hand::get_all_tiles(tiles[honor_info.index], honor_info.honor_type);
+            result.extend(a_result);
+        }
+
         result
     }
 
