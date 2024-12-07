@@ -233,6 +233,25 @@ impl Hand {
     }
 
     #[allow(dead_code)]
+    pub fn from(
+        tiles: Vec<Tile>,
+        draw: Option<Tile>,
+        chows: Vec<Tile>,
+        pungs: Vec<Tile>,
+        kongs: Vec<Tile>,
+        pairs: Vec<Tile>,
+    ) -> Self {
+        Self {
+            tiles,
+            draw,
+            chows,
+            pungs,
+            kongs,
+            pairs,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn push_tile(tiles: &mut Vec<Tile>, tile: Tile) {
         tiles.push(tile);
     }
@@ -248,11 +267,13 @@ impl Hand {
     }
 
     #[allow(dead_code)]
-    pub fn get_delta(tiles: &Vec<Tile>) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
+    pub fn get_delta(tiles: &Vec<Tile>) -> Vec<usize> {
+        let mut result: Vec<usize> = Vec::new();
 
         for i in 0..tiles.len() - 1 {
-            let delta = (tiles[i + 1].name as u8) - (tiles[i].name as u8);
+            let left = tiles[i + 1].name as usize;
+            let right = tiles[i].name as usize;
+            let delta = left - right;
             result.push(delta);
         }
 
@@ -650,9 +671,28 @@ impl Hand {
         let mut tiles = self.tiles.clone();
         if let Some(draw) = self.draw {
             tiles.push(draw);
+            Hand::sort(&mut tiles);
         }
 
-        true
+        // 聴牌となっている手牌の組み合わせを探す
+        let honors = Hand::find_honors(&tiles, false, true, true, true);
+
+        // 手牌と鳴きを合わせる
+        tiles.extend(self.chows.clone());
+        tiles.extend(self.pungs.clone());
+        tiles.extend(self.kongs.clone());
+        tiles.extend(self.pairs.clone());
+        Hand::sort(&mut tiles);
+
+        // いずれかに、2-8のみの組み合わせはあるかを判定する
+        for honor in honors {
+            let honor_tiles = Hand::get_all_tiles_from_honor(honor, &tiles);
+            if !honor_tiles.iter().any(|&x| x.is_yaochuu()) {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// 平和の判定

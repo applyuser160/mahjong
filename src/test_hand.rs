@@ -137,4 +137,43 @@ mod tests {
             Honor::from(Vec::new(), vec![4, 9], Vec::new(), vec![0, 2, 7, 12],),
         );
     }
+
+    #[test]
+    fn is_all_simple_case01() {
+        let mut tiles: Vec<Tile> = Vec::new();
+        tiles.push(Tile::from_name(TileName::TwoM, false));
+        tiles.push(Tile::from_name(TileName::TwoM, false));
+        tiles.push(Tile::from_name(TileName::TwoM, false));
+        tiles.push(Tile::from_name(TileName::ThreeM, false));
+        tiles.push(Tile::from_name(TileName::FourM, false));
+        tiles.push(Tile::from_name(TileName::FiveM, false));
+        tiles.push(Tile::from_name(TileName::TwoS, false));
+        tiles.push(Tile::from_name(TileName::ThreeS, false));
+        tiles.push(Tile::from_name(TileName::FourS, false));
+        tiles.push(Tile::from_name(TileName::ThreeP, false));
+        tiles.push(Tile::from_name(TileName::ThreeP, false));
+        tiles.push(Tile::from_name(TileName::ThreeP, false));
+        tiles.push(Tile::from_name(TileName::FiveP, false));
+
+        Hand::sort(&mut tiles);
+
+        let draw = Tile::from_name(TileName::FiveP, false);
+
+        let hand = Hand::from(
+            tiles,
+            Some(draw),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+
+        /* sorted tiles */
+        /* 2m,2m,2m,3m,4m,5m,6m,2s,3s,4s,3p,3p,3p,5p */
+        /*  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13 */
+
+        let result = hand.is_all_simples();
+
+        assert!(result);
+    }
 }
