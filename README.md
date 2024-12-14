@@ -42,10 +42,16 @@ maturin build
 
 ## 使い方
 
-### unit test
+### unit test(すべて)
 
 ``` sh
 cargo test
+```
+
+### unit test(関数指定)
+
+``` sh
+cargo test --all --exact {テストファイル名}::tests::{テスト関数名}
 ```
 
 ### coverage
