@@ -1,4 +1,6 @@
 use crate::tile::{Tile, TileName, TILE_NAME_NUMBER};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 #[allow(dead_code)]
 pub const SAME_TILE_NUMBER: usize = 4;
@@ -52,5 +54,11 @@ impl Wall {
             }
         }
         Self { tiles }
+    }
+
+    #[allow(dead_code)]
+    pub fn shuffle(&mut self) {
+        let mut rng = thread_rng();
+        self.tiles.shuffle(&mut rng);
     }
 }

@@ -176,4 +176,34 @@ mod tests {
 
         assert!(result);
     }
+
+    #[test]
+    fn test_is_winning() {
+        let mut hand = Hand::new();
+        hand.tiles = vec![
+            Tile::from_name(TileName::OneM, false),
+            Tile::from_name(TileName::OneM, false),
+            Tile::from_name(TileName::OneM, false),
+            Tile::from_name(TileName::TwoM, false),
+            Tile::from_name(TileName::ThreeM, false),
+            Tile::from_name(TileName::FourM, false),
+            Tile::from_name(TileName::FiveM, false),
+            Tile::from_name(TileName::SixM, false),
+            Tile::from_name(TileName::SevenM, false),
+            Tile::from_name(TileName::SevenM, false),
+            Tile::from_name(TileName::SevenM, false),
+            Tile::from_name(TileName::East, false),
+            Tile::from_name(TileName::East, false),
+        ];
+        hand.draw = Some(Tile::from_name(TileName::East, false));
+        assert!(hand.is_winning());
+
+        let mut hand = Hand::new();
+        hand.tiles = vec![
+            Tile::from_name(TileName::OneP, false),
+            Tile::from_name(TileName::OneP, false),
+        ];
+        hand.draw = Some(Tile::from_name(TileName::OneP, false));
+        assert!(!hand.is_winning());
+    }
 }

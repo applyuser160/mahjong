@@ -849,4 +849,73 @@ impl Hand {
     pub fn is_four_quads(&self) -> bool {
         true
     }
+
+    #[allow(dead_code)]
+    fn to_tile_counts(tiles: &Vec<Tile>) -> [u8; 34] {
+        let mut counts = [0; 34];
+        for tile in tiles {
+            counts[tile.name as usize - 1] += 1;
+        }
+        counts
+    }
+
+    #[allow(dead_code)]
+    pub fn is_winning(&self) -> bool {
+        let mut tiles = self.tiles.clone();
+        if let Some(draw) = self.draw {
+            tiles.push(draw);
+        }
+        if tiles.len() != TILE_COUNT {
+            return false;
+        }
+
+        let mut counts = Hand::to_tile_counts(&tiles);
+
+        // 雀頭を探す
+        for i in 0..34 {
+            if counts[i] >= 2 {
+                counts[i] -= 2;
+                if Hand::is_melds(&mut counts) {
+                    return true;
+                }
+                counts[i] += 2;
+            }
+        }
+        false
+    }
+
+    #[allow(dead_code)]
+    fn is_melds(counts: &mut [u8; 34]) -> bool {
+        for i in 0..34 {
+            if counts[i] == 0 {
+                continue;
+            }
+            // 刻子
+            if counts[i] >= 3 {
+                counts[i] -= 3;
+                if Hand::is_melds(counts) {
+                    counts[i] += 3;
+                    return true;
+                }
+                counts[i] += 3;
+            }
+            // 順子
+            if i < 27 && (i % 9) < 7 && counts[i] > 0 && counts[i+1] > 0 && counts[i+2] > 0 {
+                counts[i] -= 1;
+                counts[i+1] -= 1;
+                counts[i+2] -= 1;
+                if Hand::is_melds(counts) {
+                    counts[i] += 1;
+                    counts[i+1] += 1;
+                    counts[i+2] += 1;
+                    return true;
+                }
+                counts[i] += 1;
+                counts[i+1] += 1;
+                counts[i+2] += 1;
+            }
+            return false;
+        }
+        true
+    }
 }
