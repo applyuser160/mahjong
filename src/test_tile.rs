@@ -52,7 +52,7 @@ mod tests {
 
             let assert_number = if n > TILE_NAME_NUMBER { 0 } else { n };
             assert_eq!(tile_name as usize, assert_number);
-            assert_eq!(tile_name.to_string(), s);
+            assert_eq!(tile_name.as_str(), s);
         }
     }
 }
