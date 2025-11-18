@@ -55,4 +55,20 @@ mod tests {
             assert_eq!(tile_name.as_str(), s);
         }
     }
+
+    #[test]
+    fn tile_metadata_matches_name() {
+        use crate::tile::{Tile, TileCategory, TileType};
+
+        let tile = Tile::new(TileName::Red);
+        assert_eq!(tile.name(), TileName::Red);
+        assert_eq!(tile.tile_type(), TileType::Dragons);
+        assert_eq!(tile.category(), TileCategory::Honors);
+        assert!(tile.is_red());
+
+        let tile = Tile::new(TileName::EightM);
+        assert_eq!(tile.tile_type(), TileType::Characters);
+        assert_eq!(tile.category(), TileCategory::Simples);
+        assert!(!tile.is_red());
+    }
 }

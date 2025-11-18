@@ -133,7 +133,7 @@ impl TileName {
         }
     }
 
-    pub fn tile_type(&self) -> TileType {
+    pub const fn tile_type(&self) -> TileType {
         match self {
             TileName::OneM
             | TileName::TwoM
@@ -168,7 +168,7 @@ impl TileName {
         }
     }
 
-    pub fn category(&self) -> TileCategory {
+    pub const fn category(&self) -> TileCategory {
         match self.tile_type() {
             TileType::Characters | TileType::Circles | TileType::Bamboos => TileCategory::Simples,
             TileType::Winds | TileType::Dragons => TileCategory::Honors,
@@ -201,22 +201,27 @@ pub enum TileCategory {
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Tile {
-    pub name: TileName,
-    pub tile_type: TileType,
-    pub category: TileCategory,
-    pub is_read: bool,
+    name: TileName,
 }
 
 impl Tile {
-    pub fn new(name: TileName) -> Self {
-        let tile_type = name.tile_type();
-        let category = name.category();
+    pub const fn new(name: TileName) -> Self {
+        Self { name }
+    }
 
-        Self {
-            name,
-            tile_type,
-            category,
-            is_read: matches!(name, TileName::Red | TileName::Green | TileName::White),
-        }
+    pub const fn name(self) -> TileName {
+        self.name
+    }
+
+    pub const fn tile_type(self) -> TileType {
+        self.name.tile_type()
+    }
+
+    pub const fn category(self) -> TileCategory {
+        self.name.category()
+    }
+
+    pub const fn is_red(self) -> bool {
+        matches!(self.name, TileName::Red | TileName::Green | TileName::White)
     }
 }
