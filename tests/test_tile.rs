@@ -1,9 +1,8 @@
 #[cfg(test)]
-
 mod tests {
     use std::iter::zip;
 
-    use crate::tile::{TileName, TILE_NAME_NUMBER};
+    use mahjong::tile::{TileName, TILE_NAME_NUMBER};
 
     #[test]
     fn tile_name_case01() {
