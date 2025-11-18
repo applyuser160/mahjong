@@ -1,14 +1,18 @@
+#[path = "mahjong/tile.rs"]
+pub mod tile;
+
+#[path = "mahjong/hand.rs"]
+pub mod hand;
+
+#[path = "mahjong/round.rs"]
+pub mod round;
+
+#[path = "mahjong/wall.rs"]
+pub mod wall;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-
-mod hand;
-mod round;
-mod test_round;
-mod test_tile;
-mod test_wall;
-mod tile;
-mod wall;
 
 pub use round::{Round, PLAYER_NUMBER};
 pub use tile::{

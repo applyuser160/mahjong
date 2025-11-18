@@ -13,7 +13,7 @@ pub struct Round {
 }
 
 impl Round {
-    pub fn new(mut wall: Wall) -> Self {
+    pub fn new(wall: Wall) -> Self {
         let mut round = Self {
             wall,
             hands: [Hand::new(), Hand::new(), Hand::new(), Hand::new()],
@@ -48,10 +48,6 @@ impl Round {
                     hand.push(tile);
                 }
             }
-        }
-
-        if let Some(tile) = self.wall.draw() {
-            self.hands[0].push(tile);
         }
     }
 }

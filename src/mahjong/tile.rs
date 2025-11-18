@@ -4,7 +4,7 @@ pub const TILE_PER_KIND: usize = 4;
 pub const TILE_WALL_CAPACITY: usize = TILE_NAME_NUMBER * TILE_PER_KIND;
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[repr(usize)]
 pub enum TileName {
     None = 0,

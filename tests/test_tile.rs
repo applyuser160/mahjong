@@ -1,9 +1,8 @@
 #[cfg(test)]
-
 mod tests {
     use std::iter::zip;
 
-    use crate::tile::{TileName, TILE_NAME_NUMBER};
+    use mahjong::tile::{Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER};
 
     #[test]
     fn tile_name_case01() {
@@ -58,8 +57,6 @@ mod tests {
 
     #[test]
     fn tile_metadata_matches_name() {
-        use crate::tile::{Tile, TileCategory, TileType};
-
         let tile = Tile::new(TileName::Red);
         assert_eq!(tile.name(), TileName::Red);
         assert_eq!(tile.tile_type(), TileType::Dragons);

@@ -4,9 +4,9 @@ mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
-    use crate::round::{Round, PLAYER_NUMBER};
-    use crate::tile::TileName;
-    use crate::wall::Wall;
+    use mahjong::round::{Round, PLAYER_NUMBER};
+    use mahjong::tile::{TileName, TILE_WALL_CAPACITY};
+    use mahjong::wall::Wall;
 
     #[test]
     fn play_full_round() {
@@ -17,7 +17,7 @@ mod tests {
         let mut round = Round::new(wall);
         let mut draws = 0;
 
-        assert_eq!(round.hand(0).len(), 14);
+        assert_eq!(round.hand(0).len(), 13);
         for index in 1..PLAYER_NUMBER {
             assert_eq!(round.hand(index).len(), 13);
         }
@@ -27,7 +27,7 @@ mod tests {
             assert_ne!(tile, TileName::None);
         }
 
-        let total_tiles = PLAYER_NUMBER * 13 + 1 + draws;
-        assert_eq!(total_tiles, crate::tile::TILE_WALL_CAPACITY);
+        let total_tiles = PLAYER_NUMBER * 13 + draws;
+        assert_eq!(total_tiles, TILE_WALL_CAPACITY);
     }
 }

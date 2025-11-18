@@ -6,6 +6,12 @@ pub struct Hand {
     len: usize,
 }
 
+impl Default for Hand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Hand {
     pub const fn new() -> Self {
         Self {
@@ -19,13 +25,11 @@ impl Hand {
     }
 
     pub fn push(&mut self, tile: TileName) {
-        assert!(self.len < self.tiles.len());
         self.tiles[self.len] = tile;
         self.len += 1;
     }
 
     pub fn discard(&mut self, index: usize) -> TileName {
-        assert!(index < self.len);
         let removed = self.tiles[index];
         self.tiles.copy_within(index + 1..self.len, index);
         self.len -= 1;
