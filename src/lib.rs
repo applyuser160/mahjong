@@ -10,6 +10,9 @@ pub mod round;
 #[path = "mahjong/wall.rs"]
 pub mod wall;
 
+#[path = "mahjong/yaku.rs"]
+pub mod yaku;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -19,6 +22,7 @@ pub use tile::{
     Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY,
 };
 pub use wall::Wall;
+pub use yaku::{judge_yaku, WinContext, Yaku, YakuId, ALL_YAKU};
 
 #[pyfunction]
 pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
