@@ -1,6 +1,7 @@
+#[path = "mahjong/tile.rs"]
+pub mod tile;
+
 use pyo3::prelude::*;
-mod test_tile;
-mod tile;
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
