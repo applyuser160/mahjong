@@ -61,11 +61,9 @@ mod tests {
         assert_eq!(tile.name(), TileName::Red);
         assert_eq!(tile.tile_type(), TileType::Dragons);
         assert_eq!(tile.category(), TileCategory::Honors);
-        assert!(tile.is_red());
 
         let tile = Tile::new(TileName::EightM);
         assert_eq!(tile.tile_type(), TileType::Characters);
         assert_eq!(tile.category(), TileCategory::Simples);
-        assert!(!tile.is_red());
     }
 }

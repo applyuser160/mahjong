@@ -220,8 +220,4 @@ impl Tile {
     pub const fn category(self) -> TileCategory {
         self.name.category()
     }
-
-    pub const fn is_red(self) -> bool {
-        matches!(self.name, TileName::Red | TileName::Green | TileName::White)
-    }
 }
