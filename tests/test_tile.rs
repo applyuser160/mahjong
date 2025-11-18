@@ -2,7 +2,7 @@
 mod tests {
     use std::iter::zip;
 
-    use mahjong::tile::{TileName, TILE_NAME_NUMBER};
+    use mahjong::tile::{Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER};
 
     #[test]
     fn tile_name_case01() {
@@ -51,7 +51,19 @@ mod tests {
 
             let assert_number = if n > TILE_NAME_NUMBER { 0 } else { n };
             assert_eq!(tile_name as usize, assert_number);
-            assert_eq!(tile_name.to_string(), s);
+            assert_eq!(tile_name.as_str(), s);
         }
+    }
+
+    #[test]
+    fn tile_metadata_matches_name() {
+        let tile = Tile::new(TileName::Red);
+        assert_eq!(tile.name(), TileName::Red);
+        assert_eq!(tile.tile_type(), TileType::Dragons);
+        assert_eq!(tile.category(), TileCategory::Honors);
+
+        let tile = Tile::new(TileName::EightM);
+        assert_eq!(tile.tile_type(), TileType::Characters);
+        assert_eq!(tile.category(), TileCategory::Simples);
     }
 }

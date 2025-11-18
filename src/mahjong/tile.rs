@@ -1,8 +1,10 @@
 #[allow(dead_code)]
 pub const TILE_NAME_NUMBER: usize = 34;
+pub const TILE_PER_KIND: usize = 4;
+pub const TILE_WALL_CAPACITY: usize = TILE_NAME_NUMBER * TILE_PER_KIND;
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[repr(usize)]
 pub enum TileName {
     None = 0,
@@ -91,43 +93,86 @@ impl TileName {
     }
 
     #[allow(dead_code)]
-    pub fn to_string(&self) -> String {
+    pub fn as_str(&self) -> &'static str {
         match self {
-            TileName::None => String::from(" "),
-            TileName::OneM => String::from("1m"),
-            TileName::TwoM => String::from("2m"),
-            TileName::ThreeM => String::from("3m"),
-            TileName::FourM => String::from("4m"),
-            TileName::FiveM => String::from("5m"),
-            TileName::SixM => String::from("6m"),
-            TileName::SevenM => String::from("7m"),
-            TileName::EightM => String::from("8m"),
-            TileName::NineM => String::from("9m"),
-            TileName::OneP => String::from("1p"),
-            TileName::TwoP => String::from("2p"),
-            TileName::ThreeP => String::from("3p"),
-            TileName::FourP => String::from("4p"),
-            TileName::FiveP => String::from("5p"),
-            TileName::SixP => String::from("6p"),
-            TileName::SevenP => String::from("7p"),
-            TileName::EightP => String::from("8p"),
-            TileName::NineP => String::from("9p"),
-            TileName::OneS => String::from("1s"),
-            TileName::TwoS => String::from("2s"),
-            TileName::ThreeS => String::from("3s"),
-            TileName::FourS => String::from("4s"),
-            TileName::FiveS => String::from("5s"),
-            TileName::SixS => String::from("6s"),
-            TileName::SevenS => String::from("7s"),
-            TileName::EightS => String::from("8s"),
-            TileName::NineS => String::from("9s"),
-            TileName::East => String::from("東"),
-            TileName::South => String::from("南"),
-            TileName::West => String::from("西"),
-            TileName::North => String::from("北"),
-            TileName::Red => String::from("中"),
-            TileName::Green => String::from("発"),
-            TileName::White => String::from("白"),
+            TileName::None => " ",
+            TileName::OneM => "1m",
+            TileName::TwoM => "2m",
+            TileName::ThreeM => "3m",
+            TileName::FourM => "4m",
+            TileName::FiveM => "5m",
+            TileName::SixM => "6m",
+            TileName::SevenM => "7m",
+            TileName::EightM => "8m",
+            TileName::NineM => "9m",
+            TileName::OneP => "1p",
+            TileName::TwoP => "2p",
+            TileName::ThreeP => "3p",
+            TileName::FourP => "4p",
+            TileName::FiveP => "5p",
+            TileName::SixP => "6p",
+            TileName::SevenP => "7p",
+            TileName::EightP => "8p",
+            TileName::NineP => "9p",
+            TileName::OneS => "1s",
+            TileName::TwoS => "2s",
+            TileName::ThreeS => "3s",
+            TileName::FourS => "4s",
+            TileName::FiveS => "5s",
+            TileName::SixS => "6s",
+            TileName::SevenS => "7s",
+            TileName::EightS => "8s",
+            TileName::NineS => "9s",
+            TileName::East => "東",
+            TileName::South => "南",
+            TileName::West => "西",
+            TileName::North => "北",
+            TileName::Red => "中",
+            TileName::Green => "発",
+            TileName::White => "白",
+        }
+    }
+
+    pub const fn tile_type(&self) -> TileType {
+        match self {
+            TileName::OneM
+            | TileName::TwoM
+            | TileName::ThreeM
+            | TileName::FourM
+            | TileName::FiveM
+            | TileName::SixM
+            | TileName::SevenM
+            | TileName::EightM
+            | TileName::NineM => TileType::Characters,
+            TileName::OneP
+            | TileName::TwoP
+            | TileName::ThreeP
+            | TileName::FourP
+            | TileName::FiveP
+            | TileName::SixP
+            | TileName::SevenP
+            | TileName::EightP
+            | TileName::NineP => TileType::Circles,
+            TileName::OneS
+            | TileName::TwoS
+            | TileName::ThreeS
+            | TileName::FourS
+            | TileName::FiveS
+            | TileName::SixS
+            | TileName::SevenS
+            | TileName::EightS
+            | TileName::NineS => TileType::Bamboos,
+            TileName::East | TileName::South | TileName::West | TileName::North => TileType::Winds,
+            TileName::Red | TileName::Green | TileName::White => TileType::Dragons,
+            TileName::None => TileType::None,
+        }
+    }
+
+    pub const fn category(&self) -> TileCategory {
+        match self.tile_type() {
+            TileType::Characters | TileType::Circles | TileType::Bamboos => TileCategory::Simples,
+            TileType::Winds | TileType::Dragons => TileCategory::Honors,
+            TileType::None => TileCategory::None,
         }
     }
 }
@@ -149,17 +194,30 @@ pub enum TileType {
 #[repr(usize)]
 pub enum TileCategory {
     None = 0,
-    Sinples, /* 数牌      */
+    Simples, /* 数牌      */
     Honors,  /* 字牌      */
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Tile {
-    pub name: TileName,
-    pub tile_type: TileType,
-    pub category: TileCategory,
-    pub is_read: bool,
+    name: TileName,
 }
 
-impl Tile {}
+impl Tile {
+    pub const fn new(name: TileName) -> Self {
+        Self { name }
+    }
+
+    pub const fn name(self) -> TileName {
+        self.name
+    }
+
+    pub const fn tile_type(self) -> TileType {
+        self.name.tile_type()
+    }
+
+    pub const fn category(self) -> TileCategory {
+        self.name.category()
+    }
+}

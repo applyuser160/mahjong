@@ -1,17 +1,43 @@
 #[path = "mahjong/tile.rs"]
 pub mod tile;
 
-use pyo3::prelude::*;
+#[path = "mahjong/hand.rs"]
+pub mod hand;
 
-/// Formats the sum of two numbers as string.
+#[path = "mahjong/round.rs"]
+pub mod round;
+
+#[path = "mahjong/wall.rs"]
+pub mod wall;
+
+use pyo3::prelude::*;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+
+pub use round::{Round, PLAYER_NUMBER};
+pub use tile::{
+    Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY,
+};
+pub use wall::Wall;
+
 #[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
+pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
+    let mut wall = Wall::new();
+    let mut rng = StdRng::seed_from_u64(seed);
+    wall.shuffle(&mut rng);
+
+    let mut round = Round::new(wall);
+    let mut discards = Vec::new();
+
+    while let Some(tile) = round.play_turn(0) {
+        discards.push(tile.as_str());
+    }
+
+    Ok(discards)
 }
 
-/// A Python module implemented in Rust.
 #[pymodule]
 fn mahjong(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(play_once, m)?)?;
     Ok(())
 }
