@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use mahjong::tile::TileName;
     use mahjong::tile::TileName::*;
     use mahjong::yaku::{judge_yaku, WinContext, YakuId};
@@ -19,74 +17,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn detect_pinfu_and_tanyao() {
-        let tiles = vec![
-            TwoM, ThreeM, FourM, // 234m
-            FourP, FiveP, SixP, // 456p
-            ThreeS, FourS, FiveS, // 345s
-            SixS, SevenS, EightS, // 678s
-            TwoP, TwoP, // pair
-        ];
-
-        let ctx = WinContext {
-            is_closed: true,
-            is_tsumo: true,
-            ..Default::default()
-        };
-        let result = judge_yaku(&tiles, ctx);
-        let expected: HashSet<YakuId> =
-            HashSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
-        assert!(expected.is_subset(&result));
-    }
-
-    #[test]
-    fn detect_chitoitsu() {
-        let tiles = vec![
-            OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, FourM, FourM, FiveP, FiveP, SixP, SixP, SevenS,
-            SevenS,
-        ];
-
-        let result = judge_yaku(&tiles, WinContext::default());
-        assert!(result.contains(&YakuId::Chitoitsu));
-    }
-
-    #[test]
-    fn detect_kokushi() {
-        let tiles = vec![
-            OneM, NineM, OneP, NineP, OneS, NineS, East, South, West, North, Red, Green, White,
-            OneM,
-        ];
-
-        let result = judge_yaku(&tiles, WinContext::default());
-        assert!(result.contains(&YakuId::KokushiMusou));
-    }
-
-    #[test]
-    fn detect_daisangen() {
-        let tiles = vec![
-            Red, Red, Red, Green, Green, Green, White, White, White, OneM, OneM, OneM, TwoM, TwoM,
-        ];
-
-        let result = judge_yaku(&tiles, WinContext::default());
-        assert!(result.contains(&YakuId::Daisangen));
-        assert!(result.contains(&YakuId::Toitoi));
-    }
-
-    #[test]
-    fn detect_sanshoku_doujun() {
-        let tiles = vec![
-            FourM, FiveM, SixM, FourP, FiveP, SixP, FourS, FiveS, SixS, TwoM, TwoM, TwoM, NineP,
-            NineP,
-        ];
-
-        let result = judge_yaku(&tiles, WinContext::default());
-        assert!(result.contains(&YakuId::SanshokuDoujun));
-    }
-
-    #[test]
-    fn detect_every_yaku_with_multiple_examples() {
-        let cases: Vec<(YakuId, Vec<(Vec<TileName>, WinContext)>)> = vec![
+    fn yaku_cases() -> Vec<(YakuId, Vec<(Vec<TileName>, WinContext)>)> {
+        vec![
             (
                 YakuId::Riichi,
                 vec![
@@ -800,11 +732,58 @@ mod tests {
                     ),
                 ],
             ),
-        ];
-
-        for (id, hands) in cases {
-            assert_eq!(hands.len(), 2);
-            assert_detects_all(id, &hands);
-        }
+        ]
     }
+
+    fn cases_for(id: YakuId) -> Vec<(Vec<TileName>, WinContext)> {
+        yaku_cases()
+            .into_iter()
+            .find(|(case_id, _)| *case_id == id)
+            .map(|(_, hands)| hands)
+            .expect("missing yaku cases")
+    }
+
+    macro_rules! yaku_test {
+        ($name:ident, $id:expr) => {
+            #[test]
+            fn $name() {
+                assert_detects_all($id, &cases_for($id));
+            }
+        };
+    }
+
+    yaku_test!(detect_riichi, YakuId::Riichi);
+    yaku_test!(detect_menzen_tsumo, YakuId::MenzenTsumo);
+    yaku_test!(detect_tanyao, YakuId::Tanyao);
+    yaku_test!(detect_pinfu, YakuId::Pinfu);
+    yaku_test!(detect_ipeiko, YakuId::Ipeiko);
+    yaku_test!(detect_yakuhai_haku, YakuId::YakuhaiHaku);
+    yaku_test!(detect_yakuhai_hatsu, YakuId::YakuhaiHatsu);
+    yaku_test!(detect_yakuhai_chun, YakuId::YakuhaiChun);
+    yaku_test!(detect_yakuhai_jikaze, YakuId::YakuhaiJikaze);
+    yaku_test!(detect_yakuhai_bakaze, YakuId::YakuhaiBakaze);
+    yaku_test!(detect_chitoitsu, YakuId::Chitoitsu);
+    yaku_test!(detect_toitoi, YakuId::Toitoi);
+    yaku_test!(detect_sanankou, YakuId::Sanankou);
+    yaku_test!(detect_shousangen, YakuId::Shousangen);
+    yaku_test!(detect_chantaiyao, YakuId::Chantaiyao);
+    yaku_test!(detect_ryanpeiko, YakuId::Ryanpeiko);
+    yaku_test!(detect_sanshoku_doujun, YakuId::SanshokuDoujun);
+    yaku_test!(detect_sanshoku_doukou, YakuId::SanshokuDoukou);
+    yaku_test!(detect_honitsu, YakuId::Honitsu);
+    yaku_test!(detect_junchan, YakuId::Junchan);
+    yaku_test!(detect_chinitsu, YakuId::Chinitsu);
+    yaku_test!(detect_chinroutou, YakuId::Chinroutou);
+    yaku_test!(detect_honroutou, YakuId::Honroutou);
+    yaku_test!(detect_sankantsu, YakuId::Sankantsu);
+    yaku_test!(detect_kokushi_musou, YakuId::KokushiMusou);
+    yaku_test!(detect_suuankou, YakuId::Suuankou);
+    yaku_test!(detect_daisangen, YakuId::Daisangen);
+    yaku_test!(detect_shousuushi, YakuId::Shousuushi);
+    yaku_test!(detect_daisuushi, YakuId::Daisuushi);
+    yaku_test!(detect_tsuuiisou, YakuId::Tsuuiisou);
+    yaku_test!(detect_ryuuiisou, YakuId::Ryuuiisou);
+    yaku_test!(detect_chuuren_poutou, YakuId::ChuurenPoutou);
+    yaku_test!(detect_tenhou, YakuId::Tenhou);
+    yaku_test!(detect_chiihou, YakuId::Chiihou);
 }
