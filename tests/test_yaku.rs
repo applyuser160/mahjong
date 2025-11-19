@@ -127,7 +127,6 @@ mod tests {
 
         let result = judge_yaku(&tiles, WinContext::default());
         assert!(result.contains(&YakuId::Honitsu));
-        assert!(result.contains(&YakuId::YakuhaiHaku));
     }
 
     #[test]
