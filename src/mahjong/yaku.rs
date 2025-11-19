@@ -424,7 +424,7 @@ pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
         }
     }
 
-    if let Some(p) = patterns.get(0) {
+    if let Some(p) = patterns.first() {
         if contains_yakuhai(&counts, ctx.seat_wind) {
             if counts[TileName::White as usize] >= 3 {
                 result.insert(YakuId::YakuhaiHaku);
@@ -609,7 +609,7 @@ fn generate_patterns(counts: &[usize; 35]) -> Vec<HandPattern> {
         if counts[i] < 2 {
             continue;
         }
-        let mut working = counts.clone();
+        let mut working = *counts;
         working[i] -= 2;
         let pair = TileName::from_usize(i);
         let mut melds = Vec::new();
@@ -666,18 +666,22 @@ fn search_melds(
             let next2 = i + 2;
             if let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) {
                 if let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) {
-                    if s1 == suit && s2 == suit && r1 == rank + 1 && r2 == rank + 2 {
-                        if counts[next1] > 0 && counts[next2] > 0 {
-                            counts[i] -= 1;
-                            counts[next1] -= 1;
-                            counts[next2] -= 1;
-                            melds.push(MeldKind::Sequence(tile));
-                            search_melds(counts, melds, patterns, pair);
-                            melds.pop();
-                            counts[i] += 1;
-                            counts[next1] += 1;
-                            counts[next2] += 1;
-                        }
+                    if s1 == suit
+                        && s2 == suit
+                        && r1 == rank + 1
+                        && r2 == rank + 2
+                        && counts[next1] > 0
+                        && counts[next2] > 0
+                    {
+                        counts[i] -= 1;
+                        counts[next1] -= 1;
+                        counts[next2] -= 1;
+                        melds.push(MeldKind::Sequence(tile));
+                        search_melds(counts, melds, patterns, pair);
+                        melds.pop();
+                        counts[i] += 1;
+                        counts[next1] += 1;
+                        counts[next2] += 1;
                     }
                 }
             }
