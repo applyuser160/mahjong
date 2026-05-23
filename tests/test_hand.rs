@@ -12,9 +12,20 @@ mod tests {
         hand.push(FiveM);
 
         // Valid Chii (2m, 3m, 4m)
-        assert!(hand.call_meld(Meld::Chii(TwoM), &[ThreeM, FourM]).is_ok());
+        assert!(hand
+            .call_meld(Meld::Chii {
+                called: TwoM,
+                consumed: [ThreeM, FourM]
+            })
+            .is_ok());
         assert_eq!(hand.open_melds.len(), 1);
-        assert_eq!(hand.open_melds[0], Meld::Chii(TwoM));
+        assert_eq!(
+            hand.open_melds[0],
+            Meld::Chii {
+                called: TwoM,
+                consumed: [ThreeM, FourM]
+            }
+        );
     }
 
     #[test]
@@ -25,7 +36,10 @@ mod tests {
         hand.push(FourM);
 
         // Invalid Chii crossing suits (2m, 3p, 4m)
-        let result = hand.call_meld(Meld::Chii(TwoM), &[ThreeP, FourM]);
+        let result = hand.call_meld(Meld::Chii {
+            called: TwoM,
+            consumed: [ThreeP, FourM],
+        });
         assert!(result.is_err());
         assert_eq!(hand.open_melds.len(), 0);
     }
@@ -38,7 +52,10 @@ mod tests {
         hand.push(FiveM);
 
         // Invalid Chii not sequential (2m, 3m, 5m)
-        let result = hand.call_meld(Meld::Chii(TwoM), &[ThreeM, FiveM]);
+        let result = hand.call_meld(Meld::Chii {
+            called: TwoM,
+            consumed: [ThreeM, FiveM],
+        });
         assert!(result.is_err());
         assert_eq!(hand.open_melds.len(), 0);
     }
@@ -48,7 +65,10 @@ mod tests {
         let mut hand = Hand::new();
         hand.push(TwoM);
 
-        let result = hand.call_meld(Meld::Chii(TwoM), &[ThreeM, FourM]);
+        let result = hand.call_meld(Meld::Chii {
+            called: TwoM,
+            consumed: [ThreeM, FourM],
+        });
         assert!(result.is_err());
     }
 
@@ -59,7 +79,7 @@ mod tests {
         hand.push(Red);
         hand.push(Red);
 
-        assert!(hand.call_meld(Meld::Pon(Red), &[Red, Red]).is_ok());
+        assert!(hand.call_meld(Meld::Pon(Red)).is_ok());
         assert_eq!(hand.open_melds.len(), 1);
         assert_eq!(hand.open_melds[0], Meld::Pon(Red));
     }
@@ -69,7 +89,7 @@ mod tests {
         let mut hand = Hand::new();
         hand.push(Red); // Only 1 Red in hand, but trying to consume 2
 
-        let result = hand.call_meld(Meld::Pon(Red), &[Red, Red]);
+        let result = hand.call_meld(Meld::Pon(Red));
         assert!(result.is_err());
     }
 }

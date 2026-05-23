@@ -13,9 +13,6 @@ pub mod wall;
 #[path = "mahjong/yaku.rs"]
 pub mod yaku;
 
-#[path = "mahjong/river.rs"]
-pub mod river;
-
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;

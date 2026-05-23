@@ -400,7 +400,7 @@ pub fn judge_yaku(
     let mut open_melds = Vec::new();
     for meld in open_melds_input {
         match meld {
-            crate::hand::Meld::Chii(tile) => open_melds.push(MeldKind::Sequence(*tile)),
+            crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
             crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
             crate::hand::Meld::Kan(tile) => open_melds.push(MeldKind::Quad(*tile)),
         }

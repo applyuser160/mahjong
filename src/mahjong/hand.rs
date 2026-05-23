@@ -2,7 +2,10 @@ use crate::tile::TileName;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Meld {
-    Chii(TileName),
+    Chii {
+        called: TileName,
+        consumed: [TileName; 2],
+    },
     Pon(TileName),
     Kan(TileName),
 }
@@ -45,40 +48,34 @@ impl Hand {
         removed
     }
 
-    pub fn call_meld(
-        &mut self,
-        meld: Meld,
-        consumed_from_hand: &[TileName],
-    ) -> Result<(), &'static str> {
-        if let Meld::Chii(tile) = meld {
-            let info = crate::yaku::is_number_tile(tile).ok_or("Invalid tile for Chii")?;
-            if info.1 > 7 {
-                return Err("Chii sequence exceeds rank 9");
-            }
+    pub fn call_meld(&mut self, meld: Meld) -> Result<(), &'static str> {
+        let consumed_from_hand: Vec<TileName> = match meld {
+            Meld::Chii { called, consumed } => {
+                let info = crate::yaku::is_number_tile(called).ok_or("Invalid tile for Chii")?;
 
-            if consumed_from_hand.len() != 2 {
-                return Err("Chii requires exactly 2 consumed tiles");
-            }
-
-            let mut ranks = vec![info.1];
-            for &consumed in consumed_from_hand {
-                let consumed_info = crate::yaku::is_number_tile(consumed)
-                    .ok_or("Invalid consumed tile for Chii")?;
-                if consumed_info.0 != info.0 {
-                    return Err("Cross-suit Chii is not allowed");
+                let mut ranks = vec![info.1];
+                for &c in &consumed {
+                    let consumed_info =
+                        crate::yaku::is_number_tile(c).ok_or("Invalid consumed tile for Chii")?;
+                    if consumed_info.0 != info.0 {
+                        return Err("Cross-suit Chii is not allowed");
+                    }
+                    ranks.push(consumed_info.1);
                 }
-                ranks.push(consumed_info.1);
-            }
 
-            ranks.sort_unstable();
-            if ranks[1] != ranks[0] + 1 || ranks[2] != ranks[1] + 1 {
-                return Err("Tiles do not form a consecutive sequence");
+                ranks.sort_unstable();
+                if ranks[1] != ranks[0] + 1 || ranks[2] != ranks[1] + 1 {
+                    return Err("Tiles do not form a consecutive sequence");
+                }
+                consumed.to_vec()
             }
-        }
+            Meld::Pon(tile) => vec![tile, tile],
+            Meld::Kan(tile) => vec![tile, tile, tile],
+        };
 
         // Verify that we have the consumed tiles, accounting for duplicates
         let mut available_tiles = self.tiles[..self.len].to_vec();
-        for &t in consumed_from_hand {
+        for &t in &consumed_from_hand {
             if let Some(pos) = available_tiles.iter().position(|&x| x == t) {
                 available_tiles.remove(pos);
             } else {
@@ -87,7 +84,7 @@ impl Hand {
         }
 
         // Remove the consumed tiles
-        for &t in consumed_from_hand {
+        for &t in &consumed_from_hand {
             if let Some(pos) = self.tiles[..self.len].iter().position(|&x| x == t) {
                 self.discard(pos);
             }
