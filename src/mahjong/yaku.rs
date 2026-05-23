@@ -386,7 +386,10 @@ pub fn judge_yaku(
     }
 
     if !open_melds_input.is_empty() {
-        ctx.is_closed = false;
+        let has_open = open_melds_input.iter().any(|m| !matches!(m, crate::hand::Meld::Ankan(_)));
+        if has_open {
+            ctx.is_closed = false;
+        }
     }
 
     let mut counts = [0usize; 35];
@@ -402,7 +405,9 @@ pub fn judge_yaku(
         match meld {
             crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
             crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
-            crate::hand::Meld::Kan(tile) => open_melds.push(MeldKind::Quad(*tile)),
+            crate::hand::Meld::Daiminkan(tile)
+            | crate::hand::Meld::Ankan(tile)
+            | crate::hand::Meld::Kakan(tile) => open_melds.push(MeldKind::Quad(*tile)),
         }
     }
 

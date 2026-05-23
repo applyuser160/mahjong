@@ -92,4 +92,57 @@ mod tests {
         let result = hand.call_meld(Meld::Pon(Red));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_call_meld_daiminkan() {
+        let mut hand = Hand::new();
+        hand.push(White);
+        hand.push(White);
+        hand.push(White);
+
+        assert!(hand.call_meld(Meld::Daiminkan(White)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Daiminkan(White));
+    }
+
+    #[test]
+    fn test_call_meld_ankan() {
+        let mut hand = Hand::new();
+        hand.push(Green);
+        hand.push(Green);
+        hand.push(Green);
+        hand.push(Green);
+
+        assert!(hand.call_meld(Meld::Ankan(Green)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Ankan(Green));
+    }
+
+    #[test]
+    fn test_call_meld_kakan() {
+        let mut hand = Hand::new();
+        hand.push(East);
+        hand.push(East);
+
+        // First make a Pon
+        assert!(hand.call_meld(Meld::Pon(East)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Pon(East));
+
+        // Now push the fourth tile and call Kakan
+        hand.push(East);
+        assert!(hand.call_meld(Meld::Kakan(East)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1); // length should still be 1
+        assert_eq!(hand.open_melds[0], Meld::Kakan(East)); // should have replaced Pon
+    }
+
+    #[test]
+    fn test_call_meld_kakan_without_pon_fails() {
+        let mut hand = Hand::new();
+        hand.push(East);
+
+        // Try to call Kakan without a preceding Pon
+        let result = hand.call_meld(Meld::Kakan(East));
+        assert!(result.is_err());
+    }
 }
