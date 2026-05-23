@@ -18,11 +18,12 @@ mod tests {
             w.shuffle(&mut StdRng::seed_from_u64(seed));
             let mut r = Round::new(w);
 
-            // P0 draws and discards the first tile (index 0)
+            // turn is 1, so P1 plays first! Wait, the prompt says "turnの初期値は1であるべき" (initial value of turn should be 1).
+            // P1 draws and discards the first tile (index 0)
             let discarded = r.play_turn(0).unwrap();
 
-            // Does P2 have at least two of `discarded`?
-            let p2_hand = r.hand(2);
+            // Does P3 have at least two of `discarded`?
+            let p2_hand = r.hand(3);
             let count = p2_hand.iter().filter(|&&t| t == discarded).count();
             if count >= 2 {
                 found_seed = Some((seed, discarded));
@@ -36,26 +37,26 @@ mod tests {
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
 
-        // P0's turn
+        // P1's turn
         let actual_discard = round.play_turn(0).unwrap();
         assert_eq!(actual_discard, discarded);
-        assert_eq!(round.turn(), 1);
+        assert_eq!(round.turn(), 2);
 
-        // P2 calls Pon!
-        // Since P2 has 2 copies, they can call Pon. We discard index 0 from P2's hand after Pon.
+        // P3 calls Pon!
+        // Since P3 has 2 copies, they can call Pon. We discard index 0 from P3's hand after Pon.
         let meld = Meld::Pon(discarded);
 
-        let p2_discard = round.play_meld(2, meld, 0).unwrap();
+        let p2_discard = round.play_meld(3, meld, 0).unwrap();
 
-        // Now turn should be 3 (P2's turn is over, next is P3)
-        assert_eq!(round.turn(), 3);
+        // Now turn should be 0 (P3's turn is over, next is P0)
+        assert_eq!(round.turn(), 0);
 
-        // P0's river should be missing the discarded tile (it was popped)
-        assert_eq!(round.river(0).tiles().len(), 0);
+        // P1's river should be missing the discarded tile (it was popped)
+        assert_eq!(round.river(1).tiles().len(), 0);
 
-        // P2's river should have the discarded tile
-        assert_eq!(round.river(2).tiles().len(), 1);
-        assert_eq!(round.river(2).tiles()[0], p2_discard);
+        // P3's river should have the discarded tile
+        assert_eq!(round.river(3).tiles().len(), 1);
+        assert_eq!(round.river(3).tiles()[0], p2_discard);
     }
 
     #[test]
@@ -64,12 +65,12 @@ mod tests {
         let mut round = Round::new(wall);
 
         let discarded = round.play_turn(0).unwrap();
-        assert_eq!(round.river(0).tiles().len(), 1);
-        assert_eq!(round.river(0).tiles()[0], discarded);
+        assert_eq!(round.river(1).tiles().len(), 1);
+        assert_eq!(round.river(1).tiles()[0], discarded);
 
         let discarded2 = round.play_turn(0).unwrap();
-        assert_eq!(round.river(1).tiles().len(), 1);
-        assert_eq!(round.river(1).tiles()[0], discarded2);
+        assert_eq!(round.river(2).tiles().len(), 1);
+        assert_eq!(round.river(2).tiles()[0], discarded2);
     }
 
     #[test]

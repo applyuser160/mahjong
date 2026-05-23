@@ -20,7 +20,7 @@ impl Round {
             wall,
             hands: [Hand::new(), Hand::new(), Hand::new(), Hand::new()],
             rivers: [River::new(), River::new(), River::new(), River::new()],
-            turn: 0,
+            turn: 1,
         };
 
         round.deal();
