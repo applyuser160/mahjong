@@ -385,7 +385,17 @@ pub fn judge_yaku(
         return result;
     }
 
-    if !open_melds_input.is_empty() {
+    let mut has_open_meld = false;
+    for meld in open_melds_input {
+        match meld {
+            crate::hand::Meld::Chii { .. } | crate::hand::Meld::Pon(_) | crate::hand::Meld::Daiminkan(_) | crate::hand::Meld::Kakan(_) => {
+                has_open_meld = true;
+            }
+            crate::hand::Meld::Ankan(_) => {}
+        }
+    }
+
+    if has_open_meld {
         ctx.is_closed = false;
     }
 
@@ -398,15 +408,30 @@ pub fn judge_yaku(
     }
 
     let mut open_melds = Vec::new();
+    let mut closed_melds = Vec::new();
+    let mut kan_count = 0;
+
     for meld in open_melds_input {
         match meld {
             crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
             crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
-            crate::hand::Meld::Kan(tile) => open_melds.push(MeldKind::Quad(*tile)),
+            crate::hand::Meld::Daiminkan(tile) | crate::hand::Meld::Kakan(tile) => {
+                open_melds.push(MeldKind::Quad(*tile));
+                kan_count += 1;
+            }
+            crate::hand::Meld::Ankan(tile) => {
+                closed_melds.push(MeldKind::Quad(*tile));
+                kan_count += 1;
+            }
         }
     }
 
-    let patterns = generate_patterns(&counts, &open_melds);
+    // Use derived kan count for Sankantsu if it exceeds the context provided one
+    if kan_count > ctx.kan_count {
+        ctx.kan_count = kan_count;
+    }
+
+    let patterns = generate_patterns(&counts, &open_melds, &closed_melds);
 
     if ctx.riichi && ctx.is_closed {
         result.insert(YakuId::Riichi);
@@ -628,7 +653,7 @@ fn is_simple(tile: TileName) -> bool {
     )
 }
 
-fn generate_patterns(counts: &[usize; 35], open_melds: &[MeldKind]) -> Vec<HandPattern> {
+fn generate_patterns(counts: &[usize; 35], open_melds: &[MeldKind], closed_melds: &[MeldKind]) -> Vec<HandPattern> {
     let mut patterns = Vec::new();
 
     for i in 1..counts.len() {
@@ -638,7 +663,7 @@ fn generate_patterns(counts: &[usize; 35], open_melds: &[MeldKind]) -> Vec<HandP
         let mut working = *counts;
         working[i] -= 2;
         let pair = TileName::from_usize(i);
-        let mut melds = Vec::new();
+        let mut melds = closed_melds.to_vec();
         search_melds(&mut working, &mut melds, &mut patterns, pair, open_melds);
     }
 
