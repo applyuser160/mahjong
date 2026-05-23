@@ -18,6 +18,7 @@ mod tests {
         let ctx = WinContext {
             is_closed: true,
             is_tsumo: true,
+            win_tile: Some(FourM),
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
@@ -208,7 +209,7 @@ mod tests {
 
         let ctx = WinContext {
             is_tsumo: false,
-            ron_tile: Some(ThreeM), // ron on 3m, making 333m open
+            win_tile: Some(ThreeM), // ron on 3m, making 333m open
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
@@ -227,7 +228,7 @@ mod tests {
 
         let ctx = WinContext {
             is_tsumo: false,
-            ron_tile: Some(FourM), // ron on 4m, making 456m open, but triplets remain closed
+            win_tile: Some(FourM), // ron on 4m, making 456m open, but triplets remain closed
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
@@ -246,7 +247,7 @@ mod tests {
 
         let ctx = WinContext {
             is_tsumo: false,
-            ron_tile: Some(White), // ron on pair (Tanki), triplets remain closed
+            win_tile: Some(White), // ron on pair (Tanki), triplets remain closed
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
@@ -265,12 +266,92 @@ mod tests {
 
         let ctx = WinContext {
             is_tsumo: false,
-            ron_tile: Some(FourP), // ron on a triplet (Shanpon), downgrades to Sanankou + Toitoi
+            win_tile: Some(FourP), // ron on a triplet (Shanpon), downgrades to Sanankou + Toitoi
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
         assert!(!result.contains(&YakuId::Suuankou));
         assert!(result.contains(&YakuId::Sanankou));
         assert!(result.contains(&YakuId::Toitoi));
+    }
+
+    #[test]
+    fn detect_pinfu_ryamen() {
+        let tiles = vec![
+            TwoM, ThreeM, FourM, // 234m
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            TwoP, TwoP, // pair
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(FourM), // ryamen wait on 1m or 4m
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(result.contains(&YakuId::Pinfu));
+    }
+
+    #[test]
+    fn detect_pinfu_fails_kanchan() {
+        let tiles = vec![
+            TwoM, ThreeM, FourM, // 234m
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            TwoP, TwoP, // pair
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(ThreeM), // kanchan wait on 3m (2m 4m wait for 3m)
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Pinfu));
+    }
+
+    #[test]
+    fn detect_pinfu_fails_penchan() {
+        let tiles = vec![
+            OneM, TwoM, ThreeM, // 123m
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            TwoP, TwoP, // pair
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(ThreeM), // penchan wait on 3m (1m 2m wait for 3m)
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Pinfu));
+    }
+
+    #[test]
+    fn detect_pinfu_fails_nobetan() {
+        let tiles = vec![
+            TwoM, ThreeM, FourM, FiveM, // 2345m (nobetan)
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            TwoM, // The drawn tile
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(TwoM), // nobetan wait on 2m or 5m (acts as tanki pair)
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Pinfu));
     }
 }
