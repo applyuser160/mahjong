@@ -68,7 +68,11 @@ impl Round {
         };
 
         // Determine the last discarded tile
-        let last_discard = self.rivers[previous_player].tiles().last().copied().ok_or("No tile in river to call")?;
+        let last_discard = self.rivers[previous_player]
+            .tiles()
+            .last()
+            .copied()
+            .ok_or("No tile in river to call")?;
 
         if last_discard != called_tile {
             return Err("Called tile does not match the last discarded tile");
