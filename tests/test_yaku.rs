@@ -342,7 +342,7 @@ mod tests {
             FourP, FiveP, SixP, // 456p
             ThreeS, FourS, FiveS, // 345s
             SixS, SevenS, EightS, // 678s
-            TwoM, // The drawn tile
+            TwoM,   // The drawn tile
         ];
 
         let ctx = WinContext {
