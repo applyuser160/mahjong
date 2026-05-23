@@ -4,9 +4,59 @@ mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
+    use mahjong::hand::Meld;
     use mahjong::round::{Round, PLAYER_NUMBER};
     use mahjong::tile::{TileName, TILE_WALL_CAPACITY};
     use mahjong::wall::Wall;
+
+    #[test]
+    fn test_play_meld_turn_update() {
+        // Find a seed where Player 2 can pon Player 0's discard.
+        let mut found_seed = None;
+        for seed in 0..1000 {
+            let mut w = Wall::new();
+            w.shuffle(&mut StdRng::seed_from_u64(seed));
+            let mut r = Round::new(w);
+
+            // P0 draws and discards the first tile (index 0)
+            let discarded = r.play_turn(0).unwrap();
+
+            // Does P2 have at least two of `discarded`?
+            let p2_hand = r.hand(2);
+            let count = p2_hand.iter().filter(|&&t| t == discarded).count();
+            if count >= 2 {
+                found_seed = Some((seed, discarded));
+                break;
+            }
+        }
+
+        let (seed, discarded) = found_seed.unwrap();
+
+        let mut wall = Wall::new();
+        wall.shuffle(&mut StdRng::seed_from_u64(seed));
+        let mut round = Round::new(wall);
+
+        // P0's turn
+        let actual_discard = round.play_turn(0).unwrap();
+        assert_eq!(actual_discard, discarded);
+        assert_eq!(round.turn(), 1);
+
+        // P2 calls Pon!
+        // Since P2 has 2 copies, they can call Pon. We discard index 0 from P2's hand after Pon.
+        let meld = Meld::Pon(discarded);
+
+        let p2_discard = round.play_meld(2, meld, 0).unwrap();
+
+        // Now turn should be 3 (P2's turn is over, next is P3)
+        assert_eq!(round.turn(), 3);
+
+        // P0's river should be missing the discarded tile (it was popped)
+        assert_eq!(round.river(0).tiles().len(), 0);
+
+        // P2's river should have the discarded tile
+        assert_eq!(round.river(2).tiles().len(), 1);
+        assert_eq!(round.river(2).tiles()[0], p2_discard);
+    }
 
     #[test]
     fn test_river_discards() {
