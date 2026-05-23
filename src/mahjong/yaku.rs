@@ -355,7 +355,7 @@ pub struct WinContext {
     pub kan_count: usize,
     pub tenhou: bool,
     pub chiihou: bool,
-    pub ron_tile: Option<TileName>,
+    pub win_tile: Option<TileName>,
 }
 
 impl Default for WinContext {
@@ -369,7 +369,7 @@ impl Default for WinContext {
             kan_count: 0,
             tenhou: false,
             chiihou: false,
-            ron_tile: None,
+            win_tile: None,
         }
     }
 }
@@ -765,6 +765,8 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
         return Some(false);
     }
 
+    let win_tile = ctx.win_tile?;
+
     for pattern in patterns {
         if pattern
             .all_melds()
@@ -777,7 +779,29 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
             continue;
         }
 
-        return Some(true);
+        let mut is_ryamen = false;
+        for meld in pattern.all_melds() {
+            if let MeldKind::Sequence(start_tile) = meld {
+                if let Some((suit, rank)) = is_number_tile(*start_tile) {
+                    if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
+                        if suit == win_suit {
+                            if win_rank == rank && rank < 7 {
+                                is_ryamen = true;
+                                break;
+                            }
+                            if win_rank == rank + 2 && rank > 1 {
+                                is_ryamen = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if is_ryamen {
+            return Some(true);
+        }
     }
 
     Some(false)
@@ -853,10 +877,10 @@ fn is_sanankou(patterns: &[HandPattern], ctx: &WinContext) -> bool {
             .count();
 
         if !ctx.is_tsumo {
-            if let Some(ron_tile) = ctx.ron_tile {
+            if let Some(win_tile) = ctx.win_tile {
                 // If ron tile completes a triplet in closed melds, subtract 1
                 let matches_ron = pattern.melds.iter().any(|m| match m {
-                    MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                    MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == win_tile,
                     _ => false,
                 });
                 if matches_ron {
@@ -1062,9 +1086,9 @@ fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool
                 .all(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)));
 
             if all_triplets && !ctx.is_tsumo {
-                if let Some(ron_tile) = ctx.ron_tile {
+                if let Some(win_tile) = ctx.win_tile {
                     let completes_triplet = pattern.melds.iter().any(|m| match m {
-                        MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                        MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == win_tile,
                         _ => false,
                     });
 
@@ -1072,7 +1096,7 @@ fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool
                         // For Suuankou, ron on a triplet means we have 3 closed and 1 open, which is Sanankou Toitoi, not Suuankou
                         // EXCEPT if it was a single wait (Tanki), where we already have 4 closed triplets and wait for a pair
                         // To accurately check this we verify if the pair is the ron tile.
-                        if pattern.pair != ron_tile {
+                        if pattern.pair != win_tile {
                             all_triplets = false;
                         }
                     }
