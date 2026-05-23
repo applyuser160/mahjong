@@ -1,4 +1,4 @@
-use crate::hand::Hand;
+use crate::hand::{Hand, Meld};
 use crate::river::River;
 use crate::tile::TileName;
 use crate::wall::Wall;
@@ -20,7 +20,7 @@ impl Round {
             wall,
             hands: [Hand::new(), Hand::new(), Hand::new(), Hand::new()],
             rivers: [River::new(), River::new(), River::new(), River::new()],
-            turn: 0,
+            turn: 1,
         };
 
         round.deal();
@@ -39,6 +39,10 @@ impl Round {
         &self.rivers[index]
     }
 
+    pub fn turn(&self) -> usize {
+        self.turn
+    }
+
     pub fn play_turn(&mut self, discard_index: usize) -> Option<TileName> {
         let drawn = self.wall.draw()?;
         let hand = &mut self.hands[self.turn];
@@ -47,6 +51,57 @@ impl Round {
         self.rivers[self.turn].push(discarded);
         self.turn = (self.turn + 1) % PLAYER_NUMBER;
         Some(discarded)
+    }
+
+    pub fn play_meld(
+        &mut self,
+        player_index: usize,
+        meld: Meld,
+        discard_index: usize,
+    ) -> Result<TileName, &'static str> {
+        let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
+
+        let called_tile = match meld {
+            Meld::Chii { called, .. } => called,
+            Meld::Pon(called) => called,
+            Meld::Kan(called) => called,
+        };
+
+        // Determine the last discarded tile
+        let last_discard = self.rivers[previous_player]
+            .tiles()
+            .last()
+            .copied()
+            .ok_or("No tile in river to call")?;
+
+        if last_discard != called_tile {
+            return Err("Called tile does not match the last discarded tile");
+        }
+
+        // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
+        self.hands[player_index].call_meld(meld)?;
+
+        // Remove the tile from the previous player's river
+        self.rivers[previous_player].pop();
+
+        let hand = &mut self.hands[player_index];
+
+        // For Kan, we draw a replacement tile.
+        if let Meld::Kan(_) = meld {
+            if let Some(drawn) = self.wall.draw() {
+                hand.push(drawn);
+            } else {
+                return Err("Wall is empty, cannot draw replacement tile for Kan");
+            }
+        }
+
+        let discarded = hand.discard(discard_index);
+        self.rivers[player_index].push(discarded);
+
+        // Update turn: the next turn belongs to the player after the one who called the meld
+        self.turn = (player_index + 1) % PLAYER_NUMBER;
+
+        Ok(discarded)
     }
 
     fn deal(&mut self) {
