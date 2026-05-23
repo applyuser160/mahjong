@@ -326,7 +326,7 @@ pub const ALL_YAKU: &[Yaku] = &[
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MeldKind {
+pub enum MeldKind {
     Sequence(TileName),
     Triplet(TileName),
     Quad(TileName),
@@ -336,6 +336,13 @@ enum MeldKind {
 struct HandPattern {
     pair: TileName,
     melds: Vec<MeldKind>,
+    open_melds: Vec<MeldKind>,
+}
+
+impl HandPattern {
+    fn all_melds(&self) -> impl Iterator<Item = &MeldKind> {
+        self.melds.iter().chain(self.open_melds.iter())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -348,6 +355,7 @@ pub struct WinContext {
     pub kan_count: usize,
     pub tenhou: bool,
     pub chiihou: bool,
+    pub ron_tile: Option<TileName>,
 }
 
 impl Default for WinContext {
@@ -361,15 +369,24 @@ impl Default for WinContext {
             kan_count: 0,
             tenhou: false,
             chiihou: false,
+            ron_tile: None,
         }
     }
 }
 
-pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
+pub fn judge_yaku(
+    tiles: &[TileName],
+    open_melds_input: &[crate::hand::Meld],
+    mut ctx: WinContext,
+) -> HashSet<YakuId> {
     let mut result = HashSet::new();
 
     if tiles.is_empty() {
         return result;
+    }
+
+    if !open_melds_input.is_empty() {
+        ctx.is_closed = false;
     }
 
     let mut counts = [0usize; 35];
@@ -380,7 +397,16 @@ pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
         }
     }
 
-    let patterns = generate_patterns(&counts);
+    let mut open_melds = Vec::new();
+    for meld in open_melds_input {
+        match meld {
+            crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
+            crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
+            crate::hand::Meld::Kan(tile) => open_melds.push(MeldKind::Quad(*tile)),
+        }
+    }
+
+    let patterns = generate_patterns(&counts, &open_melds);
 
     if ctx.riichi && ctx.is_closed {
         result.insert(YakuId::Riichi);
@@ -452,7 +478,7 @@ pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
         if is_toitoi(&patterns) {
             result.insert(YakuId::Toitoi);
         }
-        if is_sanankou(&patterns) {
+        if is_sanankou(&patterns, &ctx) {
             result.insert(YakuId::Sanankou);
         }
         if is_shousangen(p) {
@@ -502,7 +528,7 @@ pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
         if is_ryuuiisou(&counts) {
             result.insert(YakuId::Ryuuiisou);
         }
-        if is_suuankou(&patterns, ctx.is_closed) {
+        if is_suuankou(&patterns, ctx.is_closed, &ctx) {
             result.insert(YakuId::Suuankou);
         }
         if is_chuuren_poutou(&counts, tiles.len()) {
@@ -513,7 +539,7 @@ pub fn judge_yaku(tiles: &[TileName], ctx: WinContext) -> HashSet<YakuId> {
     result
 }
 
-fn is_number_tile(tile: TileName) -> Option<(usize, usize)> {
+pub fn is_number_tile(tile: TileName) -> Option<(usize, usize)> {
     match tile {
         TileName::OneM => Some((0, 1)),
         TileName::TwoM => Some((0, 2)),
@@ -602,7 +628,7 @@ fn is_simple(tile: TileName) -> bool {
     )
 }
 
-fn generate_patterns(counts: &[usize; 35]) -> Vec<HandPattern> {
+fn generate_patterns(counts: &[usize; 35], open_melds: &[MeldKind]) -> Vec<HandPattern> {
     let mut patterns = Vec::new();
 
     for i in 1..counts.len() {
@@ -613,7 +639,7 @@ fn generate_patterns(counts: &[usize; 35]) -> Vec<HandPattern> {
         working[i] -= 2;
         let pair = TileName::from_usize(i);
         let mut melds = Vec::new();
-        search_melds(&mut working, &mut melds, &mut patterns, pair);
+        search_melds(&mut working, &mut melds, &mut patterns, pair, open_melds);
     }
 
     patterns
@@ -624,6 +650,7 @@ fn search_melds(
     melds: &mut Vec<MeldKind>,
     patterns: &mut Vec<HandPattern>,
     pair: TileName,
+    open_melds: &[MeldKind],
 ) {
     let mut index = None;
     for (i, value) in counts.iter().enumerate().skip(1) {
@@ -637,6 +664,7 @@ fn search_melds(
         patterns.push(HandPattern {
             pair,
             melds: melds.clone(),
+            open_melds: open_melds.to_vec(),
         });
         return;
     }
@@ -647,7 +675,7 @@ fn search_melds(
     if counts[i] >= 3 {
         counts[i] -= 3;
         melds.push(MeldKind::Triplet(tile));
-        search_melds(counts, melds, patterns, pair);
+        search_melds(counts, melds, patterns, pair, open_melds);
         melds.pop();
         counts[i] += 3;
     }
@@ -655,7 +683,7 @@ fn search_melds(
     if counts[i] >= 4 {
         counts[i] -= 4;
         melds.push(MeldKind::Quad(tile));
-        search_melds(counts, melds, patterns, pair);
+        search_melds(counts, melds, patterns, pair, open_melds);
         melds.pop();
         counts[i] += 4;
     }
@@ -677,7 +705,7 @@ fn search_melds(
                         counts[next1] -= 1;
                         counts[next2] -= 1;
                         melds.push(MeldKind::Sequence(tile));
-                        search_melds(counts, melds, patterns, pair);
+                        search_melds(counts, melds, patterns, pair, open_melds);
                         melds.pop();
                         counts[i] += 1;
                         counts[next1] += 1;
@@ -700,15 +728,14 @@ fn is_tanyao(counts: &[usize; 35]) -> bool {
 fn has_ipeiko(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
         let mut sequences: HashMap<TileName, usize> = HashMap::new();
-        for meld in &pattern.melds {
+        for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
                 *sequences.entry(*tile).or_default() += 1;
             }
         }
         sequences.values().any(|v| *v >= 2)
             && pattern
-                .melds
-                .iter()
+                .all_melds()
                 .all(|m| matches!(m, MeldKind::Sequence(_)))
     })
 }
@@ -716,14 +743,13 @@ fn has_ipeiko(patterns: &[HandPattern]) -> bool {
 fn has_ryanpeiko(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
         if pattern
-            .melds
-            .iter()
+            .all_melds()
             .any(|m| !matches!(m, MeldKind::Sequence(_)))
         {
             return false;
         }
         let mut sequences: HashMap<TileName, usize> = HashMap::new();
-        for meld in &pattern.melds {
+        for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
                 *sequences.entry(*tile).or_default() += 1;
             }
@@ -743,8 +769,7 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
 
     for pattern in patterns {
         if pattern
-            .melds
-            .iter()
+            .all_melds()
             .any(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)))
         {
             continue;
@@ -811,19 +836,31 @@ fn is_kokushi(counts: &[usize; 35]) -> bool {
 fn is_toitoi(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
         pattern
-            .melds
-            .iter()
+            .all_melds()
             .all(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)))
     })
 }
 
-fn is_sanankou(patterns: &[HandPattern]) -> bool {
+fn is_sanankou(patterns: &[HandPattern], ctx: &WinContext) -> bool {
     patterns.iter().any(|pattern| {
-        let count = pattern
+        let mut count = pattern
             .melds
             .iter()
             .filter(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)))
             .count();
+
+        if !ctx.is_tsumo {
+            if let Some(ron_tile) = ctx.ron_tile {
+                // If ron tile completes a triplet in closed melds, subtract 1
+                let matches_ron = pattern.melds.iter().any(|m| match m {
+                    MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                    _ => false,
+                });
+                if matches_ron {
+                    count -= 1;
+                }
+            }
+        }
         count >= 3
     })
 }
@@ -832,7 +869,7 @@ fn is_shousangen(pattern: &HandPattern) -> bool {
     let mut dragon_triplets = 0;
     let mut dragon_pair = false;
 
-    for meld in &pattern.melds {
+    for meld in pattern.all_melds() {
         match meld {
             MeldKind::Triplet(tile) | MeldKind::Quad(tile) => {
                 if matches!(tile, TileName::Red | TileName::Green | TileName::White) {
@@ -865,7 +902,7 @@ fn is_chantaiyao(patterns: &[HandPattern]) -> bool {
             return false;
         }
 
-        pattern.melds.iter().all(|meld| match meld {
+        pattern.all_melds().all(|meld| match meld {
             MeldKind::Sequence(tile) => matches!(is_number_tile(*tile), Some((_, 1 | 7))),
             MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal_or_honor(*tile),
         })
@@ -875,7 +912,7 @@ fn is_chantaiyao(patterns: &[HandPattern]) -> bool {
 fn has_sanshoku_doujun(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
         let mut map: HashMap<usize, HashSet<usize>> = HashMap::new();
-        for meld in &pattern.melds {
+        for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
                 if let Some((suit, rank)) = is_number_tile(*tile) {
                     map.entry(rank).or_default().insert(suit);
@@ -889,7 +926,7 @@ fn has_sanshoku_doujun(patterns: &[HandPattern]) -> bool {
 fn has_sanshoku_doukou(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
         let mut map: HashMap<usize, HashSet<usize>> = HashMap::new();
-        for meld in &pattern.melds {
+        for meld in pattern.all_melds() {
             match meld {
                 MeldKind::Triplet(tile) | MeldKind::Quad(tile) => {
                     if let Some((suit, rank)) = is_number_tile(*tile) {
@@ -949,7 +986,7 @@ fn is_junchan(patterns: &[HandPattern]) -> bool {
         if is_honor(pattern.pair) {
             return false;
         }
-        pattern.melds.iter().all(|meld| match meld {
+        pattern.all_melds().all(|meld| match meld {
             MeldKind::Sequence(tile) => matches!(is_number_tile(*tile), Some((_, 1 | 7))),
             MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal(*tile),
         })
@@ -961,7 +998,7 @@ fn is_honroutou(patterns: &[HandPattern]) -> bool {
         if !is_terminal_or_honor(pattern.pair) {
             return false;
         }
-        pattern.melds.iter().all(|m| match m {
+        pattern.all_melds().all(|m| match m {
             MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal_or_honor(*tile),
             MeldKind::Sequence(_) => false,
         })
@@ -973,7 +1010,7 @@ fn is_chinroutou(patterns: &[HandPattern]) -> bool {
         if !is_terminal(pattern.pair) {
             return false;
         }
-        pattern.melds.iter().all(|m| match m {
+        pattern.all_melds().all(|m| match m {
             MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal(*tile),
             MeldKind::Sequence(_) => false,
         })
@@ -1021,13 +1058,32 @@ fn is_ryuuiisou(counts: &[usize; 35]) -> bool {
         .all(|(i, c)| *c == 0 || allowed_set.contains(&i))
 }
 
-fn is_suuankou(patterns: &[HandPattern], closed: bool) -> bool {
+fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool {
     closed
         && patterns.iter().any(|pattern| {
-            pattern
+            let mut all_triplets = pattern
                 .melds
                 .iter()
-                .all(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)))
+                .all(|m| matches!(m, MeldKind::Triplet(_) | MeldKind::Quad(_)));
+
+            if all_triplets && !ctx.is_tsumo {
+                if let Some(ron_tile) = ctx.ron_tile {
+                    let completes_triplet = pattern.melds.iter().any(|m| match m {
+                        MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                        _ => false,
+                    });
+
+                    if completes_triplet {
+                        // For Suuankou, ron on a triplet means we have 3 closed and 1 open, which is Sanankou Toitoi, not Suuankou
+                        // EXCEPT if it was a single wait (Tanki), where we already have 4 closed triplets and wait for a pair
+                        // To accurately check this we verify if the pair is the ron tile.
+                        if pattern.pair != ron_tile {
+                            all_triplets = false;
+                        }
+                    }
+                }
+            }
+            all_triplets
         })
 }
 

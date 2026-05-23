@@ -9,6 +9,20 @@ mod tests {
     use mahjong::wall::Wall;
 
     #[test]
+    fn test_river_discards() {
+        let wall = Wall::new();
+        let mut round = Round::new(wall);
+
+        let discarded = round.play_turn(0).unwrap();
+        assert_eq!(round.river(0).tiles().len(), 1);
+        assert_eq!(round.river(0).tiles()[0], discarded);
+
+        let discarded2 = round.play_turn(0).unwrap();
+        assert_eq!(round.river(1).tiles().len(), 1);
+        assert_eq!(round.river(1).tiles()[0], discarded2);
+    }
+
+    #[test]
     fn play_full_round() {
         let mut wall = Wall::new();
         let mut rng = StdRng::seed_from_u64(7);

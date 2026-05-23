@@ -20,7 +20,7 @@ mod tests {
             is_tsumo: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, ctx);
+        let result = judge_yaku(&tiles, &[], ctx);
         let expected: HashSet<YakuId> =
             HashSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
         assert!(expected.is_subset(&result));
@@ -33,7 +33,7 @@ mod tests {
             SevenS,
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Chitoitsu));
     }
 
@@ -44,7 +44,7 @@ mod tests {
             OneM,
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::KokushiMusou));
     }
 
@@ -54,7 +54,7 @@ mod tests {
             Red, Red, Red, Green, Green, Green, White, White, White, OneM, OneM, OneM, TwoM, TwoM,
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Daisangen));
         assert!(result.contains(&YakuId::Toitoi));
     }
@@ -66,7 +66,7 @@ mod tests {
             NineP,
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::SanshokuDoujun));
     }
 
@@ -79,7 +79,7 @@ mod tests {
             FiveS, FiveS, // pair
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Ipeiko));
     }
 
@@ -91,7 +91,7 @@ mod tests {
             SevenM, SevenM, // pair
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Ryanpeiko));
     }
 
@@ -110,7 +110,7 @@ mod tests {
             round_wind: Some(East),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, ctx);
+        let result = judge_yaku(&tiles, &[], ctx);
         assert!(result.contains(&YakuId::YakuhaiJikaze));
         assert!(result.contains(&YakuId::YakuhaiBakaze));
     }
@@ -125,7 +125,7 @@ mod tests {
             White, White, // pair
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Honitsu));
     }
 
@@ -139,7 +139,7 @@ mod tests {
             East, East, // pair
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::SanshokuDoukou));
     }
 
@@ -153,8 +153,124 @@ mod tests {
             OneS, OneS, // pair
         ];
 
-        let result = judge_yaku(&tiles, WinContext::default());
+        let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Chinroutou));
         assert!(result.contains(&YakuId::Honroutou));
+    }
+
+    #[test]
+    fn detect_sanankou_tsumo() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            ThreeM, ThreeM, ThreeM, // 333m
+            FourM, FiveM, SixM, // 456m
+            White, White, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
+    fn detect_sanankou_fails_with_open_meld() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            FourM, FiveM, SixM, // 456m
+            White, White, // pair
+        ];
+
+        let open_melds = vec![mahjong::hand::Meld::Pon(ThreeM)];
+
+        let ctx = WinContext {
+            is_tsumo: true, // Tsumo shouldn't matter if we rely on closed melds
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &open_melds, ctx);
+        // We only have 2 closed triplets (111m, 222m) and 1 open triplet (333m).
+        assert!(!result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
+    fn detect_sanankou_fails_on_ron() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            ThreeM, ThreeM, ThreeM, // 333m
+            FourM, FiveM, SixM, // 456m
+            White, White, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: false,
+            ron_tile: Some(ThreeM), // ron on 3m, making 333m open
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
+    fn detect_sanankou_passes_on_ron_sequence() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            ThreeM, ThreeM, ThreeM, // 333m
+            FourM, FiveM, SixM, // 456m
+            White, White, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: false,
+            ron_tile: Some(FourM), // ron on 4m, making 456m open, but triplets remain closed
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
+    fn detect_suuankou_ron_tanki() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            ThreeM, ThreeM, ThreeM, // 333m
+            FourP, FourP, FourP, // 444p
+            White, White, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: false,
+            ron_tile: Some(White), // ron on pair (Tanki), triplets remain closed
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(result.contains(&YakuId::Suuankou));
+    }
+
+    #[test]
+    fn detect_suuankou_fails_on_ron_shanpon() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            ThreeM, ThreeM, ThreeM, // 333m
+            FourP, FourP, FourP, // 444p
+            White, White, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: false,
+            ron_tile: Some(FourP), // ron on a triplet (Shanpon), downgrades to Sanankou + Toitoi
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Suuankou));
+        assert!(result.contains(&YakuId::Sanankou));
+        assert!(result.contains(&YakuId::Toitoi));
     }
 }
