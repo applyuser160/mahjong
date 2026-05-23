@@ -93,7 +93,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-
     #[test]
     fn test_discard_out_of_bounds() {
         let mut hand = Hand::new();
