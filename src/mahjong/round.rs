@@ -36,12 +36,7 @@ impl Round {
     pub fn new(wall: Wall) -> Self {
         let mut round = Self {
             wall,
-            hands: [
-                Hand::new(),
-                Hand::new(),
-                Hand::new(),
-                Hand::new(),
-            ],
+            hands: [Hand::new(), Hand::new(), Hand::new(), Hand::new()],
             rivers: [River::new(), River::new(), River::new(), River::new()],
             turn: 0,
         };
