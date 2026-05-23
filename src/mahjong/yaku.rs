@@ -374,7 +374,11 @@ impl Default for WinContext {
     }
 }
 
-pub fn judge_yaku(tiles: &[TileName], open_melds_input: &[crate::hand::Meld], mut ctx: WinContext) -> HashSet<YakuId> {
+pub fn judge_yaku(
+    tiles: &[TileName],
+    open_melds_input: &[crate::hand::Meld],
+    mut ctx: WinContext,
+) -> HashSet<YakuId> {
     let mut result = HashSet::new();
 
     if tiles.is_empty() {
@@ -848,11 +852,9 @@ fn is_sanankou(patterns: &[HandPattern], ctx: &WinContext) -> bool {
         if !ctx.is_tsumo {
             if let Some(ron_tile) = ctx.ron_tile {
                 // If ron tile completes a triplet in closed melds, subtract 1
-                let matches_ron = pattern.melds.iter().any(|m| {
-                    match m {
-                        MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
-                        _ => false
-                    }
+                let matches_ron = pattern.melds.iter().any(|m| match m {
+                    MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                    _ => false,
                 });
                 if matches_ron {
                     count -= 1;
@@ -1066,11 +1068,9 @@ fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool
 
             if all_triplets && !ctx.is_tsumo {
                 if let Some(ron_tile) = ctx.ron_tile {
-                    let completes_triplet = pattern.melds.iter().any(|m| {
-                        match m {
-                            MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
-                            _ => false
-                        }
+                    let completes_triplet = pattern.melds.iter().any(|m| match m {
+                        MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == ron_tile,
+                        _ => false,
                     });
 
                     if completes_triplet {

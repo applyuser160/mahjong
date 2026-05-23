@@ -45,7 +45,11 @@ impl Hand {
         removed
     }
 
-    pub fn call_meld(&mut self, meld: Meld, consumed_from_hand: &[TileName]) -> Result<(), &'static str> {
+    pub fn call_meld(
+        &mut self,
+        meld: Meld,
+        consumed_from_hand: &[TileName],
+    ) -> Result<(), &'static str> {
         if let Meld::Chii(tile) = meld {
             let info = crate::yaku::is_number_tile(tile).ok_or("Invalid tile for Chii")?;
             if info.1 > 7 {
@@ -58,7 +62,8 @@ impl Hand {
 
             let mut ranks = vec![info.1];
             for &consumed in consumed_from_hand {
-                let consumed_info = crate::yaku::is_number_tile(consumed).ok_or("Invalid consumed tile for Chii")?;
+                let consumed_info = crate::yaku::is_number_tile(consumed)
+                    .ok_or("Invalid consumed tile for Chii")?;
                 if consumed_info.0 != info.0 {
                     return Err("Cross-suit Chii is not allowed");
                 }
