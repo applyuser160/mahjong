@@ -493,47 +493,48 @@ pub fn judge_yaku(
         if has_sanshoku_doukou(&patterns) {
             result.insert(YakuId::SanshokuDoukou);
         }
-        if is_honitsu(&counts) {
-            result.insert(YakuId::Honitsu);
-        }
         if is_junchan(&patterns) {
             result.insert(YakuId::Junchan);
-        }
-        if is_chinitsu(&counts) {
-            result.insert(YakuId::Chinitsu);
-        }
-        if is_honroutou(&patterns) {
-            result.insert(YakuId::Honroutou);
-        }
-        if is_chinroutou(&patterns) {
-            result.insert(YakuId::Chinroutou);
         }
         if ctx.kan_count >= 3 {
             result.insert(YakuId::Sankantsu);
         }
-        if is_daisangen(&counts) {
-            result.insert(YakuId::Daisangen);
-        }
-        if let Some((small, big)) = detect_suushi(&counts) {
-            if big {
-                result.insert(YakuId::Daisuushi);
-            }
-            if small {
-                result.insert(YakuId::Shousuushi);
-            }
-        }
-        if is_tsuuiisou(&counts) {
-            result.insert(YakuId::Tsuuiisou);
-        }
-        if is_ryuuiisou(&counts) {
-            result.insert(YakuId::Ryuuiisou);
-        }
         if is_suuankou(&patterns, ctx.is_closed, &ctx) {
             result.insert(YakuId::Suuankou);
         }
-        if is_chuuren_poutou(&counts, tiles.len()) {
-            result.insert(YakuId::ChuurenPoutou);
+    }
+
+    if is_honitsu(&counts) {
+        result.insert(YakuId::Honitsu);
+    }
+    if is_chinitsu(&counts) {
+        result.insert(YakuId::Chinitsu);
+    }
+    if is_honroutou(&counts) {
+        result.insert(YakuId::Honroutou);
+    }
+    if is_chinroutou(&counts) {
+        result.insert(YakuId::Chinroutou);
+    }
+    if is_daisangen(&counts) {
+        result.insert(YakuId::Daisangen);
+    }
+    if let Some((small, big)) = detect_suushi(&counts) {
+        if big {
+            result.insert(YakuId::Daisuushi);
         }
+        if small {
+            result.insert(YakuId::Shousuushi);
+        }
+    }
+    if is_tsuuiisou(&counts) {
+        result.insert(YakuId::Tsuuiisou);
+    }
+    if is_ryuuiisou(&counts) {
+        result.insert(YakuId::Ryuuiisou);
+    }
+    if is_chuuren_poutou(&counts, tiles.len()) {
+        result.insert(YakuId::ChuurenPoutou);
     }
 
     result
@@ -993,28 +994,20 @@ fn is_junchan(patterns: &[HandPattern]) -> bool {
     })
 }
 
-fn is_honroutou(patterns: &[HandPattern]) -> bool {
-    patterns.iter().any(|pattern| {
-        if !is_terminal_or_honor(pattern.pair) {
-            return false;
-        }
-        pattern.all_melds().all(|m| match m {
-            MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal_or_honor(*tile),
-            MeldKind::Sequence(_) => false,
-        })
-    })
+fn is_honroutou(counts: &[usize; 35]) -> bool {
+    counts
+        .iter()
+        .enumerate()
+        .skip(1)
+        .all(|(i, c)| *c == 0 || is_terminal_or_honor(TileName::from_usize(i)))
 }
 
-fn is_chinroutou(patterns: &[HandPattern]) -> bool {
-    patterns.iter().any(|pattern| {
-        if !is_terminal(pattern.pair) {
-            return false;
-        }
-        pattern.all_melds().all(|m| match m {
-            MeldKind::Triplet(tile) | MeldKind::Quad(tile) => is_terminal(*tile),
-            MeldKind::Sequence(_) => false,
-        })
-    })
+fn is_chinroutou(counts: &[usize; 35]) -> bool {
+    counts
+        .iter()
+        .enumerate()
+        .skip(1)
+        .all(|(i, c)| *c == 0 || is_terminal(TileName::from_usize(i)))
 }
 
 fn detect_suushi(counts: &[usize; 35]) -> Option<(bool, bool)> {
