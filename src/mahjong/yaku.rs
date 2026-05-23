@@ -386,7 +386,9 @@ pub fn judge_yaku(
     }
 
     if !open_melds_input.is_empty() {
-        let has_open = open_melds_input.iter().any(|m| !matches!(m, crate::hand::Meld::Ankan(_)));
+        let has_open = open_melds_input
+            .iter()
+            .any(|m| !matches!(m, crate::hand::Meld::Ankan(_)));
         if has_open {
             ctx.is_closed = false;
         }
