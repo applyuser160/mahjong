@@ -1,28 +1,10 @@
 use crate::hand::Hand;
+use crate::river::River;
 use crate::tile::TileName;
 use crate::wall::Wall;
 
 pub const PLAYER_NUMBER: usize = 4;
 const DEAL_BASE: usize = 13;
-
-#[derive(Debug, Clone, Default)]
-pub struct River {
-    tiles: Vec<TileName>,
-}
-
-impl River {
-    pub fn new() -> Self {
-        Self { tiles: Vec::new() }
-    }
-
-    pub fn tiles(&self) -> &[TileName] {
-        &self.tiles
-    }
-
-    pub fn push(&mut self, tile: TileName) {
-        self.tiles.push(tile);
-    }
-}
 
 #[derive(Debug)]
 pub struct Round {
