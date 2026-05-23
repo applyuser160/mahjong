@@ -43,7 +43,7 @@ impl Round {
         let drawn = self.wall.draw()?;
         let hand = &mut self.hands[self.turn];
         hand.push(drawn);
-        let discarded = hand.discard(discard_index);
+        let discarded = hand.discard(discard_index).ok()?;
         self.rivers[self.turn].push(discarded);
         self.turn = (self.turn + 1) % PLAYER_NUMBER;
         Some(discarded)

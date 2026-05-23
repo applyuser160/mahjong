@@ -92,4 +92,15 @@ mod tests {
         let result = hand.call_meld(Meld::Pon(Red));
         assert!(result.is_err());
     }
+
+
+    #[test]
+    fn test_discard_out_of_bounds() {
+        let mut hand = Hand::new();
+        hand.push(TwoM);
+        hand.push(ThreeM);
+
+        assert!(hand.discard(2).is_err());
+        assert!(hand.discard(100).is_err());
+    }
 }

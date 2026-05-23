@@ -41,11 +41,14 @@ impl Hand {
         self.len += 1;
     }
 
-    pub fn discard(&mut self, index: usize) -> TileName {
+    pub fn discard(&mut self, index: usize) -> Result<TileName, &'static str> {
+        if index >= self.len {
+            return Err("Index out of bounds");
+        }
         let removed = self.tiles[index];
         self.tiles.copy_within(index + 1..self.len, index);
         self.len -= 1;
-        removed
+        Ok(removed)
     }
 
     pub fn call_meld(&mut self, meld: Meld) -> Result<(), &'static str> {
@@ -86,7 +89,7 @@ impl Hand {
         // Remove the consumed tiles
         for &t in &consumed_from_hand {
             if let Some(pos) = self.tiles[..self.len].iter().position(|&x| x == t) {
-                self.discard(pos);
+                self.discard(pos).unwrap();
             }
         }
 
