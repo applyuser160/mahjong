@@ -735,9 +735,6 @@ fn has_ipeiko(patterns: &[HandPattern]) -> bool {
             }
         }
         sequences.values().any(|v| *v >= 2)
-            && pattern
-                .all_melds()
-                .all(|m| matches!(m, MeldKind::Sequence(_)))
     })
 }
 

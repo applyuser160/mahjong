@@ -84,6 +84,19 @@ mod tests {
     }
 
     #[test]
+    fn detect_ipeiko_with_triplet() {
+        let tiles = vec![
+            OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, // double 123m
+            FiveP, FiveP, FiveP, // 555p
+            SevenS, EightS, NineS, // 789s
+            OneS, OneS, // pair
+        ];
+
+        let result = judge_yaku(&tiles, &[], WinContext::default());
+        assert!(result.contains(&YakuId::Ipeiko));
+    }
+
+    #[test]
     fn detect_ryanpeiko() {
         let tiles = vec![
             OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, // double 123m
