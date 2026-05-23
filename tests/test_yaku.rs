@@ -116,6 +116,27 @@ mod tests {
     }
 
     #[test]
+    fn detect_yakuhai_with_round_wind_only() {
+        let tiles = vec![
+            East, East, East, // round wind triplet
+            OneM, TwoM, ThreeM, // 123m
+            FourM, FiveM, SixM, // 456m
+            FourP, FiveP, SixP, // 456p
+            NineS, NineS, // pair
+        ];
+
+        let ctx = WinContext {
+            seat_wind: Some(South), // seat wind is South
+            round_wind: Some(East), // round wind is East
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        // It should contain Bakaze (round wind), but not Jikaze (seat wind)
+        assert!(result.contains(&YakuId::YakuhaiBakaze));
+        assert!(!result.contains(&YakuId::YakuhaiJikaze));
+    }
+
+    #[test]
     fn detect_honitsu() {
         let tiles = vec![
             OneM, TwoM, ThreeM, // 123m

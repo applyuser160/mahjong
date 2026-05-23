@@ -451,7 +451,7 @@ pub fn judge_yaku(
     }
 
     if let Some(p) = patterns.first() {
-        if contains_yakuhai(&counts, ctx.seat_wind) {
+        if contains_yakuhai(&counts, ctx.seat_wind, ctx.round_wind) {
             if counts[TileName::White as usize] >= 3 {
                 result.insert(YakuId::YakuhaiHaku);
             }
@@ -786,11 +786,16 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
     Some(false)
 }
 
-fn contains_yakuhai(counts: &[usize; 35], seat_wind: Option<TileName>) -> bool {
+fn contains_yakuhai(
+    counts: &[usize; 35],
+    seat_wind: Option<TileName>,
+    round_wind: Option<TileName>,
+) -> bool {
     counts[TileName::White as usize] >= 3
         || counts[TileName::Green as usize] >= 3
         || counts[TileName::Red as usize] >= 3
         || seat_wind.map(|w| counts[w as usize] >= 3).unwrap_or(false)
+        || round_wind.map(|w| counts[w as usize] >= 3).unwrap_or(false)
 }
 
 fn is_value_pair(tile: TileName, ctx: &WinContext) -> bool {
