@@ -508,9 +508,11 @@ mod tests_kan {
             White,
         ];
         // Ensure that normal yaku are filtered out when Yakuman is achieved.
-        let mut ctx = WinContext::default();
-        ctx.riichi = true;
-        ctx.is_closed = true;
+        let ctx = WinContext {
+            riichi: true,
+            is_closed: true,
+            ..WinContext::default()
+        };
 
         let result = judge_yaku(&tiles, &[], ctx);
 

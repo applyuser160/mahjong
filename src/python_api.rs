@@ -36,9 +36,9 @@ impl From<TileType> for PyTileType {
     }
 }
 
-impl Into<TileType> for PyTileType {
-    fn into(self) -> TileType {
-        match self {
+impl From<PyTileType> for TileType {
+    fn from(val: PyTileType) -> Self {
+        match val {
             PyTileType::None => TileType::None,
             PyTileType::Characters => TileType::Characters,
             PyTileType::Circles => TileType::Circles,
@@ -67,9 +67,9 @@ impl From<TileCategory> for PyTileCategory {
     }
 }
 
-impl Into<TileCategory> for PyTileCategory {
-    fn into(self) -> TileCategory {
-        match self {
+impl From<PyTileCategory> for TileCategory {
+    fn from(val: PyTileCategory) -> Self {
+        match val {
             PyTileCategory::None => TileCategory::None,
             PyTileCategory::Simples => TileCategory::Simples,
             PyTileCategory::Honors => TileCategory::Honors,
@@ -159,9 +159,9 @@ impl From<TileName> for PyTileName {
     }
 }
 
-impl Into<TileName> for PyTileName {
-    fn into(self) -> TileName {
-        match self {
+impl From<PyTileName> for TileName {
+    fn from(val: PyTileName) -> Self {
+        match val {
             PyTileName::None => TileName::None,
             PyTileName::OneM => TileName::OneM,
             PyTileName::TwoM => TileName::TwoM,
@@ -228,6 +228,7 @@ pub struct PyTile {
 #[pymethods]
 impl PyTile {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(name: PyTileName) -> Self {
         Self {
             tile: Tile::new(name.into()),
@@ -266,9 +267,9 @@ impl From<Meld> for PyMeld {
     }
 }
 
-impl Into<Meld> for PyMeld {
-    fn into(self) -> Meld {
-        self.meld
+impl From<PyMeld> for Meld {
+    fn from(val: PyMeld) -> Self {
+        val.meld
     }
 }
 
@@ -338,7 +339,7 @@ impl PyMeld {
 }
 
 #[pyclass]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PyHand {
     pub(crate) hand: Hand,
 }
@@ -346,6 +347,7 @@ pub struct PyHand {
 #[pymethods]
 impl PyHand {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new() -> Self {
         Self { hand: Hand::new() }
     }
@@ -384,7 +386,7 @@ impl PyHand {
 // ==========================================
 
 #[pyclass]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PyRiver {
     pub(crate) river: River,
 }
@@ -392,6 +394,7 @@ pub struct PyRiver {
 #[pymethods]
 impl PyRiver {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new() -> Self {
         Self {
             river: River::new(),
@@ -405,7 +408,7 @@ impl PyRiver {
 }
 
 #[pyclass]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PyWall {
     pub(crate) wall: Wall,
 }
@@ -413,6 +416,7 @@ pub struct PyWall {
 #[pymethods]
 impl PyWall {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new() -> Self {
         Self { wall: Wall::new() }
     }
@@ -446,6 +450,7 @@ pub struct PyRound {
 #[pymethods]
 impl PyRound {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(wall: &PyWall) -> Self {
         Self {
             round: Round::new(wall.wall.clone()),
@@ -583,9 +588,9 @@ impl From<YakuId> for PyYakuId {
     }
 }
 
-impl Into<YakuId> for PyYakuId {
-    fn into(self) -> YakuId {
-        match self {
+impl From<PyYakuId> for YakuId {
+    fn from(val: PyYakuId) -> Self {
+        match val {
             PyYakuId::Riichi => YakuId::Riichi,
             PyYakuId::MenzenTsumo => YakuId::MenzenTsumo,
             PyYakuId::Tanyao => YakuId::Tanyao,
@@ -719,6 +724,7 @@ pub struct PyWinContext {
 #[pymethods]
 impl PyWinContext {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (is_closed=true, is_tsumo=true, seat_wind=None, round_wind=None, riichi=false, kan_count=0, tenhou=false, chiihou=false, win_tile=None, is_rinshan=false, is_chankan=false, is_haitei=false, is_houtei=false, is_double_riichi=false, is_ippatsu=false))]
     pub fn new(
         is_closed: bool,
@@ -757,24 +763,24 @@ impl PyWinContext {
     }
 }
 
-impl Into<WinContext> for PyWinContext {
-    fn into(self) -> WinContext {
+impl From<PyWinContext> for WinContext {
+    fn from(val: PyWinContext) -> Self {
         WinContext {
-            is_closed: self.is_closed,
-            is_tsumo: self.is_tsumo,
-            seat_wind: self.seat_wind.map(|t| t.into()),
-            round_wind: self.round_wind.map(|t| t.into()),
-            riichi: self.riichi,
-            kan_count: self.kan_count,
-            tenhou: self.tenhou,
-            chiihou: self.chiihou,
-            win_tile: self.win_tile.map(|t| t.into()),
-            is_rinshan: self.is_rinshan,
-            is_chankan: self.is_chankan,
-            is_haitei: self.is_haitei,
-            is_houtei: self.is_houtei,
-            is_double_riichi: self.is_double_riichi,
-            is_ippatsu: self.is_ippatsu,
+            is_closed: val.is_closed,
+            is_tsumo: val.is_tsumo,
+            seat_wind: val.seat_wind.map(|t| t.into()),
+            round_wind: val.round_wind.map(|t| t.into()),
+            riichi: val.riichi,
+            kan_count: val.kan_count,
+            tenhou: val.tenhou,
+            chiihou: val.chiihou,
+            win_tile: val.win_tile.map(|t| t.into()),
+            is_rinshan: val.is_rinshan,
+            is_chankan: val.is_chankan,
+            is_haitei: val.is_haitei,
+            is_houtei: val.is_houtei,
+            is_double_riichi: val.is_double_riichi,
+            is_ippatsu: val.is_ippatsu,
         }
     }
 }

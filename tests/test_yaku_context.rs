@@ -24,9 +24,11 @@ fn create_valid_hand() -> Vec<TileName> {
 #[test]
 fn test_rinshan_kaihou() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.is_tsumo = true;
-    ctx.is_rinshan = true;
+    let ctx = WinContext {
+        is_tsumo: true,
+        is_rinshan: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::RinshanKaihou));
@@ -35,9 +37,11 @@ fn test_rinshan_kaihou() {
 #[test]
 fn test_chankan() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.is_tsumo = false;
-    ctx.is_chankan = true;
+    let ctx = WinContext {
+        is_tsumo: false,
+        is_chankan: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::Chankan));
@@ -46,9 +50,11 @@ fn test_chankan() {
 #[test]
 fn test_haitei_raoyue() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.is_tsumo = true;
-    ctx.is_haitei = true;
+    let ctx = WinContext {
+        is_tsumo: true,
+        is_haitei: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::HaiteiRaoyue));
@@ -57,9 +63,11 @@ fn test_haitei_raoyue() {
 #[test]
 fn test_houtei_raoyui() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.is_tsumo = false;
-    ctx.is_houtei = true;
+    let ctx = WinContext {
+        is_tsumo: false,
+        is_houtei: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::HouteiRaoyui));
@@ -68,10 +76,12 @@ fn test_houtei_raoyui() {
 #[test]
 fn test_double_riichi_and_ippatsu() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.is_double_riichi = true;
-    ctx.is_ippatsu = true;
-    ctx.is_closed = true;
+    let ctx = WinContext {
+        is_double_riichi: true,
+        is_ippatsu: true,
+        is_closed: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::DoubleRiichi));
@@ -82,10 +92,12 @@ fn test_double_riichi_and_ippatsu() {
 #[test]
 fn test_ippatsu_with_normal_riichi() {
     let tiles = create_valid_hand();
-    let mut ctx = WinContext::default();
-    ctx.riichi = true;
-    ctx.is_ippatsu = true;
-    ctx.is_closed = true;
+    let ctx = WinContext {
+        riichi: true,
+        is_ippatsu: true,
+        is_closed: true,
+        ..WinContext::default()
+    };
 
     let yaku = judge_yaku(&tiles, &[], ctx);
     assert!(yaku.contains(&YakuId::Riichi));
