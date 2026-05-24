@@ -408,6 +408,26 @@ mod tests {
         let result = judge_yaku(&tiles, &[], ctx);
         assert!(!result.contains(&YakuId::Pinfu));
     }
+
+    #[test]
+    fn detect_pinfu_fails_tanki_with_complete_sequence() {
+        let tiles = vec![
+            TwoM, ThreeM, FourM, // complete sequence 234m
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            FourM, FourM, // pair 4m (win_tile is 4m, so it completed the pair)
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(FourM), // tanki wait on 4m
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Pinfu));
+    }
 }
 
 #[cfg(test)]

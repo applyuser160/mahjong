@@ -803,6 +803,10 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
             continue;
         }
 
+        if win_tile == pattern.pair {
+            continue;
+        }
+
         let mut is_ryamen = false;
         for meld in pattern.all_melds() {
             if let MeldKind::Sequence(start_tile) = meld {
