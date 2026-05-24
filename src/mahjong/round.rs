@@ -69,27 +69,35 @@ impl Round {
             Meld::Kakan(called) => called,
         };
 
-        // Determine the last discarded tile
-        let last_discard = self.rivers[previous_player]
-            .tiles()
-            .last()
-            .copied()
-            .ok_or("No tile in river to call")?;
+        // For Kakan and Ankan, they are called on the player's own turn (drawn tile),
+        // not from the previous player's discard.
+        let is_self_meld = matches!(meld, Meld::Ankan(_) | Meld::Kakan(_));
 
-        if last_discard != called_tile {
-            return Err("Called tile does not match the last discarded tile");
+        if !is_self_meld {
+            // Determine the last discarded tile
+            let last_discard = self.rivers[previous_player]
+                .tiles()
+                .last()
+                .copied()
+                .ok_or("No tile in river to call")?;
+
+            if last_discard != called_tile {
+                return Err("Called tile does not match the last discarded tile");
+            }
         }
 
         // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
         self.hands[player_index].call_meld(meld)?;
 
-        // Remove the tile from the previous player's river
-        self.rivers[previous_player].pop();
+        if !is_self_meld {
+            // Remove the tile from the previous player's river
+            self.rivers[previous_player].pop();
+        }
 
         let hand = &mut self.hands[player_index];
 
         // For Kan, we draw a replacement tile.
-        if let Meld::Daiminkan(_) | Meld::Ankan(_) = meld {
+        if let Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_) = meld {
             if let Some(drawn) = self.wall.draw() {
                 hand.push(drawn);
             } else {
