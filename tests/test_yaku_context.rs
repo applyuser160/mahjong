@@ -1,14 +1,23 @@
-use mahjong::yaku::{judge_yaku, WinContext, YakuId};
 use mahjong::tile::TileName;
+use mahjong::yaku::{judge_yaku, WinContext, YakuId};
 
 fn create_valid_hand() -> Vec<TileName> {
     // A simple complete hand: 123m, 456m, 789m, 11z, 222z
     vec![
-        TileName::OneM, TileName::TwoM, TileName::ThreeM,
-        TileName::FourM, TileName::FiveM, TileName::SixM,
-        TileName::SevenM, TileName::EightM, TileName::NineM,
-        TileName::East, TileName::East,
-        TileName::South, TileName::South, TileName::South,
+        TileName::OneM,
+        TileName::TwoM,
+        TileName::ThreeM,
+        TileName::FourM,
+        TileName::FiveM,
+        TileName::SixM,
+        TileName::SevenM,
+        TileName::EightM,
+        TileName::NineM,
+        TileName::East,
+        TileName::East,
+        TileName::South,
+        TileName::South,
+        TileName::South,
     ]
 }
 
