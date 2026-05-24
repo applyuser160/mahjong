@@ -33,6 +33,7 @@ pub enum YakuId {
     Daisangen,
     Shousuushi,
     Daisuushi,
+    Suukantsu,
     Tsuuiisou,
     Ryuuiisou,
     ChuurenPoutou,
@@ -279,6 +280,14 @@ pub const ALL_YAKU: &[Yaku] = &[
         id: YakuId::Daisuushi,
         name_ja: "大四喜",
         name_kana: "ダイスーシー",
+        han_closed: 13,
+        han_open: 13,
+        yakuman: true,
+    },
+    Yaku {
+        id: YakuId::Suukantsu,
+        name_ja: "四槓子",
+        name_kana: "スーカンツ",
         han_closed: 13,
         han_open: 13,
         yakuman: true,
@@ -568,6 +577,9 @@ pub fn judge_yaku(
         }
         if ctx.kan_count >= 3 {
             result.insert(YakuId::Sankantsu);
+        }
+        if ctx.kan_count >= 4 {
+            result.insert(YakuId::Suukantsu);
         }
         if is_suuankou(&patterns, ctx.is_closed, &ctx) {
             result.insert(YakuId::Suuankou);
