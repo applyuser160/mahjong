@@ -113,11 +113,6 @@ impl Round {
             }
         }
 
-        if !is_self_meld {
-            // Remove the tile from the previous player's river
-            self.rivers[previous_player].pop();
-        }
-
         let hand = &mut self.hands[player_index];
 
         // For Kan, we draw a replacement tile.
