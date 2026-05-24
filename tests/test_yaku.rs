@@ -194,6 +194,26 @@ mod tests {
     }
 
     #[test]
+    fn detect_sanankou_with_undeclared_quad() {
+        let tiles = vec![
+            TwoM, TwoM, TwoM, TwoM, // 2222m (used as 222m triplet + 2m for sequence)
+            ThreeM, FourM, // 34m (completed as 234m sequence)
+            SixP, SixP, SixP, // 666p
+            NineS, NineS, NineS, // 999s
+            East, East, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            is_closed: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        // This hand is Sanankou (222m, 666p, 999s are closed triplets).
+        assert!(result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
     fn detect_sanankou_tsumo() {
         let tiles = vec![
             OneM, OneM, OneM, // 111m
