@@ -101,31 +101,53 @@ impl Round {
             }
         }
 
-        // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
-        // Check condition before modifying the state
-        match meld {
-            Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
-                // Determine the last discarded tile
-                let last_discard = self.rivers[previous_player]
-                    .tiles()
-                    .last()
-                    .copied()
-                    .ok_or("No tile in river to call")?;
+        let original_hand = self.hands[player_index].clone();
+        let original_wall = self.wall.clone();
+        let original_river = self.rivers[previous_player].clone();
 
-                if last_discard != called {
-                    return Err("Called tile does not match the last discarded tile");
+        let res = (|| -> Result<(), &'static str> {
+            match meld {
+                Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
+                    // Determine the last discarded tile
+                    let last_discard = self.rivers[previous_player]
+                        .tiles()
+                        .last()
+                        .copied()
+                        .ok_or("No tile in river to call")?;
+
+                    if last_discard != called {
+                        return Err("Called tile does not match the last discarded tile");
+                    }
+
+                    self.hands[player_index].call_meld(meld)?;
+
+                    // Remove the tile from the previous player's river
+                    self.rivers[previous_player].pop();
                 }
-
-                self.hands[player_index].call_meld(meld)?;
-
-                // Remove the tile from the previous player's river
-                self.rivers[previous_player].pop();
+                Meld::Ankan(_) | Meld::Kakan(_) => {
+                    // For Ankan and Kakan, we do not depend on the previous player's discard.
+                    // We just call the meld directly.
+                    self.hands[player_index].call_meld(meld)?;
+                }
             }
-            Meld::Ankan(_) | Meld::Kakan(_) => {
-                // For Ankan and Kakan, we do not depend on the previous player's discard.
-                // We just call the meld directly.
-                self.hands[player_index].call_meld(meld)?;
+
+            // Draw a replacement tile for Kan
+            if matches!(meld, Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_)) {
+                if let Some(replacement) = self.wall.draw_replacement() {
+                    self.hands[player_index].push(replacement);
+                } else {
+                    return Err("No replacement tile available in wall");
+                }
             }
+
+            Ok(())
+        })();
+
+        if let Err(err) = res {
+            self.hands[player_index] = original_hand;
+            self.wall = original_wall;
+            self.rivers[previous_player] = original_river;
+            return Err(err);
         }
 
         // Set turn to the player who called the meld. They will need to discard a tile next.

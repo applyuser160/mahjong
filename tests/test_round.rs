@@ -96,7 +96,6 @@ mod tests {
                     // P3 has drawn the 4th tile. P3 calls Kakan!
                     let kakan_meld = Meld::Kakan(discarded);
                     round.play_meld(3, kakan_meld).unwrap();
-                    round.draw_tile();
                     let kakan_discard = round.discard_tile(0).unwrap();
 
                     // Verify wall decremented by 1 (replacement tile was drawn)
