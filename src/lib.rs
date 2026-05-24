@@ -36,7 +36,8 @@ pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
     let mut round = Round::new(wall);
     let mut discards = Vec::new();
 
-    while let Some(tile) = round.play_turn(0) {
+    while let Some(_drawn) = round.draw_tile() {
+        let tile = round.discard_tile(0).unwrap();
         discards.push(tile.as_str());
     }
 

@@ -43,22 +43,30 @@ impl Round {
         self.turn
     }
 
-    pub fn play_turn(&mut self, discard_index: usize) -> Option<TileName> {
+    pub fn draw_tile(&mut self) -> Option<TileName> {
         let drawn = self.wall.draw()?;
+        self.hands[self.turn].push(drawn);
+        Some(drawn)
+    }
+
+    pub fn discard_tile(&mut self, discard_index: usize) -> Result<TileName, &'static str> {
         let hand = &mut self.hands[self.turn];
-        hand.push(drawn);
-        let discarded = hand.discard(discard_index).ok()?;
+        let discarded = hand.discard(discard_index)?;
         self.rivers[self.turn].push(discarded);
         self.turn = (self.turn + 1) % PLAYER_NUMBER;
-        Some(discarded)
+        Ok(discarded)
     }
 
     pub fn play_meld(
         &mut self,
         player_index: usize,
         meld: Meld,
-        discard_index: usize,
-    ) -> Result<TileName, &'static str> {
+    ) -> Result<(), &'static str> {
+        if matches!(meld, Meld::Ankan(_) | Meld::Kakan(_))
+            && player_index != self.turn {
+                return Err("Ankan and Kakan can only be called on your own turn");
+            }
+
         let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
 
         if let Meld::Chii { .. } = meld {
@@ -119,27 +127,11 @@ impl Round {
             }
         }
 
-        let hand = &mut self.hands[player_index];
+        // Set turn to the player who called the meld. They will need to discard a tile next.
+        // For Daiminkan, Ankan, Kakan, they need to draw a replacement tile first, then discard.
+        self.turn = player_index;
 
-        // For Kan, we draw a replacement tile.
-        if let Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_) = meld {
-            if let Some(drawn) = self.wall.draw() {
-                hand.push(drawn);
-            } else {
-                return Err("Wall is empty, cannot draw replacement tile for Kan");
-            }
-        }
-
-        let discarded = hand.discard(discard_index);
-        if let Err(_e) = discarded {
-            return Err("Discard Error");
-        }
-        self.rivers[player_index].push(discarded.unwrap());
-
-        // Update turn: the next turn belongs to the player after the one who called the meld
-        self.turn = (player_index + 1) % PLAYER_NUMBER;
-
-        Ok(discarded.unwrap())
+        Ok(())
     }
 
     fn deal(&mut self) {
