@@ -88,7 +88,9 @@ mod tests {
             let r = Round::new(w);
             let p1_hand = r.hand(1);
             let mut counts = [0; 40];
-            for &t in p1_hand { counts[t as usize] += 1; }
+            for &t in p1_hand {
+                counts[t as usize] += 1;
+            }
             if counts.iter().any(|&c| c >= 4) {
                 let tile_idx = counts.iter().position(|&c| c >= 4).unwrap();
                 found_ankan = Some((seed, TileName::from_usize(tile_idx)));
@@ -110,9 +112,21 @@ mod tests {
 
         assert!(res.is_ok(), "Ankan should succeed");
 
-        assert_eq!(round.river(0).tiles().len(), r0_len_before, "River should not be popped");
-        assert_eq!(round.river(2).tiles().len(), r2_len_before, "River should not be popped");
-        assert_eq!(round.river(3).tiles().len(), r3_len_before, "River should not be popped");
+        assert_eq!(
+            round.river(0).tiles().len(),
+            r0_len_before,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(2).tiles().len(),
+            r2_len_before,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(3).tiles().len(),
+            r3_len_before,
+            "River should not be popped"
+        );
     }
 
     #[test]
@@ -126,7 +140,9 @@ mod tests {
             let p0_hand = r.hand(0);
 
             let mut p1_counts = [0; 40];
-            for &t in p1_hand { p1_counts[t as usize] += 1; }
+            for &t in p1_hand {
+                p1_counts[t as usize] += 1;
+            }
 
             if p1_counts.iter().any(|&c| c >= 3) {
                 let tile_idx = p1_counts.iter().position(|&c| c >= 3).unwrap();
@@ -169,8 +185,20 @@ mod tests {
         let res_kakan = round.play_meld(1, kakan_meld, 0);
         assert!(res_kakan.is_ok(), "Kakan should succeed");
 
-        assert_eq!(round.river(0).tiles().len(), r0_len, "River should not be popped");
-        assert_eq!(round.river(2).tiles().len(), r2_len, "River should not be popped");
-        assert_eq!(round.river(3).tiles().len(), r3_len, "River should not be popped");
+        assert_eq!(
+            round.river(0).tiles().len(),
+            r0_len,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(2).tiles().len(),
+            r2_len,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(3).tiles().len(),
+            r3_len,
+            "River should not be popped"
+        );
     }
 }
