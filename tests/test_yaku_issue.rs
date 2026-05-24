@@ -31,7 +31,10 @@ fn detect_pinfu_overlapping_kanchan_is_not_misidentified() {
         ..Default::default()
     };
     let result = judge_yaku(&tiles, &[], ctx);
-    assert!(result.contains(&YakuId::Pinfu), "Should be Pinfu under standard high-score rules");
+    assert!(
+        result.contains(&YakuId::Pinfu),
+        "Should be Pinfu under standard high-score rules"
+    );
 }
 
 #[test]
@@ -51,7 +54,10 @@ fn detect_pinfu_nobetan_is_correctly_rejected() {
         ..Default::default()
     };
     let result = judge_yaku(&tiles, &[], ctx);
-    assert!(!result.contains(&YakuId::Pinfu), "Nobetan should not be Pinfu");
+    assert!(
+        !result.contains(&YakuId::Pinfu),
+        "Nobetan should not be Pinfu"
+    );
 }
 
 #[test]
@@ -71,5 +77,8 @@ fn detect_pinfu_overlapping_pair_tanki_rejected() {
         ..Default::default()
     };
     let result = judge_yaku(&tiles, &[], ctx);
-    assert!(!result.contains(&YakuId::Pinfu), "Aryamen/tanki should not be Pinfu");
+    assert!(
+        !result.contains(&YakuId::Pinfu),
+        "Aryamen/tanki should not be Pinfu"
+    );
 }
