@@ -148,7 +148,53 @@ mod tests {
         }
 
         let total_tiles = PLAYER_NUMBER * 13 + draws;
-        assert_eq!(total_tiles, TILE_WALL_CAPACITY);
+        assert_eq!(total_tiles, TILE_WALL_CAPACITY - 14);
+    }
+
+    #[test]
+    fn test_kan_draw_reduces_remaining() {
+        // Since we want to test Kan replacement draw logic, let's just create a deterministic setup
+        // Player 1 will Ankan, which means they need 4 identical tiles.
+        // The first 52 tiles are dealt to players.
+        // P0: 0, 4, 8...
+        // P1: 1, 5, 9...
+        // By default, Wall is ordered: 1m, 1m, 1m, 1m, 2m, 2m, 2m, 2m, ...
+        // Let's just find a seed where P1 gets an Ankan initially to simplify this test.
+        let mut found_ankan = None;
+        for seed in 0..1000 {
+            let mut w = Wall::new();
+            w.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
+            let r = Round::new(w);
+            let p1_hand = r.hand(1);
+            let mut counts = [0; 40];
+            for &t in p1_hand {
+                counts[t as usize] += 1;
+            }
+            if counts.iter().any(|&c| c == 4) {
+                let tile_idx = counts.iter().position(|&c| c == 4).unwrap();
+                found_ankan = Some((seed, TileName::from_usize(tile_idx)));
+                break;
+            }
+        }
+
+        let (seed, tile) = found_ankan.expect("Should find a seed with an Ankan in initial hand");
+        let mut wall = Wall::new();
+        wall.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
+        let mut round = Round::new(wall);
+
+        let remaining_before = round.wall().remaining();
+
+        let meld = Meld::Ankan(tile);
+        let res = round.play_meld(1, meld, 0);
+
+        assert!(res.is_ok(), "Ankan should succeed");
+
+        let remaining_after = round.wall().remaining();
+        assert_eq!(
+            remaining_after,
+            remaining_before - 1,
+            "Drawing a replacement tile for a Kan should reduce the remaining drawable tiles by 1"
+        );
     }
 
     #[test]
