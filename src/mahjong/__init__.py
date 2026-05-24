@@ -1,0 +1,1 @@
+from .mahjong import *

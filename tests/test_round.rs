@@ -180,7 +180,7 @@ mod tests {
             for &t in p0_hand {
                 counts[t as usize] += 1;
             }
-            if counts.iter().any(|&c| c == 4) {
+            if counts.contains(&4) {
                 let tile_idx = counts.iter().position(|&c| c == 4).unwrap();
                 found_ankan = Some((seed, TileName::from_usize(tile_idx)));
                 break;

@@ -22,8 +22,10 @@ fn test_yaku_open_melds() {
     // Meld: Pon of White Dragon
     let melds = vec![Meld::Pon(TileName::White)];
 
-    let mut ctx = WinContext::default();
-    ctx.is_closed = false;
+    let ctx = WinContext {
+        is_closed: false,
+        ..WinContext::default()
+    };
 
     let result = judge_yaku(&tiles, &melds, ctx);
     assert!(result.contains(&YakuId::YakuhaiHaku));

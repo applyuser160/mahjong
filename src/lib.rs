@@ -27,6 +27,8 @@ pub use tile::{
 pub use wall::Wall;
 pub use yaku::{judge_yaku, WinContext, Yaku, YakuId, ALL_YAKU};
 
+pub mod python_api;
+
 #[pyfunction]
 pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
     let mut wall = Wall::new();
@@ -50,5 +52,19 @@ pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
 #[pymodule]
 fn mahjong(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(play_once, m)?)?;
+    m.add_class::<python_api::PyTileType>()?;
+    m.add_class::<python_api::PyTileCategory>()?;
+    m.add_class::<python_api::PyTileName>()?;
+    m.add_class::<python_api::PyTile>()?;
+    m.add_class::<python_api::PyMeld>()?;
+    m.add_class::<python_api::PyHand>()?;
+    m.add_class::<python_api::PyRiver>()?;
+    m.add_class::<python_api::PyWall>()?;
+    m.add_class::<python_api::PyRound>()?;
+    m.add_class::<python_api::PyYakuId>()?;
+    m.add_class::<python_api::PyYaku>()?;
+    m.add_class::<python_api::PyWinContext>()?;
+    m.add_function(wrap_pyfunction!(python_api::get_all_yaku, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_judge_yaku, m)?)?;
     Ok(())
 }
