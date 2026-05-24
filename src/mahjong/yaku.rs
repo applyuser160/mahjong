@@ -807,19 +807,32 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
             continue;
         }
 
+        // アガリの形（14枚）から順子を探すのではなく、
+        // アガリ牌を抜いた13枚のテンパイ形において、
+        // アガリ牌が「両面塔子」を完成させているかを検証する。
         let mut is_ryamen = false;
-        for meld in pattern.all_melds() {
-            if let MeldKind::Sequence(start_tile) = meld {
-                if let Some((suit, rank)) = is_number_tile(*start_tile) {
-                    if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
+        if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
+            // パターン内の各順子からアガリ牌を抜いて塔子を作り、
+            // それが両面塔子であるかをチェックする。
+            for meld in pattern.all_melds() {
+                if let MeldKind::Sequence(start_tile) = meld {
+                    if let Some((suit, rank)) = is_number_tile(*start_tile) {
                         if suit == win_suit {
-                            if win_rank == rank && rank < 7 {
-                                is_ryamen = true;
-                                break;
-                            }
-                            if win_rank == rank + 2 && rank > 1 {
-                                is_ryamen = true;
-                                break;
+                            // アガリ牌がこの順子を構成している場合、抜くと塔子になる
+                            if win_rank == rank {
+                                // アガリ牌が下端の場合、残りの塔子は (rank+1, rank+2)
+                                // これが両面待ちである条件は、上端の次が存在すること (rank+2 < 9 すなわち rank < 7)
+                                if rank < 7 {
+                                    is_ryamen = true;
+                                    break;
+                                }
+                            } else if win_rank == rank + 2 {
+                                // アガリ牌が上端の場合、残りの塔子は (rank, rank+1)
+                                // これが両面待ちである条件は、下端の前が存在すること (rank > 1)
+                                if rank > 1 {
+                                    is_ryamen = true;
+                                    break;
+                                }
                             }
                         }
                     }
