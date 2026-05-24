@@ -28,6 +28,29 @@ mod tests {
     }
 
     #[test]
+    fn detect_suukantsu() {
+        let tiles = vec![
+            White, White, // pair
+        ];
+
+        // 4 Kans -> Suukantsu
+        let open_melds = vec![
+            mahjong::hand::Meld::Ankan(ThreeP),
+            mahjong::hand::Meld::Daiminkan(FourP),
+            mahjong::hand::Meld::Kakan(FiveP),
+            mahjong::hand::Meld::Ankan(SixP),
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &open_melds, ctx);
+        assert!(result.contains(&YakuId::Suukantsu));
+        assert!(!result.contains(&YakuId::Sankantsu)); // Normal yaku should be filtered out
+    }
+
+    #[test]
     fn detect_chitoitsu() {
         let tiles = vec![
             OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, FourM, FourM, FiveP, FiveP, SixP, SixP, SevenS,
