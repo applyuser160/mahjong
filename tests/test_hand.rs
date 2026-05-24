@@ -102,4 +102,63 @@ mod tests {
         assert!(hand.discard(2).is_err());
         assert!(hand.discard(100).is_err());
     }
+  
+    fn test_call_meld_daiminkan() {
+        let mut hand = Hand::new();
+        hand.push(Red);
+        hand.push(Red);
+        hand.push(Red);
+
+        assert!(hand.call_meld(Meld::Daiminkan(Red)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Daiminkan(Red));
+        assert_eq!(hand.tiles().len(), 0);
+    }
+
+    #[test]
+    fn test_call_meld_ankan() {
+        let mut hand = Hand::new();
+        hand.push(Red);
+        hand.push(Red);
+        hand.push(Red);
+        hand.push(Red);
+
+        assert!(hand.call_meld(Meld::Ankan(Red)).is_ok());
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Ankan(Red));
+        assert_eq!(hand.tiles().len(), 0);
+    }
+
+    #[test]
+    fn test_call_meld_kakan() {
+        let mut hand = Hand::new();
+        hand.push(Red);
+        hand.push(Red); // Hand has a pair (2 tiles)
+
+        // Declare Pon (consumes the 2 tiles in hand, forming an open triplet)
+        assert!(hand.call_meld(Meld::Pon(Red)).is_ok());
+        assert_eq!(hand.tiles().len(), 0);
+
+        // Draw the 4th Red
+        hand.push(Red);
+        assert_eq!(hand.tiles().len(), 1);
+
+        // Declare Kakan (consumes 1 tile in hand, promoting the Pon)
+        assert!(hand.call_meld(Meld::Kakan(Red)).is_ok());
+
+        assert_eq!(hand.open_melds.len(), 1);
+        assert_eq!(hand.open_melds[0], Meld::Kakan(Red));
+        assert_eq!(hand.tiles().len(), 0);
+    }
+
+    #[test]
+    fn test_call_meld_kakan_without_pon() {
+        let mut hand = Hand::new();
+        hand.push(Red);
+
+        // Try to Kakan without a prior Pon
+        let result = hand.call_meld(Meld::Kakan(Red));
+        assert!(result.is_err());
+        assert_eq!(hand.open_melds.len(), 0);
+    }
 }

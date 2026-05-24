@@ -7,7 +7,9 @@ pub enum Meld {
         consumed: [TileName; 2],
     },
     Pon(TileName),
-    Kan(TileName),
+    Daiminkan(TileName),
+    Ankan(TileName),
+    Kakan(TileName),
 }
 
 #[derive(Clone, Debug)]
@@ -73,7 +75,15 @@ impl Hand {
                 consumed.to_vec()
             }
             Meld::Pon(tile) => vec![tile, tile],
-            Meld::Kan(tile) => vec![tile, tile, tile],
+            Meld::Daiminkan(tile) => vec![tile, tile, tile],
+            Meld::Ankan(tile) => vec![tile, tile, tile, tile],
+            Meld::Kakan(tile) => {
+                // Must have a corresponding Pon
+                if !self.open_melds.contains(&Meld::Pon(tile)) {
+                    return Err("Cannot call Kakan without an existing Pon");
+                }
+                vec![tile]
+            }
         };
 
         // Verify that we have the consumed tiles, accounting for duplicates
@@ -93,7 +103,14 @@ impl Hand {
             }
         }
 
-        self.open_melds.push(meld);
+        if let Meld::Kakan(tile) = meld {
+            if let Some(pos) = self.open_melds.iter().position(|&m| m == Meld::Pon(tile)) {
+                self.open_melds[pos] = meld;
+            }
+        } else {
+            self.open_melds.push(meld);
+        }
+
         Ok(())
     }
 }

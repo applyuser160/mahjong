@@ -389,3 +389,52 @@ mod tests {
         assert!(!result.contains(&YakuId::Pinfu));
     }
 }
+
+#[cfg(test)]
+mod tests_kan {
+    use mahjong::hand::Meld;
+    use mahjong::tile::TileName::*;
+    use mahjong::yaku::{judge_yaku, WinContext, YakuId};
+
+    #[test]
+    fn detect_sanankou_passes_with_ankan() {
+        let tiles = vec![
+            OneM, OneM, OneM, // 111m
+            TwoM, TwoM, TwoM, // 222m
+            FourM, FiveM, SixM, // 456m
+            White, White, // pair
+        ];
+
+        let open_melds = vec![Meld::Ankan(ThreeM)];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &open_melds, ctx);
+        // Ankan is a closed meld, so we have 3 closed triplets/quads (111m, 222m, 3333m)
+        assert!(result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
+    fn detect_sankantsu() {
+        let tiles = vec![
+            OneM, TwoM, ThreeM, // 123m
+            White, White, // pair
+        ];
+
+        // 3 Kans -> Sankantsu
+        let open_melds = vec![
+            mahjong::hand::Meld::Ankan(ThreeP),
+            mahjong::hand::Meld::Daiminkan(FourP),
+            mahjong::hand::Meld::Kakan(FiveP),
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &open_melds, ctx);
+        assert!(result.contains(&YakuId::Sankantsu));
+    }
+}

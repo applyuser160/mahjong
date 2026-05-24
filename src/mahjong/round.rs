@@ -64,7 +64,9 @@ impl Round {
         let called_tile = match meld {
             Meld::Chii { called, .. } => called,
             Meld::Pon(called) => called,
-            Meld::Kan(called) => called,
+            Meld::Daiminkan(called) => called,
+            Meld::Ankan(called) => called,
+            Meld::Kakan(called) => called,
         };
 
         // Determine the last discarded tile
@@ -87,7 +89,7 @@ impl Round {
         let hand = &mut self.hands[player_index];
 
         // For Kan, we draw a replacement tile.
-        if let Meld::Kan(_) = meld {
+        if let Meld::Daiminkan(_) | Meld::Ankan(_) = meld {
             if let Some(drawn) = self.wall.draw() {
                 hand.push(drawn);
             } else {
