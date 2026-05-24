@@ -402,14 +402,15 @@ pub fn judge_yaku(
         ctx.is_closed = false;
     }
 
-    let mut counts = [0usize; 35];
+    let mut closed_counts = [0usize; 35];
     for tile in tiles.iter().copied() {
         let idx = tile as usize;
-        if idx < counts.len() {
-            counts[idx] += 1;
+        if idx < closed_counts.len() {
+            closed_counts[idx] += 1;
         }
     }
 
+    let mut total_counts = closed_counts;
     for meld in open_melds_input {
         let meld_tiles = match meld {
             crate::hand::Meld::Chii { called, consumed } => vec![*called, consumed[0], consumed[1]],
@@ -420,8 +421,8 @@ pub fn judge_yaku(
         };
         for tile in meld_tiles {
             let idx = tile as usize;
-            if idx < counts.len() {
-                counts[idx] += 1;
+            if idx < total_counts.len() {
+                total_counts[idx] += 1;
             }
         }
     }
@@ -450,14 +451,6 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let mut closed_counts = [0usize; 35];
-    for tile in tiles.iter().copied() {
-        let idx = tile as usize;
-        if idx < closed_counts.len() {
-            closed_counts[idx] += 1;
-        }
-    }
-
     // For pattern generation, we should only use the tiles from the closed hand
     // (excluding open melds). Otherwise, it tries to re-parse the open meld tiles.
     let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
@@ -477,7 +470,7 @@ pub fn judge_yaku(
         result.insert(YakuId::Chiihou);
     }
 
-    if is_kokushi(&counts) {
+    if is_kokushi(&closed_counts) {
         result.insert(YakuId::KokushiMusou);
 
         let has_yakuman = result.iter().any(|&id| {
@@ -498,11 +491,11 @@ pub fn judge_yaku(
         return result;
     }
 
-    if is_chitoitsu(&counts) && ctx.is_closed {
+    if is_chitoitsu(&closed_counts) && ctx.is_closed {
         result.insert(YakuId::Chitoitsu);
     }
 
-    if is_tanyao(&counts) {
+    if is_tanyao(&total_counts) {
         result.insert(YakuId::Tanyao);
     }
 
@@ -521,25 +514,25 @@ pub fn judge_yaku(
     }
 
     if let Some(p) = patterns.first() {
-        if contains_yakuhai(&counts, ctx.seat_wind, ctx.round_wind) {
-            if counts[TileName::White as usize] >= 3 {
+        if contains_yakuhai(&total_counts, ctx.seat_wind, ctx.round_wind) {
+            if total_counts[TileName::White as usize] >= 3 {
                 result.insert(YakuId::YakuhaiHaku);
             }
-            if counts[TileName::Green as usize] >= 3 {
+            if total_counts[TileName::Green as usize] >= 3 {
                 result.insert(YakuId::YakuhaiHatsu);
             }
-            if counts[TileName::Red as usize] >= 3 {
+            if total_counts[TileName::Red as usize] >= 3 {
                 result.insert(YakuId::YakuhaiChun);
             }
             if let Some(seat) = ctx.seat_wind {
                 let idx = seat as usize;
-                if counts[idx] >= 3 {
+                if total_counts[idx] >= 3 {
                     result.insert(YakuId::YakuhaiJikaze);
                 }
             }
             if let Some(round) = ctx.round_wind {
                 let idx = round as usize;
-                if counts[idx] >= 3 {
+                if total_counts[idx] >= 3 {
                     result.insert(YakuId::YakuhaiBakaze);
                 }
             }
@@ -574,22 +567,22 @@ pub fn judge_yaku(
         }
     }
 
-    if is_honitsu(&counts) {
+    if is_honitsu(&total_counts) {
         result.insert(YakuId::Honitsu);
     }
-    if is_chinitsu(&counts) {
+    if is_chinitsu(&total_counts) {
         result.insert(YakuId::Chinitsu);
     }
-    if is_honroutou(&counts) {
+    if is_honroutou(&total_counts) {
         result.insert(YakuId::Honroutou);
     }
-    if is_chinroutou(&counts) {
+    if is_chinroutou(&total_counts) {
         result.insert(YakuId::Chinroutou);
     }
-    if is_daisangen(&counts) {
+    if is_daisangen(&total_counts) {
         result.insert(YakuId::Daisangen);
     }
-    if let Some((small, big)) = detect_suushi(&counts) {
+    if let Some((small, big)) = detect_suushi(&total_counts) {
         if big {
             result.insert(YakuId::Daisuushi);
         }
@@ -597,13 +590,13 @@ pub fn judge_yaku(
             result.insert(YakuId::Shousuushi);
         }
     }
-    if is_tsuuiisou(&counts) {
+    if is_tsuuiisou(&total_counts) {
         result.insert(YakuId::Tsuuiisou);
     }
-    if is_ryuuiisou(&counts) {
+    if is_ryuuiisou(&total_counts) {
         result.insert(YakuId::Ryuuiisou);
     }
-    if is_chuuren_poutou(&counts, tiles.len()) {
+    if is_chuuren_poutou(&closed_counts, tiles.len()) {
         result.insert(YakuId::ChuurenPoutou);
     }
 
