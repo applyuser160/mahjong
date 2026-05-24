@@ -185,7 +185,7 @@ mod tests {
         let remaining_before = round.wall().remaining();
 
         let meld = Meld::Ankan(tile);
-        let res = round.play_meld(1, meld, 0);
+        let res = round.play_meld(1, meld);
 
         assert!(res.is_ok(), "Ankan should succeed");
 
