@@ -410,6 +410,22 @@ pub fn judge_yaku(
         }
     }
 
+    for meld in open_melds_input {
+        let meld_tiles = match meld {
+            crate::hand::Meld::Chii { called, consumed } => vec![*called, consumed[0], consumed[1]],
+            crate::hand::Meld::Pon(t) => vec![*t, *t, *t],
+            crate::hand::Meld::Daiminkan(t)
+            | crate::hand::Meld::Ankan(t)
+            | crate::hand::Meld::Kakan(t) => vec![*t, *t, *t, *t],
+        };
+        for tile in meld_tiles {
+            let idx = tile as usize;
+            if idx < counts.len() {
+                counts[idx] += 1;
+            }
+        }
+    }
+
     let mut open_melds = Vec::new();
     let mut closed_melds = Vec::new();
     let mut kan_count = 0;
@@ -434,7 +450,17 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let patterns = generate_patterns(&counts, &open_melds, &closed_melds);
+    let mut closed_counts = [0usize; 35];
+    for tile in tiles.iter().copied() {
+        let idx = tile as usize;
+        if idx < closed_counts.len() {
+            closed_counts[idx] += 1;
+        }
+    }
+
+    // For pattern generation, we should only use the tiles from the closed hand
+    // (excluding open melds). Otherwise, it tries to re-parse the open meld tiles.
+    let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
 
     if ctx.riichi && ctx.is_closed {
         result.insert(YakuId::Riichi);
