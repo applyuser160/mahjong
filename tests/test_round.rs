@@ -165,9 +165,9 @@ mod tests {
             let mut w = Wall::new();
             w.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
             let r = Round::new(w);
-            let p1_hand = r.hand(1);
+            let p0_hand = r.hand(0);
             let mut counts = [0; 40];
-            for &t in p1_hand {
+            for &t in p0_hand {
                 counts[t as usize] += 1;
             }
             if counts.iter().any(|&c| c == 4) {
@@ -185,7 +185,7 @@ mod tests {
         let remaining_before = round.wall().remaining();
 
         let meld = Meld::Ankan(tile);
-        let res = round.play_meld(1, meld);
+        let res = round.play_meld(0, meld);
 
         assert!(res.is_ok(), "Ankan should succeed");
 
