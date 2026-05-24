@@ -22,7 +22,10 @@ mod tests {
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
-        assert!(!result.contains(&YakuId::Junchan), "Junchan should not be valid with a non-terminal pair");
+        assert!(
+            !result.contains(&YakuId::Junchan),
+            "Junchan should not be valid with a non-terminal pair"
+        );
     }
 
     #[test]
@@ -44,6 +47,9 @@ mod tests {
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);
-        assert!(result.contains(&YakuId::Junchan), "Junchan should be valid with a terminal pair");
+        assert!(
+            result.contains(&YakuId::Junchan),
+            "Junchan should be valid with a terminal pair"
+        );
     }
 }
