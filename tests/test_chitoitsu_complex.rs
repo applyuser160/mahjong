@@ -4,7 +4,7 @@ use mahjong::yaku::{judge_yaku, WinContext, YakuId};
 #[test]
 fn test_chitoitsu_honitsu() {
     let tiles = vec![
-        OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, FourM, FourM, FiveM, FiveM, SixM, SixM, Red, Red,
+        OneM, OneM, TwoM, TwoM, FourM, FourM, FiveM, FiveM, SevenM, SevenM, NineM, NineM, Red, Red,
     ];
 
     let result = judge_yaku(
@@ -22,8 +22,8 @@ fn test_chitoitsu_honitsu() {
 #[test]
 fn test_chitoitsu_chinitsu() {
     let tiles = vec![
-        OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, FourM, FourM, FiveM, FiveM, SixM, SixM, SevenM,
-        SevenM,
+        OneM, OneM, TwoM, TwoM, FourM, FourM, FiveM, FiveM, SevenM, SevenM, EightM, EightM, NineM,
+        NineM,
     ];
 
     let result = judge_yaku(
