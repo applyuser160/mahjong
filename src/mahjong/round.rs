@@ -20,7 +20,7 @@ impl Round {
             wall,
             hands: [Hand::new(), Hand::new(), Hand::new(), Hand::new()],
             rivers: [River::new(), River::new(), River::new(), River::new()],
-            turn: 1,
+            turn: 0,
         };
 
         round.deal();
@@ -51,7 +51,7 @@ impl Round {
 
     pub fn discard_tile(&mut self, discard_index: usize) -> Result<TileName, &'static str> {
         let hand = &mut self.hands[self.turn];
-        let discarded = hand.discard(discard_index)?;
+        let discarded = hand.discard(discard_index).map_err(|_| "Discard Error")?;
         self.rivers[self.turn].push(discarded);
         self.turn = (self.turn + 1) % PLAYER_NUMBER;
         Ok(discarded)
@@ -67,6 +67,12 @@ impl Round {
         if let Meld::Chii { .. } = meld {
             if player_index != self.turn {
                 return Err("Chii can only be called from the Kamicha (previous player)");
+            }
+        }
+
+        if let Meld::Ankan(_) | Meld::Kakan(_) = meld {
+            if player_index != self.turn {
+                return Err("Self meld (Ankan/Kakan) can only be called on the player's own turn");
             }
         }
 

@@ -28,6 +28,29 @@ mod tests {
     }
 
     #[test]
+    fn detect_suukantsu() {
+        let tiles = vec![
+            White, White, // pair
+        ];
+
+        // 4 Kans -> Suukantsu
+        let open_melds = vec![
+            mahjong::hand::Meld::Ankan(ThreeP),
+            mahjong::hand::Meld::Daiminkan(FourP),
+            mahjong::hand::Meld::Kakan(FiveP),
+            mahjong::hand::Meld::Ankan(SixP),
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &open_melds, ctx);
+        assert!(result.contains(&YakuId::Suukantsu));
+        assert!(!result.contains(&YakuId::Sankantsu)); // Normal yaku should be filtered out
+    }
+
+    #[test]
     fn detect_chitoitsu() {
         let tiles = vec![
             OneM, OneM, TwoM, TwoM, ThreeM, ThreeM, FourM, FourM, FiveP, FiveP, SixP, SixP, SevenS,
@@ -57,7 +80,7 @@ mod tests {
 
         let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Daisangen));
-        assert!(result.contains(&YakuId::Toitoi));
+        assert!(!result.contains(&YakuId::Toitoi));
     }
 
     #[test]
@@ -190,7 +213,7 @@ mod tests {
 
         let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Chinroutou));
-        assert!(result.contains(&YakuId::Honroutou));
+        assert!(!result.contains(&YakuId::Honroutou));
     }
 
     #[test]
@@ -476,5 +499,22 @@ mod tests_kan {
         };
         let result = judge_yaku(&tiles, &open_melds, ctx);
         assert!(result.contains(&YakuId::Sankantsu));
+    }
+
+    #[test]
+    fn test_yakuman_filters_normal_yaku() {
+        let tiles = vec![
+            OneM, NineM, OneP, NineP, OneS, NineS, East, South, West, North, Red, Green, White,
+            White,
+        ];
+        // Ensure that normal yaku are filtered out when Yakuman is achieved.
+        let mut ctx = WinContext::default();
+        ctx.riichi = true;
+        ctx.is_closed = true;
+
+        let result = judge_yaku(&tiles, &[], ctx);
+
+        assert!(result.contains(&YakuId::KokushiMusou));
+        assert!(!result.contains(&YakuId::Riichi));
     }
 }

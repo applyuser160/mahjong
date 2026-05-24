@@ -36,9 +36,12 @@ pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
     let mut round = Round::new(wall);
     let mut discards = Vec::new();
 
-    while let Some(_drawn) = round.draw_tile() {
-        let tile = round.discard_tile(0).unwrap();
-        discards.push(tile.as_str());
+    while round.draw_tile().is_some() {
+        if let Ok(tile) = round.discard_tile(0) {
+            discards.push(tile.as_str());
+        } else {
+            break;
+        }
     }
 
     Ok(discards)

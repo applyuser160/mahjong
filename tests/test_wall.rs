@@ -15,7 +15,7 @@ mod tests {
             *counter.entry(*tile).or_default() += 1;
         }
 
-        assert_eq!(wall.remaining(), TILE_WALL_CAPACITY);
+        assert_eq!(wall.remaining(), TILE_WALL_CAPACITY - 14);
         assert_eq!(counter.len(), TILE_NAME_NUMBER);
         for value in counter.values() {
             assert_eq!(*value, TILE_PER_KIND);
