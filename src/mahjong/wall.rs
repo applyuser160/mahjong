@@ -51,7 +51,10 @@ impl Wall {
             return None;
         }
 
-        let tile = self.tiles.get(TILE_WALL_CAPACITY - 1 - self.kan_count).copied();
+        let tile = self
+            .tiles
+            .get(TILE_WALL_CAPACITY - 1 - self.kan_count)
+            .copied();
         if tile.is_some() {
             self.kan_count += 1;
         }

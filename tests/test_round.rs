@@ -178,7 +178,11 @@ mod tests {
         assert!(res.is_ok(), "Ankan should succeed");
 
         let remaining_after = round.wall().remaining();
-        assert_eq!(remaining_after, remaining_before - 1, "Drawing a replacement tile for a Kan should reduce the remaining drawable tiles by 1");
+        assert_eq!(
+            remaining_after,
+            remaining_before - 1,
+            "Drawing a replacement tile for a Kan should reduce the remaining drawable tiles by 1"
+        );
     }
 
     #[test]
