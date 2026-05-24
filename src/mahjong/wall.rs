@@ -7,6 +7,7 @@ use crate::tile::{TileName, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY}
 pub struct Wall {
     tiles: [TileName; TILE_WALL_CAPACITY],
     cursor: usize,
+    kan_count: usize,
 }
 
 impl Wall {
@@ -19,15 +20,25 @@ impl Wall {
             tiles[offset..offset + TILE_PER_KIND].fill(tile_name);
         }
 
-        Self { tiles, cursor: 0 }
+        Self {
+            tiles,
+            cursor: 0,
+            kan_count: 0,
+        }
     }
 
     pub fn shuffle<R: Rng + ?Sized>(&mut self, rng: &mut R) {
         self.tiles.shuffle(rng);
         self.cursor = 0;
+        self.kan_count = 0;
     }
 
     pub fn draw(&mut self) -> Option<TileName> {
+        let limit = TILE_WALL_CAPACITY - 14 - self.kan_count;
+        if self.cursor >= limit {
+            return None;
+        }
+
         let tile = self.tiles.get(self.cursor).copied();
         if tile.is_some() {
             self.cursor += 1;
@@ -35,8 +46,21 @@ impl Wall {
         tile
     }
 
+    pub fn draw_replacement(&mut self) -> Option<TileName> {
+        if self.kan_count >= 4 {
+            return None;
+        }
+
+        let tile = self.tiles.get(TILE_WALL_CAPACITY - 1 - self.kan_count).copied();
+        if tile.is_some() {
+            self.kan_count += 1;
+        }
+        tile
+    }
+
     pub fn remaining(&self) -> usize {
-        TILE_WALL_CAPACITY.saturating_sub(self.cursor)
+        let limit = TILE_WALL_CAPACITY - 14 - self.kan_count;
+        limit.saturating_sub(self.cursor)
     }
 
     pub fn tiles(&self) -> &[TileName] {

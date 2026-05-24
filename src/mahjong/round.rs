@@ -123,10 +123,10 @@ impl Round {
 
         // For Kan, we draw a replacement tile.
         if let Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_) = meld {
-            if let Some(drawn) = self.wall.draw() {
+            if let Some(drawn) = self.wall.draw_replacement() {
                 hand.push(drawn);
             } else {
-                return Err("Wall is empty, cannot draw replacement tile for Kan");
+                return Err("Cannot draw replacement tile for Kan (possibly max kans reached)");
             }
         }
 
