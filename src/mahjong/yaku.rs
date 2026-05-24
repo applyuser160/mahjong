@@ -595,20 +595,20 @@ pub fn judge_yaku(
         return result;
     }
 
-    if is_chitoitsu(&counts) && ctx.is_closed {
-        result.insert(YakuId::Chitoitsu);
-    }
-
-    if is_tanyao(&counts) {
-        result.insert(YakuId::Tanyao);
-    }
-
     if ctx.is_closed {
         if has_ryanpeiko(&patterns) {
             result.insert(YakuId::Ryanpeiko);
         } else if has_ipeiko(&patterns) {
             result.insert(YakuId::Ipeiko);
         }
+    }
+
+    if is_chitoitsu(&counts) && ctx.is_closed && !result.contains(&YakuId::Ryanpeiko) {
+        result.insert(YakuId::Chitoitsu);
+    }
+
+    if is_tanyao(&counts) {
+        result.insert(YakuId::Tanyao);
     }
 
     if let Some(y) = detect_pinfu(&patterns, &ctx) {
