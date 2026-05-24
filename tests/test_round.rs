@@ -304,4 +304,71 @@ mod tests {
         let res2 = round.play_meld(2, chii_meld, 0);
         assert!(res2.is_ok());
     }
+
+    #[test]
+    fn test_play_meld_multiple_discards_in_river() {
+        let mut found_seed = None;
+        for seed in 0..10000 {
+            let mut w = Wall::new();
+            w.shuffle(&mut StdRng::seed_from_u64(seed));
+            let mut r = Round::new(w);
+
+            // Let's play 4 turns so everyone has discarded 1 tile.
+            let _d1 = r.play_turn(0).unwrap(); // P1
+            let _d2 = r.play_turn(0).unwrap(); // P2
+            let _d3 = r.play_turn(0).unwrap(); // P3
+            let _d0 = r.play_turn(0).unwrap(); // P0
+
+            // P1 plays again and discards their second tile.
+            let second_discard = r.play_turn(0).unwrap(); // P1
+
+            // P3 has hand. Let's see if P3 has at least 2 of second_discard.
+            let p3_hand = r.hand(3);
+            let count = p3_hand.iter().filter(|&&t| t == second_discard).count();
+            if count >= 2 {
+                found_seed = Some((seed, second_discard));
+                break;
+            }
+        }
+
+        let (seed, discarded) =
+            found_seed.expect("Should find a seed where P3 can Pon P1's second discard");
+        let mut wall = Wall::new();
+        wall.shuffle(&mut StdRng::seed_from_u64(seed));
+        let mut round = Round::new(wall);
+
+        // Play 5 turns to get P1's river to have 2 tiles, and the last discard is `discarded`
+        let first_discard = round.play_turn(0).unwrap();
+        round.play_turn(0).unwrap();
+        round.play_turn(0).unwrap();
+        round.play_turn(0).unwrap();
+        let second_discard = round.play_turn(0).unwrap();
+        assert_eq!(second_discard, discarded);
+
+        // Check P1 (index 1) river has 2 tiles
+        assert_eq!(round.river(1).tiles().len(), 2);
+        assert_eq!(round.river(1).tiles()[0], first_discard);
+        assert_eq!(round.river(1).tiles()[1], second_discard);
+
+        // P3 (index 3) calls Pon on P1's discard
+        let meld = Meld::Pon(discarded);
+        let p3_discard = round.play_meld(3, meld, 0).unwrap();
+
+        // Verify that ONLY the last discard was removed from P1's river.
+        // First discard should still be there!
+        assert_eq!(
+            round.river(1).tiles().len(),
+            1,
+            "Only 1 tile should be removed from P1's river"
+        );
+        assert_eq!(
+            round.river(1).tiles()[0],
+            first_discard,
+            "P1's first discard should remain in the river"
+        );
+
+        // Verify P3's river has their discard
+        assert_eq!(round.river(3).tiles().len(), 2);
+        assert_eq!(round.river(3).tiles()[1], p3_discard);
+    }
 }
