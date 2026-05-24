@@ -27,7 +27,6 @@ mod tests {
         }
 
         let (seed, discarded) = found_seed.unwrap();
-
         let mut wall = Wall::new();
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
@@ -138,5 +137,128 @@ mod tests {
 
         let total_tiles = PLAYER_NUMBER * 13 + draws;
         assert_eq!(total_tiles, TILE_WALL_CAPACITY);
+    }
+
+    #[test]
+    fn test_play_meld_ankan() {
+        let mut found_ankan = None;
+        for seed in 0..100000 {
+            let mut w = Wall::new();
+            w.shuffle(&mut StdRng::seed_from_u64(seed));
+            let r = Round::new(w);
+            let p1_hand = r.hand(1);
+            let mut counts = [0; 40];
+            for &t in p1_hand {
+                counts[t as usize] += 1;
+            }
+            if counts.iter().any(|&c| c >= 4) {
+                let tile_idx = counts.iter().position(|&c| c >= 4).unwrap();
+                found_ankan = Some((seed, TileName::from_usize(tile_idx)));
+                break;
+            }
+        }
+
+        let (seed, tile) = found_ankan.unwrap();
+        let mut wall = Wall::new();
+        wall.shuffle(&mut StdRng::seed_from_u64(seed));
+        let mut round = Round::new(wall);
+
+        let r0_len_before = round.river(0).tiles().len();
+        let r2_len_before = round.river(2).tiles().len();
+        let r3_len_before = round.river(3).tiles().len();
+
+        let meld = Meld::Ankan(tile);
+        let res = round.play_meld(1, meld, 0);
+
+        assert!(res.is_ok(), "Ankan should succeed");
+
+        assert_eq!(
+            round.river(0).tiles().len(),
+            r0_len_before,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(2).tiles().len(),
+            r2_len_before,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(3).tiles().len(),
+            r3_len_before,
+            "River should not be popped"
+        );
+    }
+
+    #[test]
+    fn test_play_meld_kakan() {
+        let mut found_kakan = None;
+        for seed in 0..100000 {
+            let mut w = Wall::new();
+            w.shuffle(&mut StdRng::seed_from_u64(seed));
+            let r = Round::new(w);
+            let p1_hand = r.hand(1);
+            let p0_hand = r.hand(0);
+
+            let mut p1_counts = [0; 40];
+            for &t in p1_hand {
+                p1_counts[t as usize] += 1;
+            }
+
+            if p1_counts.iter().any(|&c| c >= 3) {
+                let tile_idx = p1_counts.iter().position(|&c| c >= 3).unwrap();
+                let target_tile = TileName::from_usize(tile_idx);
+                // P0 needs the tile to discard on their turn (which is the 4th turn of the first round, index 0 might not be discarded if play_turn draws then discards)
+                // wait, play_turn(0) draws a tile THEN discards the tile at index 0 of the NEW hand.
+                // The new hand has 14 tiles. So index 0 is the first tile originally dealt.
+                if p0_hand[0] == target_tile {
+                    found_kakan = Some((seed, target_tile));
+                    break;
+                }
+            }
+        }
+
+        let (seed, tile) = found_kakan.unwrap();
+        let mut wall = Wall::new();
+        wall.shuffle(&mut StdRng::seed_from_u64(seed));
+        let mut round = Round::new(wall);
+
+        round.play_turn(0).unwrap(); // P1 plays, turn -> 2
+        round.play_turn(0).unwrap(); // P2 plays, turn -> 3
+        round.play_turn(0).unwrap(); // P3 plays, turn -> 0
+
+        let p0_discard = round.play_turn(0).unwrap();
+        assert_eq!(p0_discard, tile);
+
+        let pon_meld = Meld::Pon(tile);
+        let res = round.play_meld(1, pon_meld, 0);
+        assert!(res.is_ok());
+
+        round.play_turn(0).unwrap(); // P2 plays, turn -> 3
+        round.play_turn(0).unwrap(); // P3 plays, turn -> 0
+        round.play_turn(0).unwrap(); // P0 plays, turn -> 1
+
+        let kakan_meld = Meld::Kakan(tile);
+        let r0_len = round.river(0).tiles().len();
+        let r2_len = round.river(2).tiles().len();
+        let r3_len = round.river(3).tiles().len();
+
+        let res_kakan = round.play_meld(1, kakan_meld, 0);
+        assert!(res_kakan.is_ok(), "Kakan should succeed");
+
+        assert_eq!(
+            round.river(0).tiles().len(),
+            r0_len,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(2).tiles().len(),
+            r2_len,
+            "River should not be popped"
+        );
+        assert_eq!(
+            round.river(3).tiles().len(),
+            r3_len,
+            "River should not be popped"
+        );
     }
 }

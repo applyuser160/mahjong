@@ -713,14 +713,6 @@ fn search_melds(
         counts[i] += 3;
     }
 
-    if counts[i] >= 4 {
-        counts[i] -= 4;
-        melds.push(MeldKind::Quad(tile));
-        search_melds(counts, melds, patterns, pair, open_melds);
-        melds.pop();
-        counts[i] += 4;
-    }
-
     if let Some((suit, rank)) = is_number_tile(tile) {
         if rank <= 7 {
             let next1 = i + 1;
@@ -808,6 +800,10 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
         }
 
         if is_value_pair(pattern.pair, ctx) {
+            continue;
+        }
+
+        if win_tile == pattern.pair {
             continue;
         }
 

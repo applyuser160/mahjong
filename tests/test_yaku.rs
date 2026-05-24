@@ -194,6 +194,26 @@ mod tests {
     }
 
     #[test]
+    fn detect_sanankou_with_undeclared_quad() {
+        let tiles = vec![
+            TwoM, TwoM, TwoM, TwoM, // 2222m (used as 222m triplet + 2m for sequence)
+            ThreeM, FourM, // 34m (completed as 234m sequence)
+            SixP, SixP, SixP, // 666p
+            NineS, NineS, NineS, // 999s
+            East, East, // pair
+        ];
+
+        let ctx = WinContext {
+            is_tsumo: true,
+            is_closed: true,
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        // This hand is Sanankou (222m, 666p, 999s are closed triplets).
+        assert!(result.contains(&YakuId::Sanankou));
+    }
+
+    #[test]
     fn detect_sanankou_tsumo() {
         let tiles = vec![
             OneM, OneM, OneM, // 111m
@@ -383,6 +403,26 @@ mod tests {
             is_closed: true,
             is_tsumo: false,
             win_tile: Some(TwoM), // nobetan wait on 2m or 5m (acts as tanki pair)
+            ..Default::default()
+        };
+        let result = judge_yaku(&tiles, &[], ctx);
+        assert!(!result.contains(&YakuId::Pinfu));
+    }
+
+    #[test]
+    fn detect_pinfu_fails_tanki_with_complete_sequence() {
+        let tiles = vec![
+            TwoM, ThreeM, FourM, // complete sequence 234m
+            FourP, FiveP, SixP, // 456p
+            ThreeS, FourS, FiveS, // 345s
+            SixS, SevenS, EightS, // 678s
+            FourM, FourM, // pair 4m (win_tile is 4m, so it completed the pair)
+        ];
+
+        let ctx = WinContext {
+            is_closed: true,
+            is_tsumo: false,
+            win_tile: Some(FourM), // tanki wait on 4m
             ..Default::default()
         };
         let result = judge_yaku(&tiles, &[], ctx);

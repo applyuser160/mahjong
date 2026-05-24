@@ -87,7 +87,31 @@ impl Round {
         }
 
         // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
-        self.hands[player_index].call_meld(meld)?;
+        // Check condition before modifying the state
+        match meld {
+            Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
+                // Determine the last discarded tile
+                let last_discard = self.rivers[previous_player]
+                    .tiles()
+                    .last()
+                    .copied()
+                    .ok_or("No tile in river to call")?;
+
+                if last_discard != called {
+                    return Err("Called tile does not match the last discarded tile");
+                }
+
+                self.hands[player_index].call_meld(meld)?;
+
+                // Remove the tile from the previous player's river
+                self.rivers[previous_player].pop();
+            }
+            Meld::Ankan(_) | Meld::Kakan(_) => {
+                // For Ankan and Kakan, we do not depend on the previous player's discard.
+                // We just call the meld directly.
+                self.hands[player_index].call_meld(meld)?;
+            }
+        }
 
         if !is_self_meld {
             // Remove the tile from the previous player's river
