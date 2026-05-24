@@ -33,11 +33,18 @@ pub enum YakuId {
     Daisangen,
     Shousuushi,
     Daisuushi,
+    Suukantsu,
     Tsuuiisou,
     Ryuuiisou,
     ChuurenPoutou,
     Tenhou,
     Chiihou,
+    RinshanKaihou,
+    Chankan,
+    HaiteiRaoyue,
+    HouteiRaoyui,
+    DoubleRiichi,
+    Ippatsu,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -284,6 +291,14 @@ pub const ALL_YAKU: &[Yaku] = &[
         yakuman: true,
     },
     Yaku {
+        id: YakuId::Suukantsu,
+        name_ja: "四槓子",
+        name_kana: "スーカンツ",
+        han_closed: 13,
+        han_open: 13,
+        yakuman: true,
+    },
+    Yaku {
         id: YakuId::Tsuuiisou,
         name_ja: "字一色",
         name_kana: "ツーイーソー",
@@ -323,6 +338,54 @@ pub const ALL_YAKU: &[Yaku] = &[
         han_open: 0,
         yakuman: true,
     },
+    Yaku {
+        id: YakuId::RinshanKaihou,
+        name_ja: "嶺上開花",
+        name_kana: "リンシャンカイホウ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::Chankan,
+        name_ja: "槍槓",
+        name_kana: "チャンカン",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::HaiteiRaoyue,
+        name_ja: "海底撈月",
+        name_kana: "ハイテイラオユエ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::HouteiRaoyui,
+        name_ja: "河底撈魚",
+        name_kana: "ホウテイラオユイ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::DoubleRiichi,
+        name_ja: "ダブル立直",
+        name_kana: "ダブルリーチ",
+        han_closed: 2,
+        han_open: 0,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::Ippatsu,
+        name_ja: "一発",
+        name_kana: "イッパツ",
+        han_closed: 1,
+        han_open: 0,
+        yakuman: false,
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -356,6 +419,12 @@ pub struct WinContext {
     pub tenhou: bool,
     pub chiihou: bool,
     pub win_tile: Option<TileName>,
+    pub is_rinshan: bool,
+    pub is_chankan: bool,
+    pub is_haitei: bool,
+    pub is_houtei: bool,
+    pub is_double_riichi: bool,
+    pub is_ippatsu: bool,
 }
 
 impl Default for WinContext {
@@ -370,6 +439,12 @@ impl Default for WinContext {
             tenhou: false,
             chiihou: false,
             win_tile: None,
+            is_rinshan: false,
+            is_chankan: false,
+            is_haitei: false,
+            is_houtei: false,
+            is_double_riichi: false,
+            is_ippatsu: false,
         }
     }
 }
@@ -410,6 +485,22 @@ pub fn judge_yaku(
         }
     }
 
+    for meld in open_melds_input {
+        let meld_tiles = match meld {
+            crate::hand::Meld::Chii { called, consumed } => vec![*called, consumed[0], consumed[1]],
+            crate::hand::Meld::Pon(t) => vec![*t, *t, *t],
+            crate::hand::Meld::Daiminkan(t)
+            | crate::hand::Meld::Ankan(t)
+            | crate::hand::Meld::Kakan(t) => vec![*t, *t, *t, *t],
+        };
+        for tile in meld_tiles {
+            let idx = tile as usize;
+            if idx < counts.len() {
+                counts[idx] += 1;
+            }
+        }
+    }
+
     let mut open_melds = Vec::new();
     let mut closed_melds = Vec::new();
     let mut kan_count = 0;
@@ -434,10 +525,42 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let patterns = generate_patterns(&counts, &open_melds, &closed_melds);
+    let mut closed_counts = [0usize; 35];
+    for tile in tiles.iter().copied() {
+        let idx = tile as usize;
+        if idx < closed_counts.len() {
+            closed_counts[idx] += 1;
+        }
+    }
 
-    if ctx.riichi && ctx.is_closed {
+    // For pattern generation, we should only use the tiles from the closed hand
+    // (excluding open melds). Otherwise, it tries to re-parse the open meld tiles.
+    let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
+
+    if ctx.is_double_riichi && ctx.is_closed {
+        result.insert(YakuId::DoubleRiichi);
+    } else if ctx.riichi && ctx.is_closed {
         result.insert(YakuId::Riichi);
+    }
+
+    if ctx.is_ippatsu && ctx.is_closed && (ctx.riichi || ctx.is_double_riichi) {
+        result.insert(YakuId::Ippatsu);
+    }
+
+    if ctx.is_rinshan && ctx.is_tsumo {
+        result.insert(YakuId::RinshanKaihou);
+    }
+
+    if ctx.is_chankan && !ctx.is_tsumo {
+        result.insert(YakuId::Chankan);
+    }
+
+    if ctx.is_haitei && ctx.is_tsumo {
+        result.insert(YakuId::HaiteiRaoyue);
+    }
+
+    if ctx.is_houtei && !ctx.is_tsumo {
+        result.insert(YakuId::HouteiRaoyui);
     }
 
     if ctx.is_closed && ctx.is_tsumo {
@@ -453,15 +576,23 @@ pub fn judge_yaku(
 
     if is_kokushi(&counts) {
         result.insert(YakuId::KokushiMusou);
+
+        let has_yakuman = result.iter().any(|&id| {
+            ALL_YAKU
+                .iter()
+                .find(|y| y.id == id)
+                .is_some_and(|y| y.yakuman)
+        });
+        if has_yakuman {
+            result.retain(|&id| {
+                ALL_YAKU
+                    .iter()
+                    .find(|y| y.id == id)
+                    .is_some_and(|y| y.yakuman)
+            });
+        }
+
         return result;
-    }
-
-    if is_chitoitsu(&counts) && ctx.is_closed {
-        result.insert(YakuId::Chitoitsu);
-    }
-
-    if is_tanyao(&counts) {
-        result.insert(YakuId::Tanyao);
     }
 
     if ctx.is_closed {
@@ -470,6 +601,14 @@ pub fn judge_yaku(
         } else if has_ipeiko(&patterns) {
             result.insert(YakuId::Ipeiko);
         }
+    }
+
+    if is_chitoitsu(&counts) && ctx.is_closed && !result.contains(&YakuId::Ryanpeiko) {
+        result.insert(YakuId::Chitoitsu);
+    }
+
+    if is_tanyao(&counts) {
+        result.insert(YakuId::Tanyao);
     }
 
     if let Some(y) = detect_pinfu(&patterns, &ctx) {
@@ -527,6 +666,9 @@ pub fn judge_yaku(
         if ctx.kan_count >= 3 {
             result.insert(YakuId::Sankantsu);
         }
+        if ctx.kan_count >= 4 {
+            result.insert(YakuId::Suukantsu);
+        }
         if is_suuankou(&patterns, ctx.is_closed, &ctx) {
             result.insert(YakuId::Suuankou);
         }
@@ -563,6 +705,21 @@ pub fn judge_yaku(
     }
     if is_chuuren_poutou(&counts, tiles.len()) {
         result.insert(YakuId::ChuurenPoutou);
+    }
+
+    let has_yakuman = result.iter().any(|&id| {
+        ALL_YAKU
+            .iter()
+            .find(|y| y.id == id)
+            .is_some_and(|y| y.yakuman)
+    });
+    if has_yakuman {
+        result.retain(|&id| {
+            ALL_YAKU
+                .iter()
+                .find(|y| y.id == id)
+                .is_some_and(|y| y.yakuman)
+        });
     }
 
     result
@@ -807,19 +964,32 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
             continue;
         }
 
+        // アガリの形（14枚）から順子を探すのではなく、
+        // アガリ牌を抜いた13枚のテンパイ形において、
+        // アガリ牌が「両面塔子」を完成させているかを検証する。
         let mut is_ryamen = false;
-        for meld in pattern.all_melds() {
-            if let MeldKind::Sequence(start_tile) = meld {
-                if let Some((suit, rank)) = is_number_tile(*start_tile) {
-                    if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
+        if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
+            // パターン内の各順子からアガリ牌を抜いて塔子を作り、
+            // それが両面塔子であるかをチェックする。
+            for meld in pattern.all_melds() {
+                if let MeldKind::Sequence(start_tile) = meld {
+                    if let Some((suit, rank)) = is_number_tile(*start_tile) {
                         if suit == win_suit {
-                            if win_rank == rank && rank < 7 {
-                                is_ryamen = true;
-                                break;
-                            }
-                            if win_rank == rank + 2 && rank > 1 {
-                                is_ryamen = true;
-                                break;
+                            // アガリ牌がこの順子を構成している場合、抜くと塔子になる
+                            if win_rank == rank {
+                                // アガリ牌が下端の場合、残りの塔子は (rank+1, rank+2)
+                                // これが両面待ちである条件は、上端の次が存在すること (rank+2 < 9 すなわち rank < 7)
+                                if rank < 7 {
+                                    is_ryamen = true;
+                                    break;
+                                }
+                            } else if win_rank == rank + 2 {
+                                // アガリ牌が上端の場合、残りの塔子は (rank, rank+1)
+                                // これが両面待ちである条件は、下端の前が存在すること (rank > 1)
+                                if rank > 1 {
+                                    is_ryamen = true;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1038,7 +1208,7 @@ fn is_chinitsu(counts: &[usize; 35]) -> bool {
 
 fn is_junchan(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
-        if is_honor(pattern.pair) {
+        if !is_terminal(pattern.pair) {
             return false;
         }
         pattern.all_melds().all(|meld| match meld {
