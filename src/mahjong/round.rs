@@ -61,35 +61,37 @@ impl Round {
     ) -> Result<TileName, &'static str> {
         let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
 
-        let called_tile = match meld {
-            Meld::Chii { called, .. } => called,
-            Meld::Pon(called) => called,
-            Meld::Daiminkan(called) => called,
-            Meld::Ankan(called) => called,
-            Meld::Kakan(called) => called,
-        };
-
-        // Determine the last discarded tile
-        let last_discard = self.rivers[previous_player]
-            .tiles()
-            .last()
-            .copied()
-            .ok_or("No tile in river to call")?;
-
-        if last_discard != called_tile {
-            return Err("Called tile does not match the last discarded tile");
-        }
-
         // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
-        self.hands[player_index].call_meld(meld)?;
+        // Check condition before modifying the state
+        match meld {
+            Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
+                // Determine the last discarded tile
+                let last_discard = self.rivers[previous_player]
+                    .tiles()
+                    .last()
+                    .copied()
+                    .ok_or("No tile in river to call")?;
 
-        // Remove the tile from the previous player's river
-        self.rivers[previous_player].pop();
+                if last_discard != called {
+                    return Err("Called tile does not match the last discarded tile");
+                }
+
+                self.hands[player_index].call_meld(meld)?;
+
+                // Remove the tile from the previous player's river
+                self.rivers[previous_player].pop();
+            }
+            Meld::Ankan(_) | Meld::Kakan(_) => {
+                // For Ankan and Kakan, we do not depend on the previous player's discard.
+                // We just call the meld directly.
+                self.hands[player_index].call_meld(meld)?;
+            }
+        }
 
         let hand = &mut self.hands[player_index];
 
         // For Kan, we draw a replacement tile.
-        if let Meld::Daiminkan(_) | Meld::Ankan(_) = meld {
+        if let Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_) = meld {
             if let Some(drawn) = self.wall.draw() {
                 hand.push(drawn);
             } else {
