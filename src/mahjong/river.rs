@@ -17,4 +17,8 @@ impl River {
     pub fn push(&mut self, tile: TileName) {
         self.tiles.push(tile);
     }
+
+    pub fn pop(&mut self) -> Option<TileName> {
+        self.tiles.pop()
+    }
 }
