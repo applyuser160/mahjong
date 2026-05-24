@@ -57,15 +57,10 @@ impl Round {
         Ok(discarded)
     }
 
-    pub fn play_meld(
-        &mut self,
-        player_index: usize,
-        meld: Meld,
-    ) -> Result<(), &'static str> {
-        if matches!(meld, Meld::Ankan(_) | Meld::Kakan(_))
-            && player_index != self.turn {
-                return Err("Ankan and Kakan can only be called on your own turn");
-            }
+    pub fn play_meld(&mut self, player_index: usize, meld: Meld) -> Result<(), &'static str> {
+        if matches!(meld, Meld::Ankan(_) | Meld::Kakan(_)) && player_index != self.turn {
+            return Err("Ankan and Kakan can only be called on your own turn");
+        }
 
         let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
 

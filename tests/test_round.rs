@@ -16,7 +16,10 @@ mod tests {
             w.shuffle(&mut StdRng::seed_from_u64(seed));
             let mut r = Round::new(w);
 
-            let discarded = { r.draw_tile(); r.discard_tile(0).unwrap() };
+            let discarded = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            };
 
             let p2_hand = r.hand(3);
             let count = p2_hand.iter().filter(|&&t| t == discarded).count();
@@ -31,12 +34,15 @@ mod tests {
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
 
-        let actual_discard = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let actual_discard = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(actual_discard, discarded);
         assert_eq!(round.turn(), 2);
 
         let meld = Meld::Pon(discarded);
-        round.play_meld(3,     meld).unwrap();
+        round.play_meld(3, meld).unwrap();
         let p2_discard = round.discard_tile(0).unwrap();
 
         assert_eq!(round.turn(), 0);
@@ -55,12 +61,15 @@ mod tests {
         let mut round = Round::new(wall);
 
         // P1's turn
-        let actual_discard = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let actual_discard = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(actual_discard, discarded);
 
         // P3 calls Pon!
         let meld = Meld::Pon(discarded);
-        round.play_meld(3,     meld).unwrap();
+        round.play_meld(3, meld).unwrap();
         let _ = round.discard_tile(0).unwrap();
         assert_eq!(round.turn(), 0);
 
@@ -114,11 +123,17 @@ mod tests {
         let wall = Wall::new();
         let mut round = Round::new(wall);
 
-        let discarded = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let discarded = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(round.river(1).tiles().len(), 1);
         assert_eq!(round.river(1).tiles()[0], discarded);
 
-        let discarded2 = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let discarded2 = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(round.river(2).tiles().len(), 1);
         assert_eq!(round.river(2).tiles()[0], discarded2);
     }
@@ -176,7 +191,7 @@ mod tests {
         let r3_len_before = round.river(3).tiles().len();
 
         let meld = Meld::Ankan(tile);
-        let res = round.play_meld(1,  meld);
+        let res = round.play_meld(1, meld);
 
         assert!(res.is_ok(), "Ankan should succeed");
 
@@ -230,28 +245,49 @@ mod tests {
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
 
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P1 plays, turn -> 2
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P2 plays, turn -> 3
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P3 plays, turn -> 0
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P1 plays, turn -> 2
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P2 plays, turn -> 3
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P3 plays, turn -> 0
 
-        let p0_discard = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let p0_discard = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(p0_discard, tile);
 
         let pon_meld = Meld::Pon(tile);
-        let res = round.play_meld(1,  pon_meld);
+        let res = round.play_meld(1, pon_meld);
         assert!(res.is_ok());
         round.discard_tile(0).unwrap(); // P1 discards after Pon, turn -> 2
 
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P2 plays, turn -> 3
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P3 plays, turn -> 0
-        { round.draw_tile(); round.discard_tile(0).unwrap() }; // P0 plays, turn -> 1
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P2 plays, turn -> 3
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P3 plays, turn -> 0
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        }; // P0 plays, turn -> 1
 
         let kakan_meld = Meld::Kakan(tile);
         let r0_len = round.river(0).tiles().len();
         let r2_len = round.river(2).tiles().len();
         let r3_len = round.river(3).tiles().len();
 
-        let res_kakan = round.play_meld(1,  kakan_meld);
+        let res_kakan = round.play_meld(1, kakan_meld);
         assert!(res_kakan.is_ok(), "Kakan should succeed");
 
         assert_eq!(
@@ -279,7 +315,10 @@ mod tests {
         // Player 1 plays their turn.
         // With an unshuffled wall, Player 1 discards OneM.
         // Turn updates to Player 2.
-        let discarded = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let discarded = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(discarded, TileName::OneM);
         assert_eq!(round.turn(), 2);
 
@@ -293,7 +332,7 @@ mod tests {
 
         // Player 3 (index 3) attempts to call Chii.
         // Player 3 is NOT the immediate next player in order (not self.turn()), so it must fail.
-        let res3 = round.play_meld(3,  chii_meld);
+        let res3 = round.play_meld(3, chii_meld);
         assert!(res3.is_err());
         assert_eq!(
             res3.unwrap_err(),
@@ -302,7 +341,7 @@ mod tests {
 
         // Player 0 (index 0) attempts to call Chii.
         // Player 0 is NOT the immediate next player in order (not self.turn()), so it must fail.
-        let res0 = round.play_meld(0,  chii_meld);
+        let res0 = round.play_meld(0, chii_meld);
         assert!(res0.is_err());
         assert_eq!(
             res0.unwrap_err(),
@@ -310,7 +349,7 @@ mod tests {
         );
 
         // Player 2 (index 2) calls Chii. This is valid.
-        let res2 = round.play_meld(2,  chii_meld);
+        let res2 = round.play_meld(2, chii_meld);
         assert!(res2.is_ok());
     }
 
@@ -323,13 +362,28 @@ mod tests {
             let mut r = Round::new(w);
 
             // Let's play 4 turns so everyone has discarded 1 tile.
-            let _d1 = { r.draw_tile(); r.discard_tile(0).unwrap() }; // P1
-            let _d2 = { r.draw_tile(); r.discard_tile(0).unwrap() }; // P2
-            let _d3 = { r.draw_tile(); r.discard_tile(0).unwrap() }; // P3
-            let _d0 = { r.draw_tile(); r.discard_tile(0).unwrap() }; // P0
+            let _d1 = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            }; // P1
+            let _d2 = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            }; // P2
+            let _d3 = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            }; // P3
+            let _d0 = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            }; // P0
 
             // P1 plays again and discards their second tile.
-            let second_discard = { r.draw_tile(); r.discard_tile(0).unwrap() }; // P1
+            let second_discard = {
+                r.draw_tile();
+                r.discard_tile(0).unwrap()
+            }; // P1
 
             // P3 has hand. Let's see if P3 has at least 2 of second_discard.
             let p3_hand = r.hand(3);
@@ -347,11 +401,26 @@ mod tests {
         let mut round = Round::new(wall);
 
         // Play 5 turns to get P1's river to have 2 tiles, and the last discard is `discarded`
-        let first_discard = { round.draw_tile(); round.discard_tile(0).unwrap() };
-        { round.draw_tile(); round.discard_tile(0).unwrap() };
-        { round.draw_tile(); round.discard_tile(0).unwrap() };
-        { round.draw_tile(); round.discard_tile(0).unwrap() };
-        let second_discard = { round.draw_tile(); round.discard_tile(0).unwrap() };
+        let first_discard = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
+        {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
+        let second_discard = {
+            round.draw_tile();
+            round.discard_tile(0).unwrap()
+        };
         assert_eq!(second_discard, discarded);
 
         // Check P1 (index 1) river has 2 tiles
