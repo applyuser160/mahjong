@@ -39,6 +39,12 @@ pub enum YakuId {
     ChuurenPoutou,
     Tenhou,
     Chiihou,
+    RinshanKaihou,
+    Chankan,
+    HaiteiRaoyue,
+    HouteiRaoyui,
+    DoubleRiichi,
+    Ippatsu,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -332,6 +338,54 @@ pub const ALL_YAKU: &[Yaku] = &[
         han_open: 0,
         yakuman: true,
     },
+    Yaku {
+        id: YakuId::RinshanKaihou,
+        name_ja: "嶺上開花",
+        name_kana: "リンシャンカイホウ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::Chankan,
+        name_ja: "槍槓",
+        name_kana: "チャンカン",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::HaiteiRaoyue,
+        name_ja: "海底撈月",
+        name_kana: "ハイテイラオユエ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::HouteiRaoyui,
+        name_ja: "河底撈魚",
+        name_kana: "ホウテイラオユイ",
+        han_closed: 1,
+        han_open: 1,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::DoubleRiichi,
+        name_ja: "ダブル立直",
+        name_kana: "ダブルリーチ",
+        han_closed: 2,
+        han_open: 0,
+        yakuman: false,
+    },
+    Yaku {
+        id: YakuId::Ippatsu,
+        name_ja: "一発",
+        name_kana: "イッパツ",
+        han_closed: 1,
+        han_open: 0,
+        yakuman: false,
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -365,6 +419,12 @@ pub struct WinContext {
     pub tenhou: bool,
     pub chiihou: bool,
     pub win_tile: Option<TileName>,
+    pub is_rinshan: bool,
+    pub is_chankan: bool,
+    pub is_haitei: bool,
+    pub is_houtei: bool,
+    pub is_double_riichi: bool,
+    pub is_ippatsu: bool,
 }
 
 impl Default for WinContext {
@@ -379,6 +439,12 @@ impl Default for WinContext {
             tenhou: false,
             chiihou: false,
             win_tile: None,
+            is_rinshan: false,
+            is_chankan: false,
+            is_haitei: false,
+            is_houtei: false,
+            is_double_riichi: false,
+            is_ippatsu: false,
         }
     }
 }
@@ -471,8 +537,30 @@ pub fn judge_yaku(
     // (excluding open melds). Otherwise, it tries to re-parse the open meld tiles.
     let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
 
-    if ctx.riichi && ctx.is_closed {
+    if ctx.is_double_riichi && ctx.is_closed {
+        result.insert(YakuId::DoubleRiichi);
+    } else if ctx.riichi && ctx.is_closed {
         result.insert(YakuId::Riichi);
+    }
+
+    if ctx.is_ippatsu && ctx.is_closed && (ctx.riichi || ctx.is_double_riichi) {
+        result.insert(YakuId::Ippatsu);
+    }
+
+    if ctx.is_rinshan && ctx.is_tsumo {
+        result.insert(YakuId::RinshanKaihou);
+    }
+
+    if ctx.is_chankan && !ctx.is_tsumo {
+        result.insert(YakuId::Chankan);
+    }
+
+    if ctx.is_haitei && ctx.is_tsumo {
+        result.insert(YakuId::HaiteiRaoyue);
+    }
+
+    if ctx.is_houtei && !ctx.is_tsumo {
+        result.insert(YakuId::HouteiRaoyui);
     }
 
     if ctx.is_closed && ctx.is_tsumo {
