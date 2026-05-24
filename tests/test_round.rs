@@ -33,27 +33,27 @@ mod tests {
 
         let actual_discard = round.play_turn(0).unwrap();
         assert_eq!(actual_discard, discarded);
-        assert_eq!(round.turn(), 2);
+        assert_eq!(round.turn(), 1);
 
         let meld = Meld::Pon(discarded);
         let p2_discard = round.play_meld(3, meld, 0).unwrap();
 
         assert_eq!(round.turn(), 0);
-        assert_eq!(round.river(1).tiles().len(), 0);
+        assert_eq!(round.river(0).tiles().len(), 0);
         assert_eq!(round.river(3).tiles().len(), 1);
         assert_eq!(round.river(3).tiles()[0], p2_discard);
     }
 
     #[test]
     fn test_play_meld_kakan_draw() {
-        let seed = 1350;
-        let discarded = TileName::SixS;
+        let seed = 128;
+        let discarded = TileName::FourM;
 
         let mut wall = Wall::new();
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
 
-        // P1's turn
+        // P0's turn
         let actual_discard = round.play_turn(0).unwrap();
         assert_eq!(actual_discard, discarded);
 
@@ -108,12 +108,12 @@ mod tests {
         let mut round = Round::new(wall);
 
         let discarded = round.play_turn(0).unwrap();
-        assert_eq!(round.river(1).tiles().len(), 1);
-        assert_eq!(round.river(1).tiles()[0], discarded);
+        assert_eq!(round.river(0).tiles().len(), 1);
+        assert_eq!(round.river(0).tiles()[0], discarded);
 
         let discarded2 = round.play_turn(0).unwrap();
-        assert_eq!(round.river(2).tiles().len(), 1);
-        assert_eq!(round.river(2).tiles()[0], discarded2);
+        assert_eq!(round.river(1).tiles().len(), 1);
+        assert_eq!(round.river(1).tiles()[0], discarded2);
     }
 
     #[test]
@@ -207,9 +207,7 @@ mod tests {
             if p1_counts.iter().any(|&c| c >= 3) {
                 let tile_idx = p1_counts.iter().position(|&c| c >= 3).unwrap();
                 let target_tile = TileName::from_usize(tile_idx);
-                // P0 needs the tile to discard on their turn (which is the 4th turn of the first round, index 0 might not be discarded if play_turn draws then discards)
-                // wait, play_turn(0) draws a tile THEN discards the tile at index 0 of the NEW hand.
-                // The new hand has 14 tiles. So index 0 is the first tile originally dealt.
+                // P0 needs the tile to discard on their turn (which is the first turn)
                 if p0_hand[0] == target_tile {
                     found_kakan = Some((seed, target_tile));
                     break;
@@ -221,10 +219,6 @@ mod tests {
         let mut wall = Wall::new();
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
-
-        round.play_turn(0).unwrap(); // P1 plays, turn -> 2
-        round.play_turn(0).unwrap(); // P2 plays, turn -> 3
-        round.play_turn(0).unwrap(); // P3 plays, turn -> 0
 
         let p0_discard = round.play_turn(0).unwrap();
         assert_eq!(p0_discard, tile);
@@ -267,20 +261,29 @@ mod tests {
         let wall = Wall::new(); // Deterministic wall (unshuffled)
         let mut round = Round::new(wall);
 
-        // Player 1 plays their turn.
-        // With an unshuffled wall, Player 1 discards OneM.
-        // Turn updates to Player 2.
+        // Player 0 plays their turn.
+        // With an unshuffled wall, Player 0 discards OneM.
+        // Turn updates to Player 1.
         let discarded = round.play_turn(0).unwrap();
         assert_eq!(discarded, TileName::OneM);
-        assert_eq!(round.turn(), 2);
+        assert_eq!(round.turn(), 1);
 
         // A valid Chii using OneM (called) and TwoM, ThreeM (consumed).
-        // Since Player 2 is the next turn (which is Player 1's Shimodate/Kamicha relationship),
-        // Player 2 is allowed to call Chii.
+        // Since Player 1 is the next turn (which is Player 0's Shimodate/Kamicha relationship),
+        // Player 1 is allowed to call Chii.
         let chii_meld = Meld::Chii {
             called: TileName::OneM,
             consumed: [TileName::TwoM, TileName::ThreeM],
         };
+
+        // Player 2 (index 2) attempts to call Chii.
+        // Player 2 is NOT the immediate next player in order (not self.turn()), so it must fail.
+        let res2 = round.play_meld(2, chii_meld, 0);
+        assert!(res2.is_err());
+        assert_eq!(
+            res2.unwrap_err(),
+            "Chii can only be called from the Kamicha (previous player)"
+        );
 
         // Player 3 (index 3) attempts to call Chii.
         // Player 3 is NOT the immediate next player in order (not self.turn()), so it must fail.
@@ -291,18 +294,9 @@ mod tests {
             "Chii can only be called from the Kamicha (previous player)"
         );
 
-        // Player 0 (index 0) attempts to call Chii.
-        // Player 0 is NOT the immediate next player in order (not self.turn()), so it must fail.
-        let res0 = round.play_meld(0, chii_meld, 0);
-        assert!(res0.is_err());
-        assert_eq!(
-            res0.unwrap_err(),
-            "Chii can only be called from the Kamicha (previous player)"
-        );
-
-        // Player 2 (index 2) calls Chii. This is valid.
-        let res2 = round.play_meld(2, chii_meld, 0);
-        assert!(res2.is_ok());
+        // Player 1 (index 1) calls Chii. This is valid.
+        let res1 = round.play_meld(1, chii_meld, 0);
+        assert!(res1.is_ok());
     }
 
     #[test]
@@ -314,17 +308,17 @@ mod tests {
             let mut r = Round::new(w);
 
             // Let's play 4 turns so everyone has discarded 1 tile.
+            let _d0 = r.play_turn(0).unwrap(); // P0
             let _d1 = r.play_turn(0).unwrap(); // P1
             let _d2 = r.play_turn(0).unwrap(); // P2
             let _d3 = r.play_turn(0).unwrap(); // P3
-            let _d0 = r.play_turn(0).unwrap(); // P0
 
-            // P1 plays again and discards their second tile.
-            let second_discard = r.play_turn(0).unwrap(); // P1
+            // P0 plays again and discards their second tile.
+            let second_discard = r.play_turn(0).unwrap(); // P0
 
-            // P3 has hand. Let's see if P3 has at least 2 of second_discard.
-            let p3_hand = r.hand(3);
-            let count = p3_hand.iter().filter(|&&t| t == second_discard).count();
+            // P2 has hand. Let's see if P2 has at least 2 of second_discard.
+            let p2_hand = r.hand(2);
+            let count = p2_hand.iter().filter(|&&t| t == second_discard).count();
             if count >= 2 {
                 found_seed = Some((seed, second_discard));
                 break;
@@ -332,43 +326,43 @@ mod tests {
         }
 
         let (seed, discarded) =
-            found_seed.expect("Should find a seed where P3 can Pon P1's second discard");
+            found_seed.expect("Should find a seed where P2 can Pon P0's second discard");
         let mut wall = Wall::new();
         wall.shuffle(&mut StdRng::seed_from_u64(seed));
         let mut round = Round::new(wall);
 
-        // Play 5 turns to get P1's river to have 2 tiles, and the last discard is `discarded`
-        let first_discard = round.play_turn(0).unwrap();
-        round.play_turn(0).unwrap();
-        round.play_turn(0).unwrap();
-        round.play_turn(0).unwrap();
-        let second_discard = round.play_turn(0).unwrap();
+        // Play 5 turns to get P0's river to have 2 tiles, and the last discard is `discarded`
+        let first_discard = round.play_turn(0).unwrap(); // P0
+        round.play_turn(0).unwrap(); // P1
+        round.play_turn(0).unwrap(); // P2
+        round.play_turn(0).unwrap(); // P3
+        let second_discard = round.play_turn(0).unwrap(); // P0
         assert_eq!(second_discard, discarded);
 
-        // Check P1 (index 1) river has 2 tiles
-        assert_eq!(round.river(1).tiles().len(), 2);
-        assert_eq!(round.river(1).tiles()[0], first_discard);
-        assert_eq!(round.river(1).tiles()[1], second_discard);
+        // Check P0 (index 0) river has 2 tiles
+        assert_eq!(round.river(0).tiles().len(), 2);
+        assert_eq!(round.river(0).tiles()[0], first_discard);
+        assert_eq!(round.river(0).tiles()[1], second_discard);
 
-        // P3 (index 3) calls Pon on P1's discard
+        // P2 (index 2) calls Pon on P0's discard
         let meld = Meld::Pon(discarded);
-        let p3_discard = round.play_meld(3, meld, 0).unwrap();
+        let p2_discard = round.play_meld(2, meld, 0).unwrap();
 
-        // Verify that ONLY the last discard was removed from P1's river.
+        // Verify that ONLY the last discard was removed from P0's river.
         // First discard should still be there!
         assert_eq!(
-            round.river(1).tiles().len(),
+            round.river(0).tiles().len(),
             1,
-            "Only 1 tile should be removed from P1's river"
+            "Only 1 tile should be removed from P0's river"
         );
         assert_eq!(
-            round.river(1).tiles()[0],
+            round.river(0).tiles()[0],
             first_discard,
-            "P1's first discard should remain in the river"
+            "P0's first discard should remain in the river"
         );
 
-        // Verify P3's river has their discard
-        assert_eq!(round.river(3).tiles().len(), 2);
-        assert_eq!(round.river(3).tiles()[1], p3_discard);
+        // Verify P2's river has their discard
+        assert_eq!(round.river(2).tiles().len(), 2);
+        assert_eq!(round.river(2).tiles()[1], p2_discard);
     }
 }
