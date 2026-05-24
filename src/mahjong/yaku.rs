@@ -1120,7 +1120,7 @@ fn is_chinitsu(counts: &[usize; 35]) -> bool {
 
 fn is_junchan(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
-        if is_honor(pattern.pair) {
+        if !is_terminal(pattern.pair) {
             return false;
         }
         pattern.all_melds().all(|meld| match meld {
