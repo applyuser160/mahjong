@@ -103,6 +103,7 @@ mod tests {
         assert!(hand.discard(100).is_err());
     }
 
+    #[test]
     fn test_call_meld_daiminkan() {
         let mut hand = Hand::new();
         hand.push(Red);
