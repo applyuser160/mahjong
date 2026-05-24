@@ -61,6 +61,12 @@ impl Round {
     ) -> Result<TileName, &'static str> {
         let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
 
+        if let Meld::Chii { .. } = meld {
+            if player_index != self.turn {
+                return Err("Chii can only be called from the Kamicha (previous player)");
+            }
+        }
+
         let called_tile = match meld {
             Meld::Chii { called, .. } => called,
             Meld::Pon(called) => called,
