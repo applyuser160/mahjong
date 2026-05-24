@@ -59,37 +59,47 @@ impl Round {
         meld: Meld,
         discard_index: usize,
     ) -> Result<TileName, &'static str> {
-        let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
-
-        let called_tile = match meld {
-            Meld::Chii { called, .. } => called,
-            Meld::Pon(called) => called,
-            Meld::Daiminkan(called) => called,
-            Meld::Ankan(called) => called,
-            Meld::Kakan(called) => called,
+        // 1. 他家の捨て牌を必要とするアクション（ポン・チー・大明槓）かどうかを判定
+        let is_open_call = match meld {
+            Meld::Chii { .. } | Meld::Pon(_) | Meld::Daiminkan(_) => true,
+            Meld::Ankan(_) | Meld::Kakan(_) => false,
         };
 
-        // Determine the last discarded tile
-        let last_discard = self.rivers[previous_player]
-            .tiles()
-            .last()
-            .copied()
-            .ok_or("No tile in river to call")?;
+        if is_open_call {
+            let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
+            let called_tile = match meld {
+                Meld::Chii { called, .. } => called,
+                Meld::Pon(called) => called,
+                Meld::Daiminkan(called) => called,
+                _ => unreachable!(),
+            };
 
-        if last_discard != called_tile {
-            return Err("Called tile does not match the last discarded tile");
+            // 直前のプレイヤーの河から牌を確認
+            let last_discard = self.rivers[previous_player]
+                .tiles()
+                .last()
+                .copied()
+                .ok_or("No tile in river to call")?;
+
+            if last_discard != called_tile {
+                return Err("Called tile does not match the last discarded tile");
+            }
+
+            // 手牌に副露を適用
+            self.hands[player_index].call_meld(meld)?;
+
+            // 直前のプレイヤーの河から捨て牌を奪う
+            self.rivers[previous_player].pop();
+        } else {
+            // 暗槓・加槓の場合は、他家の河を参照せず、自分の手牌のみでカンを適用
+            self.hands[player_index].call_meld(meld)?;
         }
-
-        // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
-        self.hands[player_index].call_meld(meld)?;
-
-        // Remove the tile from the previous player's river
-        self.rivers[previous_player].pop();
 
         let hand = &mut self.hands[player_index];
 
-        // For Kan, we draw a replacement tile.
-        if let Meld::Daiminkan(_) | Meld::Ankan(_) = meld {
+        // 2. カンの場合の補充牌（嶺上ツモ）処理
+        // ※ 以前のバグ修正：ここに Meld::Kakan(_) を追加して加槓でもツモるようにする
+        if let Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_) = meld {
             if let Some(drawn) = self.wall.draw() {
                 hand.push(drawn);
             } else {
@@ -97,13 +107,14 @@ impl Round {
             }
         }
 
+        // 打牌処理
         let discarded = hand.discard(discard_index);
         if let Err(_e) = discarded {
             return Err("Discard Error");
         }
         self.rivers[player_index].push(discarded.unwrap());
 
-        // Update turn: the next turn belongs to the player after the one who called the meld
+        // 順番の更新
         self.turn = (player_index + 1) % PLAYER_NUMBER;
 
         Ok(discarded.unwrap())
