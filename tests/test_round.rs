@@ -261,4 +261,47 @@ mod tests {
             "River should not be popped"
         );
     }
+
+    #[test]
+    fn test_chii_validation_kamicha() {
+        let wall = Wall::new(); // Deterministic wall (unshuffled)
+        let mut round = Round::new(wall);
+
+        // Player 1 plays their turn.
+        // With an unshuffled wall, Player 1 discards OneM.
+        // Turn updates to Player 2.
+        let discarded = round.play_turn(0).unwrap();
+        assert_eq!(discarded, TileName::OneM);
+        assert_eq!(round.turn(), 2);
+
+        // A valid Chii using OneM (called) and TwoM, ThreeM (consumed).
+        // Since Player 2 is the next turn (which is Player 1's Shimodate/Kamicha relationship),
+        // Player 2 is allowed to call Chii.
+        let chii_meld = Meld::Chii {
+            called: TileName::OneM,
+            consumed: [TileName::TwoM, TileName::ThreeM],
+        };
+
+        // Player 3 (index 3) attempts to call Chii.
+        // Player 3 is NOT the immediate next player in order (not self.turn()), so it must fail.
+        let res3 = round.play_meld(3, chii_meld, 0);
+        assert!(res3.is_err());
+        assert_eq!(
+            res3.unwrap_err(),
+            "Chii can only be called from the Kamicha (previous player)"
+        );
+
+        // Player 0 (index 0) attempts to call Chii.
+        // Player 0 is NOT the immediate next player in order (not self.turn()), so it must fail.
+        let res0 = round.play_meld(0, chii_meld, 0);
+        assert!(res0.is_err());
+        assert_eq!(
+            res0.unwrap_err(),
+            "Chii can only be called from the Kamicha (previous player)"
+        );
+
+        // Player 2 (index 2) calls Chii. This is valid.
+        let res2 = round.play_meld(2, chii_meld, 0);
+        assert!(res2.is_ok());
+    }
 }
