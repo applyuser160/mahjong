@@ -47,7 +47,7 @@ impl Round {
         let drawn = self.wall.draw()?;
         let hand = &mut self.hands[self.turn];
         hand.push(drawn);
-        let discarded = hand.discard(discard_index);
+        let discarded = hand.discard(discard_index).ok()?;
         self.rivers[self.turn].push(discarded);
         self.turn = (self.turn + 1) % PLAYER_NUMBER;
         Some(discarded)
@@ -98,12 +98,15 @@ impl Round {
         }
 
         let discarded = hand.discard(discard_index);
-        self.rivers[player_index].push(discarded);
+        if let Err(_e) = discarded {
+            return Err("Discard Error");
+        }
+        self.rivers[player_index].push(discarded.unwrap());
 
         // Update turn: the next turn belongs to the player after the one who called the meld
         self.turn = (player_index + 1) % PLAYER_NUMBER;
 
-        Ok(discarded)
+        Ok(discarded.unwrap())
     }
 
     fn deal(&mut self) {
