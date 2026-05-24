@@ -392,9 +392,9 @@ mod tests {
 
 #[cfg(test)]
 mod tests_kan {
+    use mahjong::hand::Meld;
     use mahjong::tile::TileName::*;
     use mahjong::yaku::{judge_yaku, WinContext, YakuId};
-    use mahjong::hand::Meld;
 
     #[test]
     fn detect_sanankou_passes_with_ankan() {

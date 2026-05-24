@@ -388,7 +388,10 @@ pub fn judge_yaku(
     let mut has_open_meld = false;
     for meld in open_melds_input {
         match meld {
-            crate::hand::Meld::Chii { .. } | crate::hand::Meld::Pon(_) | crate::hand::Meld::Daiminkan(_) | crate::hand::Meld::Kakan(_) => {
+            crate::hand::Meld::Chii { .. }
+            | crate::hand::Meld::Pon(_)
+            | crate::hand::Meld::Daiminkan(_)
+            | crate::hand::Meld::Kakan(_) => {
                 has_open_meld = true;
             }
             crate::hand::Meld::Ankan(_) => {}
@@ -654,7 +657,11 @@ fn is_simple(tile: TileName) -> bool {
     )
 }
 
-fn generate_patterns(counts: &[usize; 35], open_melds: &[MeldKind], closed_melds: &[MeldKind]) -> Vec<HandPattern> {
+fn generate_patterns(
+    counts: &[usize; 35],
+    open_melds: &[MeldKind],
+    closed_melds: &[MeldKind],
+) -> Vec<HandPattern> {
     let mut patterns = Vec::new();
 
     for i in 1..counts.len() {
