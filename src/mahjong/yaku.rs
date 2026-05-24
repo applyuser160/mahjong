@@ -453,6 +453,22 @@ pub fn judge_yaku(
 
     if is_kokushi(&counts) {
         result.insert(YakuId::KokushiMusou);
+
+        let has_yakuman = result.iter().any(|&id| {
+            ALL_YAKU
+                .iter()
+                .find(|y| y.id == id)
+                .is_some_and(|y| y.yakuman)
+        });
+        if has_yakuman {
+            result.retain(|&id| {
+                ALL_YAKU
+                    .iter()
+                    .find(|y| y.id == id)
+                    .is_some_and(|y| y.yakuman)
+            });
+        }
+
         return result;
     }
 
@@ -563,6 +579,21 @@ pub fn judge_yaku(
     }
     if is_chuuren_poutou(&counts, tiles.len()) {
         result.insert(YakuId::ChuurenPoutou);
+    }
+
+    let has_yakuman = result.iter().any(|&id| {
+        ALL_YAKU
+            .iter()
+            .find(|y| y.id == id)
+            .is_some_and(|y| y.yakuman)
+    });
+    if has_yakuman {
+        result.retain(|&id| {
+            ALL_YAKU
+                .iter()
+                .find(|y| y.id == id)
+                .is_some_and(|y| y.yakuman)
+        });
     }
 
     result

@@ -70,6 +70,6 @@ fn test_chitoitsu_tsuuiisou() {
             ..Default::default()
         },
     );
-    assert!(result.contains(&YakuId::Chitoitsu));
+    assert!(!result.contains(&YakuId::Chitoitsu));
     assert!(result.contains(&YakuId::Tsuuiisou));
 }

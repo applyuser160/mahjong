@@ -57,7 +57,7 @@ mod tests {
 
         let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Daisangen));
-        assert!(result.contains(&YakuId::Toitoi));
+        assert!(!result.contains(&YakuId::Toitoi));
     }
 
     #[test]
@@ -190,7 +190,7 @@ mod tests {
 
         let result = judge_yaku(&tiles, &[], WinContext::default());
         assert!(result.contains(&YakuId::Chinroutou));
-        assert!(result.contains(&YakuId::Honroutou));
+        assert!(!result.contains(&YakuId::Honroutou));
     }
 
     #[test]
@@ -476,5 +476,22 @@ mod tests_kan {
         };
         let result = judge_yaku(&tiles, &open_melds, ctx);
         assert!(result.contains(&YakuId::Sankantsu));
+    }
+
+    #[test]
+    fn test_yakuman_filters_normal_yaku() {
+        let tiles = vec![
+            OneM, NineM, OneP, NineP, OneS, NineS, East, South, West, North, Red, Green, White,
+            White,
+        ];
+        // Ensure that normal yaku are filtered out when Yakuman is achieved.
+        let mut ctx = WinContext::default();
+        ctx.riichi = true;
+        ctx.is_closed = true;
+
+        let result = judge_yaku(&tiles, &[], ctx);
+
+        assert!(result.contains(&YakuId::KokushiMusou));
+        assert!(!result.contains(&YakuId::Riichi));
     }
 }
