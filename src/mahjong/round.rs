@@ -61,6 +61,31 @@ impl Round {
     ) -> Result<TileName, &'static str> {
         let previous_player = (self.turn + PLAYER_NUMBER - 1) % PLAYER_NUMBER;
 
+        let called_tile = match meld {
+            Meld::Chii { called, .. } => called,
+            Meld::Pon(called) => called,
+            Meld::Daiminkan(called) => called,
+            Meld::Ankan(called) => called,
+            Meld::Kakan(called) => called,
+        };
+
+        // For Kakan and Ankan, they are called on the player's own turn (drawn tile),
+        // not from the previous player's discard.
+        let is_self_meld = matches!(meld, Meld::Ankan(_) | Meld::Kakan(_));
+
+        if !is_self_meld {
+            // Determine the last discarded tile
+            let last_discard = self.rivers[previous_player]
+                .tiles()
+                .last()
+                .copied()
+                .ok_or("No tile in river to call")?;
+
+            if last_discard != called_tile {
+                return Err("Called tile does not match the last discarded tile");
+            }
+        }
+
         // Apply meld to hand (this will fail if hand doesn't have the consumed tiles)
         // Check condition before modifying the state
         match meld {
@@ -86,6 +111,11 @@ impl Round {
                 // We just call the meld directly.
                 self.hands[player_index].call_meld(meld)?;
             }
+        }
+
+        if !is_self_meld {
+            // Remove the tile from the previous player's river
+            self.rivers[previous_player].pop();
         }
 
         let hand = &mut self.hands[player_index];
