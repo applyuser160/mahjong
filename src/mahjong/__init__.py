@@ -1,1 +1,33 @@
-from .mahjong import *
+from ._core import (
+    PyTileType as TileType,
+    PyTileCategory as TileCategory,
+    PyTileName as TileName,
+    PyTile as Tile,
+    PyMeld as Meld,
+    PyHand as Hand,
+    PyRiver as River,
+    PyWall as Wall,
+    PyRound as Round,
+    PyYakuId as YakuId,
+    PyYaku as Yaku,
+    PyWinContext as WinContext,
+    get_all_yaku,
+    py_judge_yaku as judge_yaku,
+)
+
+__all__ = [
+    "TileType",
+    "TileCategory",
+    "TileName",
+    "Tile",
+    "Meld",
+    "Hand",
+    "River",
+    "Wall",
+    "Round",
+    "YakuId",
+    "Yaku",
+    "WinContext",
+    "get_all_yaku",
+    "judge_yaku",
+]
