@@ -48,6 +48,7 @@ pub enum YakuId {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// 役の情報を表す構造体です。
 pub struct Yaku {
     pub id: YakuId,
     pub name_ja: &'static str,
@@ -389,6 +390,7 @@ pub const ALL_YAKU: &[Yaku] = &[
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 鳴き（副露）の種類を表す列挙型です。
 pub enum MeldKind {
     Sequence(TileName),
     Triplet(TileName),
@@ -396,6 +398,7 @@ pub enum MeldKind {
 }
 
 #[derive(Debug, Clone)]
+/// 手牌のパターン（雀頭と面子の組み合わせ）を表す構造体です。
 struct HandPattern {
     pair: TileName,
     melds: Vec<MeldKind>,
@@ -409,6 +412,7 @@ impl HandPattern {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// 和了（アガリ）時の状況を表す文脈情報です。
 pub struct WinContext {
     pub is_closed: bool,
     pub is_tsumo: bool,
@@ -449,6 +453,8 @@ impl Default for WinContext {
     }
 }
 
+/// 手牌と副露、および和了（アガリ）時の状況から、成立している役を判定します。
+/// 役満が成立している場合は、通常の役は除外されます。
 pub fn judge_yaku(
     tiles: &[TileName],
     open_melds_input: &[crate::hand::Meld],
@@ -505,22 +511,20 @@ pub fn judge_yaku(
     let mut closed_melds = Vec::new();
     let mut kan_count = 0;
 
-    for meld in open_melds_input {
-        match meld {
-            crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
-            crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
-            crate::hand::Meld::Daiminkan(tile) | crate::hand::Meld::Kakan(tile) => {
-                open_melds.push(MeldKind::Quad(*tile));
-                kan_count += 1;
-            }
-            crate::hand::Meld::Ankan(tile) => {
-                closed_melds.push(MeldKind::Quad(*tile));
-                kan_count += 1;
-            }
+    open_melds_input.iter().for_each(|meld| match meld {
+        crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
+        crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
+        crate::hand::Meld::Daiminkan(tile) | crate::hand::Meld::Kakan(tile) => {
+            open_melds.push(MeldKind::Quad(*tile));
+            kan_count += 1;
         }
-    }
+        crate::hand::Meld::Ankan(tile) => {
+            closed_melds.push(MeldKind::Quad(*tile));
+            kan_count += 1;
+        }
+    });
 
-    // Use derived kan count for Sankantsu if it exceeds the context provided one
+    // 文脈（Context）で提供された数よりも導出されたカンの数が多い場合、三槓子等のために導出されたカン数を使用します
     if kan_count > ctx.kan_count {
         ctx.kan_count = kan_count;
     }
@@ -533,65 +537,16 @@ pub fn judge_yaku(
         }
     }
 
-    // For pattern generation, we should only use the tiles from the closed hand
-    // (excluding open melds). Otherwise, it tries to re-parse the open meld tiles.
+    // 手牌のパターン生成には、副露（鳴き）を除外した門前（メンゼン）の牌のみを使用します。
+    // そうしないと、副露した牌を再度パースしようとしてしまいます。
     let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
 
-    if ctx.is_double_riichi && ctx.is_closed {
-        result.insert(YakuId::DoubleRiichi);
-    } else if ctx.riichi && ctx.is_closed {
-        result.insert(YakuId::Riichi);
-    }
+    result.extend(check_situational_yaku(&ctx));
 
-    if ctx.is_ippatsu && ctx.is_closed && (ctx.riichi || ctx.is_double_riichi) {
-        result.insert(YakuId::Ippatsu);
-    }
-
-    if ctx.is_rinshan && ctx.is_tsumo {
-        result.insert(YakuId::RinshanKaihou);
-    }
-
-    if ctx.is_chankan && !ctx.is_tsumo {
-        result.insert(YakuId::Chankan);
-    }
-
-    if ctx.is_haitei && ctx.is_tsumo {
-        result.insert(YakuId::HaiteiRaoyue);
-    }
-
-    if ctx.is_houtei && !ctx.is_tsumo {
-        result.insert(YakuId::HouteiRaoyui);
-    }
-
-    if ctx.is_closed && ctx.is_tsumo {
-        result.insert(YakuId::MenzenTsumo);
-    }
-
-    if ctx.tenhou {
-        result.insert(YakuId::Tenhou);
-    }
-    if ctx.chiihou {
-        result.insert(YakuId::Chiihou);
-    }
-
-    if is_kokushi(&counts) {
-        result.insert(YakuId::KokushiMusou);
-
-        let has_yakuman = result.iter().any(|&id| {
-            ALL_YAKU
-                .iter()
-                .find(|y| y.id == id)
-                .is_some_and(|y| y.yakuman)
-        });
-        if has_yakuman {
-            result.retain(|&id| {
-                ALL_YAKU
-                    .iter()
-                    .find(|y| y.id == id)
-                    .is_some_and(|y| y.yakuman)
-            });
-        }
-
+    let yakuman_list = check_yakuman_yaku(&counts, tiles.len());
+    if !yakuman_list.is_empty() {
+        result.extend(yakuman_list);
+        retain_yakuman_only(&mut result);
         return result;
     }
 
@@ -683,44 +638,7 @@ pub fn judge_yaku(
     if is_honroutou(&counts) {
         result.insert(YakuId::Honroutou);
     }
-    if is_chinroutou(&counts) {
-        result.insert(YakuId::Chinroutou);
-    }
-    if is_daisangen(&counts) {
-        result.insert(YakuId::Daisangen);
-    }
-    if let Some((small, big)) = detect_suushi(&counts) {
-        if big {
-            result.insert(YakuId::Daisuushi);
-        }
-        if small {
-            result.insert(YakuId::Shousuushi);
-        }
-    }
-    if is_tsuuiisou(&counts) {
-        result.insert(YakuId::Tsuuiisou);
-    }
-    if is_ryuuiisou(&counts) {
-        result.insert(YakuId::Ryuuiisou);
-    }
-    if is_chuuren_poutou(&counts, tiles.len()) {
-        result.insert(YakuId::ChuurenPoutou);
-    }
-
-    let has_yakuman = result.iter().any(|&id| {
-        ALL_YAKU
-            .iter()
-            .find(|y| y.id == id)
-            .is_some_and(|y| y.yakuman)
-    });
-    if has_yakuman {
-        result.retain(|&id| {
-            ALL_YAKU
-                .iter()
-                .find(|y| y.id == id)
-                .is_some_and(|y| y.yakuman)
-        });
-    }
+    retain_yakuman_only(&mut result);
 
     result
 }
@@ -842,24 +760,21 @@ fn search_melds(
     pair: TileName,
     open_melds: &[MeldKind],
 ) {
-    let mut index = None;
-    for (i, value) in counts.iter().enumerate().skip(1) {
-        if *value > 0 {
-            index = Some(i);
-            break;
-        }
-    }
-
-    if index.is_none() {
+    let Some(i) = counts
+        .iter()
+        .enumerate()
+        .skip(1)
+        .position(|(_, &c)| c > 0)
+        .map(|p| p + 1)
+    else {
         patterns.push(HandPattern {
             pair,
             melds: melds.clone(),
             open_melds: open_melds.to_vec(),
         });
         return;
-    }
+    };
 
-    let i = index.unwrap();
     let tile = TileName::from_usize(i);
 
     if counts[i] >= 3 {
@@ -870,33 +785,39 @@ fn search_melds(
         counts[i] += 3;
     }
 
-    if let Some((suit, rank)) = is_number_tile(tile) {
-        if rank <= 7 {
-            let next1 = i + 1;
-            let next2 = i + 2;
-            if let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) {
-                if let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) {
-                    if s1 == suit
-                        && s2 == suit
-                        && r1 == rank + 1
-                        && r2 == rank + 2
-                        && counts[next1] > 0
-                        && counts[next2] > 0
-                    {
-                        counts[i] -= 1;
-                        counts[next1] -= 1;
-                        counts[next2] -= 1;
-                        melds.push(MeldKind::Sequence(tile));
-                        search_melds(counts, melds, patterns, pair, open_melds);
-                        melds.pop();
-                        counts[i] += 1;
-                        counts[next1] += 1;
-                        counts[next2] += 1;
-                    }
-                }
-            }
-        }
+    let Some((suit, rank)) = is_number_tile(tile) else {
+        return;
+    };
+    if rank > 7 {
+        return;
     }
+
+    let next1 = i + 1;
+    let next2 = i + 2;
+
+    let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) else {
+        return;
+    };
+    let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) else {
+        return;
+    };
+
+    if s1 != suit || s2 != suit || r1 != rank + 1 || r2 != rank + 2 {
+        return;
+    }
+    if counts[next1] == 0 || counts[next2] == 0 {
+        return;
+    }
+
+    counts[i] -= 1;
+    counts[next1] -= 1;
+    counts[next2] -= 1;
+    melds.push(MeldKind::Sequence(tile));
+    search_melds(counts, melds, patterns, pair, open_melds);
+    melds.pop();
+    counts[i] += 1;
+    counts[next1] += 1;
+    counts[next2] += 1;
 }
 
 fn is_tanyao(counts: &[usize; 35]) -> bool {
@@ -947,6 +868,7 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
     }
 
     let win_tile = ctx.win_tile?;
+    let (win_suit, win_rank) = is_number_tile(win_tile)?;
 
     for pattern in patterns {
         if pattern
@@ -956,46 +878,40 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
             continue;
         }
 
-        if is_value_pair(pattern.pair, ctx) {
-            continue;
-        }
-
-        if win_tile == pattern.pair {
+        if is_value_pair(pattern.pair, ctx) || win_tile == pattern.pair {
             continue;
         }
 
         // アガリの形（14枚）から順子を探すのではなく、
         // アガリ牌を抜いた13枚のテンパイ形において、
-        // アガリ牌が「両面塔子」を完成させているかを検証する。
-        let mut is_ryamen = false;
-        if let Some((win_suit, win_rank)) = is_number_tile(win_tile) {
-            // パターン内の各順子からアガリ牌を抜いて塔子を作り、
-            // それが両面塔子であるかをチェックする。
-            for meld in pattern.all_melds() {
-                if let MeldKind::Sequence(start_tile) = meld {
-                    if let Some((suit, rank)) = is_number_tile(*start_tile) {
-                        if suit == win_suit {
-                            // アガリ牌がこの順子を構成している場合、抜くと塔子になる
-                            if win_rank == rank {
-                                // アガリ牌が下端の場合、残りの塔子は (rank+1, rank+2)
-                                // これが両面待ちである条件は、上端の次が存在すること (rank+2 < 9 すなわち rank < 7)
-                                if rank < 7 {
-                                    is_ryamen = true;
-                                    break;
-                                }
-                            } else if win_rank == rank + 2 {
-                                // アガリ牌が上端の場合、残りの塔子は (rank, rank+1)
-                                // これが両面待ちである条件は、下端の前が存在すること (rank > 1)
-                                if rank > 1 {
-                                    is_ryamen = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+        // アガリ牌が「両面塔子」を完成させているかを検証します。
+        // パターン内の各順子からアガリ牌を抜いて塔子を作り、
+        // それが両面塔子（両面待ち）であるかをチェックします。
+        let is_ryamen = pattern.all_melds().any(|meld| {
+            let MeldKind::Sequence(start_tile) = meld else {
+                return false;
+            };
+            let Some((suit, rank)) = is_number_tile(*start_tile) else {
+                return false;
+            };
+
+            if suit != win_suit {
+                return false;
             }
-        }
+
+            // アガリ牌がこの順子を構成している場合、抜くと塔子になります
+            if win_rank == rank {
+                // アガリ牌が下端の場合、残りの塔子は (rank+1, rank+2)
+                // これが両面待ちである条件は、上端の次が存在すること (rank+2 < 9 すなわち rank < 7) です
+                rank < 7
+            } else if win_rank == rank + 2 {
+                // アガリ牌が上端の場合、残りの塔子は (rank, rank+1)
+                // これが両面待ちである条件は、下端の前が存在すること (rank > 1) です
+                rank > 1
+            } else {
+                false
+            }
+        });
 
         if is_ryamen {
             return Some(true);
@@ -1029,7 +945,7 @@ fn is_chitoitsu(counts: &[usize; 35]) -> bool {
 }
 
 fn is_kokushi(counts: &[usize; 35]) -> bool {
-    let terminals_and_honors: Vec<usize> = vec![
+    let terminals_and_honors = [
         TileName::OneM as usize,
         TileName::NineM as usize,
         TileName::OneP as usize,
@@ -1045,15 +961,17 @@ fn is_kokushi(counts: &[usize; 35]) -> bool {
         TileName::White as usize,
     ];
 
-    let mut missing = 0;
-    let mut has_pair = false;
-    for idx in &terminals_and_honors {
-        if counts[*idx] == 0 {
-            missing += 1;
-        } else if counts[*idx] >= 2 {
-            has_pair = true;
-        }
-    }
+    let (missing, has_pair) = terminals_and_honors
+        .iter()
+        .fold((0, false), |(m, p), &idx| {
+            if counts[idx] == 0 {
+                (m + 1, p)
+            } else if counts[idx] >= 2 {
+                (m, true)
+            } else {
+                (m, p)
+            }
+        });
 
     missing == 0 && has_pair
 }
@@ -1076,7 +994,7 @@ fn is_sanankou(patterns: &[HandPattern], ctx: &WinContext) -> bool {
 
         if !ctx.is_tsumo {
             if let Some(win_tile) = ctx.win_tile {
-                // If ron tile completes a triplet in closed melds, subtract 1
+                // ロンアガリの牌が暗刻（アンコウ）を完成させた場合、それは明刻（ミンコウ）扱いになるため1を引きます
                 let matches_ron = pattern.melds.iter().any(|m| match m {
                     MeldKind::Triplet(t) | MeldKind::Quad(t) => *t == win_tile,
                     _ => false,
@@ -1291,9 +1209,9 @@ fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool
                     });
 
                     if completes_triplet {
-                        // For Suuankou, ron on a triplet means we have 3 closed and 1 open, which is Sanankou Toitoi, not Suuankou
-                        // EXCEPT if it was a single wait (Tanki), where we already have 4 closed triplets and wait for a pair
-                        // To accurately check this we verify if the pair is the ron tile.
+                        // 四暗刻の場合、暗刻に対するロンアガリは「暗刻3＋明刻1」となり、四暗刻ではなく三暗刻・対々和になります。
+                        // ただし、単騎待ち（すでに暗刻が4つあり、雀頭を待つ形）の場合は例外です。
+                        // これを正確に判定するため、雀頭がロンアガリ牌であるかを検証します。
                         if pattern.pair != win_tile {
                             all_triplets = false;
                         }
@@ -1341,4 +1259,93 @@ fn is_chuuren_poutou(counts: &[usize; 35], tiles_len: usize) -> bool {
         }
     }
     false
+}
+
+fn check_situational_yaku(ctx: &WinContext) -> Vec<YakuId> {
+    let mut yaku = Vec::new();
+    if ctx.is_double_riichi && ctx.is_closed {
+        yaku.push(YakuId::DoubleRiichi);
+    } else if ctx.riichi && ctx.is_closed {
+        yaku.push(YakuId::Riichi);
+    }
+
+    if ctx.is_ippatsu && ctx.is_closed && (ctx.riichi || ctx.is_double_riichi) {
+        yaku.push(YakuId::Ippatsu);
+    }
+
+    if ctx.is_rinshan && ctx.is_tsumo {
+        yaku.push(YakuId::RinshanKaihou);
+    }
+
+    if ctx.is_chankan && !ctx.is_tsumo {
+        yaku.push(YakuId::Chankan);
+    }
+
+    if ctx.is_haitei && ctx.is_tsumo {
+        yaku.push(YakuId::HaiteiRaoyue);
+    }
+
+    if ctx.is_houtei && !ctx.is_tsumo {
+        yaku.push(YakuId::HouteiRaoyui);
+    }
+
+    if ctx.is_closed && ctx.is_tsumo {
+        yaku.push(YakuId::MenzenTsumo);
+    }
+
+    if ctx.tenhou {
+        yaku.push(YakuId::Tenhou);
+    }
+    if ctx.chiihou {
+        yaku.push(YakuId::Chiihou);
+    }
+    yaku
+}
+
+fn check_yakuman_yaku(counts: &[usize; 35], tiles_len: usize) -> Vec<YakuId> {
+    let mut yaku = Vec::new();
+    if is_kokushi(counts) {
+        yaku.push(YakuId::KokushiMusou);
+    }
+    if is_chinroutou(counts) {
+        yaku.push(YakuId::Chinroutou);
+    }
+    if is_daisangen(counts) {
+        yaku.push(YakuId::Daisangen);
+    }
+    if let Some((small, big)) = detect_suushi(counts) {
+        if big {
+            yaku.push(YakuId::Daisuushi);
+        }
+        if small {
+            yaku.push(YakuId::Shousuushi);
+        }
+    }
+    if is_tsuuiisou(counts) {
+        yaku.push(YakuId::Tsuuiisou);
+    }
+    if is_ryuuiisou(counts) {
+        yaku.push(YakuId::Ryuuiisou);
+    }
+    if is_chuuren_poutou(counts, tiles_len) {
+        yaku.push(YakuId::ChuurenPoutou);
+    }
+    yaku
+}
+
+fn retain_yakuman_only(result: &mut std::collections::HashSet<YakuId>) {
+    let has_yakuman = result.iter().any(|&id| {
+        ALL_YAKU
+            .iter()
+            .find(|y| y.id == id)
+            .is_some_and(|y| y.yakuman)
+    });
+    if has_yakuman {
+        result.retain(|&id| {
+            ALL_YAKU
+                .iter()
+                .find(|y| y.id == id)
+                .is_some_and(|y| y.yakuman)
+        });
+    }
 }
