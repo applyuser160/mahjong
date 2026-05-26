@@ -1,6 +1,7 @@
 use crate::tile::TileName;
 
 #[derive(Debug, Clone, Default)]
+/// 河（捨て牌の置き場）を表す構造体です。
 pub struct River {
     tiles: Vec<TileName>,
 }

@@ -6,6 +6,7 @@ pub const TILE_WALL_CAPACITY: usize = TILE_NAME_NUMBER * TILE_PER_KIND;
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[repr(usize)]
+/// 牌の種類（名前）を表す列挙型です。
 pub enum TileName {
     None = 0,
 
@@ -180,6 +181,7 @@ impl TileName {
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(usize)]
+/// 牌の種類（数牌の各スーツ、風牌、三元牌）を表す列挙型です。
 pub enum TileType {
     None = 0,
     Characters, /* 萬子      */
@@ -192,6 +194,7 @@ pub enum TileType {
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(usize)]
+/// 牌のカテゴリ（数牌か字牌か）を表す列挙型です。
 pub enum TileCategory {
     None = 0,
     Simples, /* 数牌      */
@@ -200,6 +203,7 @@ pub enum TileCategory {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+/// 牌を表す構造体です。
 pub struct Tile {
     name: TileName,
 }
