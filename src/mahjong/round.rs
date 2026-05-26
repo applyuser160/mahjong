@@ -7,6 +7,7 @@ pub const PLAYER_NUMBER: usize = 4;
 const DEAL_BASE: usize = 13;
 
 #[derive(Debug)]
+/// 1局（1回のゲーム）の進行状態を表す構造体です。
 pub struct Round {
     wall: Wall,
     hands: [Hand; PLAYER_NUMBER],
@@ -84,12 +85,12 @@ impl Round {
             Meld::Kakan(called) => called,
         };
 
-        // For Kakan and Ankan, they are called on the player's own turn (drawn tile),
-        // not from the previous player's discard.
+        // 加カンと暗カンは自身のツモ番で実行され、
+        // 他家の捨て牌からは鳴きません。
         let is_self_meld = matches!(meld, Meld::Ankan(_) | Meld::Kakan(_));
 
         if !is_self_meld {
-            // Determine the last discarded tile
+            // 直前に捨てられた牌を取得します
             let last_discard = self.rivers[previous_player]
                 .tiles()
                 .last()
@@ -108,7 +109,7 @@ impl Round {
         let res = (|| -> Result<(), &'static str> {
             match meld {
                 Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
-                    // Determine the last discarded tile
+                    // 直前に捨てられた牌を取得します
                     let last_discard = self.rivers[previous_player]
                         .tiles()
                         .last()
@@ -121,17 +122,17 @@ impl Round {
 
                     self.hands[player_index].call_meld(meld)?;
 
-                    // Remove the tile from the previous player's river
+                    // 直前のプレイヤーの河から牌を取り除きます
                     self.rivers[previous_player].pop();
                 }
                 Meld::Ankan(_) | Meld::Kakan(_) => {
-                    // For Ankan and Kakan, we do not depend on the previous player's discard.
-                    // We just call the meld directly.
+                    // 暗カンと加カンは他家の捨て牌に依存せず、
+                    // 直接鳴きを処理します。
                     self.hands[player_index].call_meld(meld)?;
                 }
             }
 
-            // Draw a replacement tile for Kan
+            // カンの嶺上牌（リンシャンハイ）をツモります
             if matches!(meld, Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_)) {
                 if let Some(replacement) = self.wall.draw_replacement() {
                     self.hands[player_index].push(replacement);
@@ -150,8 +151,8 @@ impl Round {
             return Err(err);
         }
 
-        // Set turn to the player who called the meld. They will need to discard a tile next.
-        // For Daiminkan, Ankan, Kakan, they need to draw a replacement tile first, then discard.
+        // 手番を鳴いたプレイヤーに設定します。
+        // 大明カン、暗カン、加カンの場合、嶺上牌をツモった後に打牌する必要があります。
         self.turn = player_index;
 
         Ok(())
@@ -160,9 +161,10 @@ impl Round {
     fn deal(&mut self) {
         for _ in 0..DEAL_BASE {
             for hand in &mut self.hands {
-                if let Some(tile) = self.wall.draw() {
-                    hand.push(tile);
-                }
+                let Some(tile) = self.wall.draw() else {
+                    continue;
+                };
+                hand.push(tile);
             }
         }
     }

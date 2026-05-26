@@ -4,6 +4,7 @@ use rand::Rng;
 use crate::tile::{TileName, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY};
 
 #[derive(Clone, Debug)]
+/// 山（壁）を表す構造体です。
 pub struct Wall {
     tiles: [TileName; TILE_WALL_CAPACITY],
     cursor: usize,
@@ -27,12 +28,15 @@ impl Wall {
         }
     }
 
+    /// 牌山をシャッフルし、ツモの位置を初期化します。
     pub fn shuffle<R: Rng + ?Sized>(&mut self, rng: &mut R) {
         self.tiles.shuffle(rng);
         self.cursor = 0;
         self.kan_count = 0;
     }
 
+    /// 通常のツモを行います。
+    /// 王牌（ワンパイ）の14枚を除いた残りの山から牌を引きます。
     pub fn draw(&mut self) -> Option<TileName> {
         let limit = TILE_WALL_CAPACITY - 14 - self.kan_count;
         if self.cursor >= limit {
@@ -46,6 +50,7 @@ impl Wall {
         tile
     }
 
+    /// カンが発生した際に、嶺上牌（リンシャンハイ）を引きます。
     pub fn draw_replacement(&mut self) -> Option<TileName> {
         if self.kan_count >= 4 {
             return None;
@@ -61,6 +66,7 @@ impl Wall {
         tile
     }
 
+    /// 山の残り枚数を返します。
     pub fn remaining(&self) -> usize {
         let limit = TILE_WALL_CAPACITY - 14 - self.kan_count;
         limit.saturating_sub(self.cursor)

@@ -1,6 +1,7 @@
 use crate::tile::TileName;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// 鳴き（副露）の種類を表す列挙型です。
 pub enum Meld {
     Chii {
         called: TileName,
@@ -13,6 +14,7 @@ pub enum Meld {
 }
 
 #[derive(Clone, Debug)]
+/// プレイヤーの手牌を表す構造体です。
 pub struct Hand {
     tiles: [TileName; 14],
     len: usize,
@@ -78,7 +80,7 @@ impl Hand {
             Meld::Daiminkan(tile) => vec![tile, tile, tile],
             Meld::Ankan(tile) => vec![tile, tile, tile, tile],
             Meld::Kakan(tile) => {
-                // Must have a corresponding Pon
+                // 対応するポンがすでに存在している必要があります
                 if !self.open_melds.contains(&Meld::Pon(tile)) {
                     return Err("Cannot call Kakan without an existing Pon");
                 }
@@ -86,7 +88,7 @@ impl Hand {
             }
         };
 
-        // Verify that we have the consumed tiles, accounting for duplicates
+        // 手牌に必要な牌が含まれているか、重複を考慮して検証します
         let mut available_tiles = self.tiles[..self.len].to_vec();
         for &t in &consumed_from_hand {
             if let Some(pos) = available_tiles.iter().position(|&x| x == t) {
@@ -96,7 +98,7 @@ impl Hand {
             }
         }
 
-        // Remove the consumed tiles
+        // 消費された牌を手牌から取り除きます
         for &t in &consumed_from_hand {
             if let Some(pos) = self.tiles[..self.len].iter().position(|&x| x == t) {
                 self.discard(pos).unwrap();
