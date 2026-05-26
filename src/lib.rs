@@ -50,7 +50,7 @@ pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
 }
 
 #[pymodule]
-fn mahjong(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(play_once, m)?)?;
     m.add_class::<python_api::PyTileType>()?;
     m.add_class::<python_api::PyTileCategory>()?;
