@@ -34,24 +34,12 @@ jobs:
           tar -xzvf cargo-binstall-x86_64-unknown-linux-musl.tgz
           ./cargo-binstall -y critcmp
 
-      # 1. 比較対象となるマージ先ブランチ（mainなど）を別ディレクトリにチェックアウトしてベンチマークを取得
+      # 1. 比較対象となるマージ先ブランチ（mainなど）のベンチマークを取得
       - name: Run benchmark on target branch
         run: |
-          # mainブランチのコードを target-branch ディレクトリに別途展開
-          git clone --depth 1 --branch ${{ github.base_ref }} https://github.com/${{ github.repository }}.git target-branch
-
-          # もしmain側に mahjong_benchmark.rs がまだない場合は、PR側のコードから一時的にコピーして無理やり動かす
-          if [ ! -f target-branch/benches/mahjong_benchmark.rs ]; then
-            mkdir -p target-branch/benches
-            cp benches/mahjong_benchmark.rs target-branch/benches/
-            # Cargo.tomlに [[bench]] 設定等が必要な場合も考慮し、
-            # main側にベンチマーク環境がない場合は、PR側の環境を使ってmainのsrcコードだけを計測する等の調整が必要な場合があります。
-            # 今回はmain側にもベンチマークが存在している、あるいは共通であることを前提として進めます。
-          fi
-
-          cd target-branch
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > ../main_bench.txt
-          cd ..
+          git checkout ${{ github.base_ref }}
+          cargo bench --bench mahjong_benchmark -- --output-format bencher > main_bench.txt
+          git checkout ${{ github.sha }}
 
       # 2. 現在のPRブランチのベンチマークを取得
       - name: Run benchmark on PR branch
