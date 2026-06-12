@@ -37,14 +37,19 @@ jobs:
       # 1. 比較対象となるマージ先ブランチ（mainなど）のベンチマークを取得
       - name: Run benchmark on target branch
         run: |
-          git checkout ${{ github.base_ref }}
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > main_bench.txt
-          git checkout ${{ github.sha }}
+          git clone --depth 1 --branch ${{ github.base_ref }} https://github.com/${{ github.repository }}.git target-branch
+          cd target-branch
+
+          # CARGO_TERM_COLOR=never と --color never を追加してカラーコードを無効化
+          CARGO_TERM_COLOR=never cargo bench --bench mahjong_benchmark -- --output-format bencher --color never > ../main_bench.txt
+
+          cd ..
 
       # 2. 現在のPRブランチのベンチマークを取得
       - name: Run benchmark on PR branch
         run: |
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > pr_bench.txt
+          # 同様にカラー出力を無効化
+          CARGO_TERM_COLOR=never cargo bench --bench mahjong_benchmark -- --output-format bencher --color never > pr_bench.txt
 
       # 3. critcmpを使って2つの結果を比較し、Markdownのコメントファイルを生成
       - name: Compare benchmarks
