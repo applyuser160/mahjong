@@ -89,10 +89,14 @@ impl Hand {
         };
 
         // 手牌に必要な牌が含まれているか、重複を考慮して検証します
-        let mut available_tiles = self.tiles[..self.len].to_vec();
+        let mut available_counts = [0u8; 35];
+        for &t in self.tiles[..self.len].iter() {
+            available_counts[t as usize] += 1;
+        }
         for &t in &consumed_from_hand {
-            if let Some(pos) = available_tiles.iter().position(|&x| x == t) {
-                available_tiles.remove(pos);
+            let idx = t as usize;
+            if available_counts[idx] > 0 {
+                available_counts[idx] -= 1;
             } else {
                 return Err("Missing required tiles in hand to call meld");
             }
