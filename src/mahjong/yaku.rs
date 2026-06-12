@@ -944,24 +944,24 @@ fn is_chitoitsu(counts: &[usize; 35]) -> bool {
     pair_count == 7
 }
 
-fn is_kokushi(counts: &[usize; 35]) -> bool {
-    let terminals_and_honors = [
-        TileName::OneM as usize,
-        TileName::NineM as usize,
-        TileName::OneP as usize,
-        TileName::NineP as usize,
-        TileName::OneS as usize,
-        TileName::NineS as usize,
-        TileName::East as usize,
-        TileName::South as usize,
-        TileName::West as usize,
-        TileName::North as usize,
-        TileName::Red as usize,
-        TileName::Green as usize,
-        TileName::White as usize,
-    ];
+const TERMINALS_AND_HONORS: [usize; 13] = [
+    TileName::OneM as usize,
+    TileName::NineM as usize,
+    TileName::OneP as usize,
+    TileName::NineP as usize,
+    TileName::OneS as usize,
+    TileName::NineS as usize,
+    TileName::East as usize,
+    TileName::South as usize,
+    TileName::West as usize,
+    TileName::North as usize,
+    TileName::Red as usize,
+    TileName::Green as usize,
+    TileName::White as usize,
+];
 
-    let (missing, has_pair) = terminals_and_honors
+fn is_kokushi(counts: &[usize; 35]) -> bool {
+    let (missing, has_pair) = TERMINALS_AND_HONORS
         .iter()
         .fold((0, false), |(m, p), &idx| {
             if counts[idx] == 0 {
