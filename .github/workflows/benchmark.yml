@@ -38,13 +38,13 @@ jobs:
       - name: Run benchmark on target branch
         run: |
           git checkout ${{ github.base_ref }}
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > main_bench.txt
+          cargo bench --bench mahjong_benchmark -- --save-baseline main
           git checkout ${{ github.sha }}
 
       # 2. 現在のPRブランチのベンチマークを取得
       - name: Run benchmark on PR branch
         run: |
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > pr_bench.txt
+          cargo bench --bench mahjong_benchmark -- --save-baseline pr
 
       # 3. critcmpを使って2つの結果を比較し、Markdownのコメントファイルを生成
       - name: Compare benchmarks
@@ -53,7 +53,7 @@ jobs:
           echo "PRコードの変更による、ベースライン（\`${{ github.base_ref }}\`）との実行速度比較です。" >> comment.md
           echo "" >> comment.md
           echo "\`\`\`text" >> comment.md
-          critcmp main_bench.txt pr_bench.txt >> comment.md
+          critcmp main pr >> comment.md
           echo "\`\`\`" >> comment.md
 
       # 4. 生成したテーブル結果をPRにコメント（既存のベンチマークコメントがあれば上書き）
