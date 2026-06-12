@@ -53,7 +53,7 @@ jobs:
           echo "PRコードの変更による、ベースライン（\`${{ github.base_ref }}\`）との実行速度比較です。" >> comment.md
           echo "" >> comment.md
           echo "\`\`\`text" >> comment.md
-          ./critcmp main_bench.txt pr_bench.txt >> comment.md
+          critcmp main_bench.txt pr_bench.txt >> comment.md
           echo "\`\`\`" >> comment.md
 
       # 4. 生成したテーブル結果をPRにコメント（既存のベンチマークコメントがあれば上書き）
