@@ -50,6 +50,11 @@ impl Wall {
         tile
     }
 
+    /// 嶺上牌が引けるか（カンが4回未満か）を返します。
+    pub fn can_draw_replacement(&self) -> bool {
+        self.kan_count < 4
+    }
+
     /// カンが発生した際に、嶺上牌（リンシャンハイ）を引きます。
     pub fn draw_replacement(&mut self) -> Option<TileName> {
         if self.kan_count >= 4 {
