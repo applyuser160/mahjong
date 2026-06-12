@@ -16,7 +16,7 @@ impl Wall {
         let mut tiles = [TileName::None; TILE_WALL_CAPACITY];
 
         for name_index in 1..=TILE_NAME_NUMBER {
-            let tile_name = TileName::from_u8(name_index as u8);
+            let tile_name = TileName::from_usize(name_index);
             let offset = (name_index - 1) * TILE_PER_KIND;
             tiles[offset..offset + TILE_PER_KIND].fill(tile_name);
         }
