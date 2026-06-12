@@ -1275,15 +1275,15 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
         for rank in 1..=9 {
             let tile = match suit {
                 0 => TileName::from_usize(rank),
-                1 => TileName::from_usize(rank + 9 ),
-                _ => TileName::from_usize(rank + 18 ),
+                1 => TileName::from_usize(rank + 9),
+                _ => TileName::from_usize(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[rank - 1 ] {
+            if count < required[(rank - 1) as usize] {
                 valid = false;
                 break;
             }
-            extra += count - required[rank - 1 ];
+            extra += count - required[(rank - 1) as usize];
         }
         if valid && extra == 1 {
             return true;
