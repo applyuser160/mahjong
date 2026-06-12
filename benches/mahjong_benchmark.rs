@@ -65,6 +65,96 @@ fn bench_yaku(c: &mut Criterion) {
         })
     });
 
+    // 1. Open Hand
+    let open_tiles = vec![White, White, East, East, East, OneP, TwoP];
+    let open_win_tile = ThreeP;
+    let mut open_hand = Hand::new();
+    for t in open_tiles {
+        open_hand.push(t);
+    }
+    open_hand.push(open_win_tile);
+
+    let open_melds = vec![
+        Meld::Pon(South),
+        Meld::Chii {
+            called: OneM,
+            consumed: [TwoM, ThreeM],
+        },
+    ];
+
+    let open_ctx = WinContext {
+        is_closed: false,
+        is_tsumo: true,
+        win_tile: Some(open_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("Open Hand", |b| {
+        b.iter(|| {
+            judge_yaku(
+                black_box(open_hand.tiles()),
+                black_box(&open_melds),
+                black_box(open_ctx.clone()),
+            )
+        })
+    });
+
+    // 2. Worst Case Branching
+    let worst_case_tiles = vec![
+        TwoP, TwoP, ThreeP, ThreeP, FourP, FourP, FiveP, FiveP, SixP, SixP, SevenP, SevenP, EightP,
+    ];
+    let worst_case_win_tile = EightP;
+    let mut worst_case_hand = Hand::new();
+    for t in worst_case_tiles {
+        worst_case_hand.push(t);
+    }
+    worst_case_hand.push(worst_case_win_tile);
+
+    let worst_case_ctx = WinContext {
+        is_closed: true,
+        is_tsumo: true,
+        win_tile: Some(worst_case_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("Worst Case Branching", |b| {
+        b.iter(|| {
+            judge_yaku(
+                black_box(worst_case_hand.tiles()),
+                black_box(&[] as &[Meld]),
+                black_box(worst_case_ctx.clone()),
+            )
+        })
+    });
+
+    // 3. No Yaku / Fast Reject
+    let no_yaku_tiles = vec![
+        OneM, FourM, SevenM, OneP, FourP, SevenP, OneS, FourS, SevenS, East, South, West, North,
+    ];
+    let no_yaku_win_tile = White;
+    let mut no_yaku_hand = Hand::new();
+    for t in no_yaku_tiles {
+        no_yaku_hand.push(t);
+    }
+    no_yaku_hand.push(no_yaku_win_tile);
+
+    let no_yaku_ctx = WinContext {
+        is_closed: true,
+        is_tsumo: true,
+        win_tile: Some(no_yaku_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("No Yaku / Fast Reject", |b| {
+        b.iter(|| {
+            judge_yaku(
+                black_box(no_yaku_hand.tiles()),
+                black_box(&[] as &[Meld]),
+                black_box(no_yaku_ctx.clone()),
+            )
+        })
+    });
+
     group.finish();
 }
 
@@ -116,6 +206,25 @@ fn bench_game_simulation(c: &mut Criterion) {
             |mut hand| {
                 let meld = Meld::Pon(East);
                 let _ = hand.call_meld(meld);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    // 4. Kan Simulation
+    group.bench_function("Call Meld (Ankan)", |b| {
+        b.iter_batched(
+            || {
+                let mut hand = Hand::new();
+                hand.push(East);
+                hand.push(East);
+                hand.push(East);
+                hand.push(East);
+                hand
+            },
+            |mut hand| {
+                let meld = Meld::Ankan(East);
+                black_box(hand.call_meld(meld))
             },
             BatchSize::SmallInput,
         )
