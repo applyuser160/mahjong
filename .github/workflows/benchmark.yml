@@ -11,14 +11,14 @@ jobs:
     name: Performance Regression Check
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write # PRにコメントを書き込む権限
-      contents: read       # コードをチェックアウトする権限
+      pull-requests: write
+      contents: read
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # マージ対象ブランチ（main）への切り替えに必要
+          fetch-depth: 0
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -27,36 +27,36 @@ jobs:
       - name: Cache Cargo
         uses: ./.github/actions/cache_cargo
 
-      # cargo installだとコンパイルに数分かかるため、高速バイナリインストーラー経由でcritcmpを導入
-      - name: Install critcmp (Fast binary install)
+      - name: Install critcmp
         run: |
           wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz
           tar -xzvf cargo-binstall-x86_64-unknown-linux-musl.tgz
           ./cargo-binstall -y critcmp
 
-      # 1. 比較対象となるマージ先ブランチ（mainなど）のベンチマークを取得
+      # 1. マージ先（main）のベンチマークを実行し、「main」という名前で結果を保存
       - name: Run benchmark on target branch
         run: |
           git checkout ${{ github.base_ref }}
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > main_bench.txt
-          git checkout ${{ github.sha }}
+          cargo bench --bench mahjong_benchmark -- --save-baseline main
 
-      # 2. 現在のPRブランチのベンチマークを取得
+      # 2. 現在のPRのベンチマークを実行し、「pr」という名前で結果を保存
       - name: Run benchmark on PR branch
         run: |
-          cargo bench --bench mahjong_benchmark -- --output-format bencher > pr_bench.txt
+          git checkout ${{ github.sha }}
+          cargo bench --bench mahjong_benchmark -- --save-baseline pr
 
-      # 3. critcmpを使って2つの結果を比較し、Markdownのコメントファイルを生成
+      # 3. 保存した2つのベースライン（main と pr）を比較してMarkdownに出力
       - name: Compare benchmarks
         run: |
           echo "### 📊 パフォーマンスベンチマーク結果" > comment.md
           echo "PRコードの変更による、ベースライン（\`${{ github.base_ref }}\`）との実行速度比較です。" >> comment.md
           echo "" >> comment.md
           echo "\`\`\`text" >> comment.md
-          critcmp main_bench.txt pr_bench.txt >> comment.md
+          # テキストファイルではなく、保存した名前を渡す
+          critcmp main pr >> comment.md
           echo "\`\`\`" >> comment.md
 
-      # 4. 生成したテーブル結果をPRにコメント（既存のベンチマークコメントがあれば上書き）
+      # 4. PRにコメント
       - name: Comment PR
         uses: actions/github-script@v7
         with:
@@ -64,18 +64,15 @@ jobs:
             const fs = require('fs');
             const commentBody = fs.readFileSync('comment.md', 'utf8');
 
-            // PR内の既存コメントを一覧取得
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
 
-            // 過去にこのワークフローが投稿したコメントを探す
             const botComment = comments.find(comment => comment.body.includes('### 📊 パフォーマンスベンチマーク結果'));
 
             if (botComment) {
-              // すでにコメントが存在すれば、最新の計測結果で上書き更新
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -83,7 +80,6 @@ jobs:
                 body: commentBody
               });
             } else {
-              // 初めての投稿であれば、新規にコメントを作成
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
