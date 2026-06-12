@@ -492,17 +492,32 @@ pub fn judge_yaku(
     }
 
     for meld in open_melds_input {
-        let meld_tiles = match meld {
-            crate::hand::Meld::Chii { called, consumed } => vec![*called, consumed[0], consumed[1]],
-            crate::hand::Meld::Pon(t) => vec![*t, *t, *t],
+        match meld {
+            crate::hand::Meld::Chii { called, consumed } => {
+                for tile in [*called, consumed[0], consumed[1]] {
+                    let idx = tile as usize;
+                    if idx < counts.len() {
+                        counts[idx] += 1;
+                    }
+                }
+            }
+            crate::hand::Meld::Pon(t) => {
+                for tile in [*t, *t, *t] {
+                    let idx = tile as usize;
+                    if idx < counts.len() {
+                        counts[idx] += 1;
+                    }
+                }
+            }
             crate::hand::Meld::Daiminkan(t)
             | crate::hand::Meld::Ankan(t)
-            | crate::hand::Meld::Kakan(t) => vec![*t, *t, *t, *t],
-        };
-        for tile in meld_tiles {
-            let idx = tile as usize;
-            if idx < counts.len() {
-                counts[idx] += 1;
+            | crate::hand::Meld::Kakan(t) => {
+                for tile in [*t, *t, *t, *t] {
+                    let idx = tile as usize;
+                    if idx < counts.len() {
+                        counts[idx] += 1;
+                    }
+                }
             }
         }
     }
