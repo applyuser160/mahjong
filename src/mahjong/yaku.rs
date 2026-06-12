@@ -738,6 +738,7 @@ fn generate_patterns(
     closed_melds: &[MeldKind],
 ) -> Vec<HandPattern> {
     let mut patterns = Vec::new();
+    let mut current_melds = Vec::new();
 
     for i in 1..counts.len() {
         if counts[i] < 2 {
@@ -746,8 +747,8 @@ fn generate_patterns(
         let mut working = *counts;
         working[i] -= 2;
         let pair = TileName::from_usize(i);
-        let mut melds = closed_melds.to_vec();
-        search_melds(&mut working, &mut melds, &mut patterns, pair, open_melds);
+        current_melds.clear();
+        search_melds(&mut working, &mut current_melds, &mut patterns, pair, open_melds, closed_melds);
     }
 
     patterns
@@ -759,6 +760,7 @@ fn search_melds(
     patterns: &mut Vec<HandPattern>,
     pair: TileName,
     open_melds: &[MeldKind],
+    closed_melds: &[MeldKind],
 ) {
     let Some(i) = counts
         .iter()
@@ -767,9 +769,11 @@ fn search_melds(
         .position(|(_, &c)| c > 0)
         .map(|p| p + 1)
     else {
+        let mut all_melds = closed_melds.to_vec();
+        all_melds.extend_from_slice(melds);
         patterns.push(HandPattern {
             pair,
-            melds: melds.clone(),
+            melds: all_melds,
             open_melds: open_melds.to_vec(),
         });
         return;
@@ -780,7 +784,7 @@ fn search_melds(
     if counts[i] >= 3 {
         counts[i] -= 3;
         melds.push(MeldKind::Triplet(tile));
-        search_melds(counts, melds, patterns, pair, open_melds);
+        search_melds(counts, melds, patterns, pair, open_melds, closed_melds);
         melds.pop();
         counts[i] += 3;
     }
@@ -813,7 +817,7 @@ fn search_melds(
     counts[next1] -= 1;
     counts[next2] -= 1;
     melds.push(MeldKind::Sequence(tile));
-    search_melds(counts, melds, patterns, pair, open_melds);
+    search_melds(counts, melds, patterns, pair, open_melds, closed_melds);
     melds.pop();
     counts[i] += 1;
     counts[next1] += 1;
