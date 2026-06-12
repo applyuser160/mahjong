@@ -451,9 +451,9 @@ pub struct PyRound {
 impl PyRound {
     #[new]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(wall: &PyWall) -> Self {
+    pub fn new(mut wall: PyRefMut<'_, PyWall>) -> Self {
         Self {
-            round: Round::new(wall.wall.clone()),
+            round: Round::new(std::mem::take(&mut wall.wall)),
         }
     }
 
