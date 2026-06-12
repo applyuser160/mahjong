@@ -747,103 +747,177 @@ fn is_simple(tile: TileName) -> bool {
     )
 }
 
-fn generate_patterns(
-    counts: &[usize; 35],
-    open_melds: &[MeldKind],
-    closed_melds: &[MeldKind],
-) -> Vec<HandPattern> {
-    let mut patterns = Vec::new();
-    let mut current_melds = Vec::new();
-
-    for i in 1..counts.len() {
-        if counts[i] < 2 {
-            continue;
-        }
-        let mut working = *counts;
-        working[i] -= 2;
-        let pair = TileName::from_usize(i);
-        current_melds.clear();
-        search_melds(
-            &mut working,
-            &mut current_melds,
-            &mut patterns,
-            pair,
-            open_melds,
-            closed_melds,
-        );
-    }
-
-    patterns
+#[derive(Clone)]
+struct GroupPattern {
+    melds: Vec<MeldKind>,
+    pair: Option<TileName>,
 }
 
-fn search_melds(
+fn search_group(
     counts: &mut [usize; 35],
     melds: &mut Vec<MeldKind>,
-    patterns: &mut Vec<HandPattern>,
-    pair: TileName,
-    open_melds: &[MeldKind],
-    closed_melds: &[MeldKind],
+    patterns: &mut Vec<GroupPattern>,
+    pair: Option<TileName>,
+    start_idx: usize,
+    end_idx: usize,
 ) {
-    let Some(i) = counts
-        .iter()
-        .enumerate()
-        .skip(1)
-        .position(|(_, &c)| c > 0)
-        .map(|p| p + 1)
-    else {
-        let mut all_melds = closed_melds.to_vec();
-        all_melds.extend_from_slice(melds);
-        patterns.push(HandPattern {
+    let mut i = start_idx;
+    while i <= end_idx {
+        if counts[i] > 0 {
+            break;
+        }
+        i += 1;
+    }
+
+    if i > end_idx {
+        patterns.push(GroupPattern {
+            melds: melds.clone(),
             pair,
-            melds: all_melds,
-            open_melds: open_melds.to_vec(),
         });
         return;
-    };
+    }
 
     let tile = TileName::from_usize(i);
 
     if counts[i] >= 3 {
         counts[i] -= 3;
         melds.push(MeldKind::Triplet(tile));
-        search_melds(counts, melds, patterns, pair, open_melds, closed_melds);
+        search_group(counts, melds, patterns, pair, i, end_idx);
         melds.pop();
         counts[i] += 3;
     }
 
-    let Some((suit, rank)) = is_number_tile(tile) else {
-        return;
-    };
-    if rank > 7 {
-        return;
+    if let Some((suit, rank)) = is_number_tile(tile) {
+        if rank <= 7 {
+            let next1 = i + 1;
+            let next2 = i + 2;
+
+            if next1 <= end_idx && next2 <= end_idx {
+                if let (Some((s1, r1)), Some((s2, r2))) = (
+                    is_number_tile(TileName::from_usize(next1)),
+                    is_number_tile(TileName::from_usize(next2))
+                ) {
+                    if s1 == suit && s2 == suit && r1 == rank + 1 && r2 == rank + 2
+                        && counts[next1] > 0 && counts[next2] > 0 {
+                            counts[i] -= 1;
+                            counts[next1] -= 1;
+                            counts[next2] -= 1;
+                            melds.push(MeldKind::Sequence(tile));
+                            search_group(counts, melds, patterns, pair, i, end_idx);
+                            melds.pop();
+                            counts[i] += 1;
+                            counts[next1] += 1;
+                            counts[next2] += 1;
+                        }
+                }
+            }
+        }
+    }
+}
+
+fn get_group_patterns(
+    counts: &[usize; 35],
+    start_idx: usize,
+    end_idx: usize,
+) -> Vec<GroupPattern> {
+    let mut sum = 0;
+    for count in counts.iter().take(end_idx + 1).skip(start_idx) {
+        sum += count;
     }
 
-    let next1 = i + 1;
-    let next2 = i + 2;
-
-    let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) else {
-        return;
-    };
-    let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) else {
-        return;
-    };
-
-    if s1 != suit || s2 != suit || r1 != rank + 1 || r2 != rank + 2 {
-        return;
-    }
-    if counts[next1] == 0 || counts[next2] == 0 {
-        return;
+    if sum == 0 {
+        return vec![GroupPattern { melds: vec![], pair: None }];
     }
 
-    counts[i] -= 1;
-    counts[next1] -= 1;
-    counts[next2] -= 1;
-    melds.push(MeldKind::Sequence(tile));
-    search_melds(counts, melds, patterns, pair, open_melds, closed_melds);
-    melds.pop();
-    counts[i] += 1;
-    counts[next1] += 1;
-    counts[next2] += 1;
+    let mut patterns = Vec::new();
+    let rem = sum % 3;
+
+    if rem == 1 {
+        // Invalid state, cannot form valid group
+        return patterns;
+    }
+
+    let mut current_melds = Vec::new();
+    let mut working = *counts;
+
+    if rem == 2 {
+        for i in start_idx..=end_idx {
+            if working[i] >= 2 {
+                working[i] -= 2;
+                search_group(
+                    &mut working,
+                    &mut current_melds,
+                    &mut patterns,
+                    Some(TileName::from_usize(i)),
+                    start_idx,
+                    end_idx,
+                );
+                working[i] += 2;
+            }
+        }
+    } else {
+        // rem == 0
+        search_group(
+            &mut working,
+            &mut current_melds,
+            &mut patterns,
+            None,
+            start_idx,
+            end_idx,
+        );
+    }
+
+    patterns
+}
+
+fn generate_patterns(
+    counts: &[usize; 35],
+    open_melds: &[MeldKind],
+    closed_melds: &[MeldKind],
+) -> Vec<HandPattern> {
+    let manzu = get_group_patterns(counts, 1, 9);
+    if manzu.is_empty() { return vec![]; }
+
+    let pinzu = get_group_patterns(counts, 10, 18);
+    if pinzu.is_empty() { return vec![]; }
+
+    let souzu = get_group_patterns(counts, 19, 27);
+    if souzu.is_empty() { return vec![]; }
+
+    let honors = get_group_patterns(counts, 28, 34);
+    if honors.is_empty() { return vec![]; }
+
+    let mut patterns = Vec::new();
+
+    for m in &manzu {
+        for p in &pinzu {
+            for s in &souzu {
+                for h in &honors {
+                    let mut pairs = Vec::new();
+                    if let Some(pair) = m.pair { pairs.push(pair); }
+                    if let Some(pair) = p.pair { pairs.push(pair); }
+                    if let Some(pair) = s.pair { pairs.push(pair); }
+                    if let Some(pair) = h.pair { pairs.push(pair); }
+
+                    if pairs.len() == 1 {
+                        let mut all_melds = closed_melds.to_vec();
+                        all_melds.extend(m.melds.iter().cloned());
+                        all_melds.extend(p.melds.iter().cloned());
+                        all_melds.extend(s.melds.iter().cloned());
+                        all_melds.extend(h.melds.iter().cloned());
+
+                        patterns.push(HandPattern {
+                            pair: pairs[0],
+                            melds: all_melds,
+                            open_melds: open_melds.to_vec(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    patterns
 }
 
 fn is_tanyao(counts: &[usize; 35]) -> bool {
