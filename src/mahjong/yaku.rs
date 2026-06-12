@@ -795,38 +795,42 @@ fn search_group(
             if next1 <= end_idx && next2 <= end_idx {
                 if let (Some((s1, r1)), Some((s2, r2))) = (
                     is_number_tile(TileName::from_usize(next1)),
-                    is_number_tile(TileName::from_usize(next2))
+                    is_number_tile(TileName::from_usize(next2)),
                 ) {
-                    if s1 == suit && s2 == suit && r1 == rank + 1 && r2 == rank + 2
-                        && counts[next1] > 0 && counts[next2] > 0 {
-                            counts[i] -= 1;
-                            counts[next1] -= 1;
-                            counts[next2] -= 1;
-                            melds.push(MeldKind::Sequence(tile));
-                            search_group(counts, melds, patterns, pair, i, end_idx);
-                            melds.pop();
-                            counts[i] += 1;
-                            counts[next1] += 1;
-                            counts[next2] += 1;
-                        }
+                    if s1 == suit
+                        && s2 == suit
+                        && r1 == rank + 1
+                        && r2 == rank + 2
+                        && counts[next1] > 0
+                        && counts[next2] > 0
+                    {
+                        counts[i] -= 1;
+                        counts[next1] -= 1;
+                        counts[next2] -= 1;
+                        melds.push(MeldKind::Sequence(tile));
+                        search_group(counts, melds, patterns, pair, i, end_idx);
+                        melds.pop();
+                        counts[i] += 1;
+                        counts[next1] += 1;
+                        counts[next2] += 1;
+                    }
                 }
             }
         }
     }
 }
 
-fn get_group_patterns(
-    counts: &[usize; 35],
-    start_idx: usize,
-    end_idx: usize,
-) -> Vec<GroupPattern> {
+fn get_group_patterns(counts: &[usize; 35], start_idx: usize, end_idx: usize) -> Vec<GroupPattern> {
     let mut sum = 0;
     for count in counts.iter().take(end_idx + 1).skip(start_idx) {
         sum += count;
     }
 
     if sum == 0 {
-        return vec![GroupPattern { melds: vec![], pair: None }];
+        return vec![GroupPattern {
+            melds: vec![],
+            pair: None,
+        }];
     }
 
     let mut patterns = Vec::new();
@@ -876,16 +880,24 @@ fn generate_patterns(
     closed_melds: &[MeldKind],
 ) -> Vec<HandPattern> {
     let manzu = get_group_patterns(counts, 1, 9);
-    if manzu.is_empty() { return vec![]; }
+    if manzu.is_empty() {
+        return vec![];
+    }
 
     let pinzu = get_group_patterns(counts, 10, 18);
-    if pinzu.is_empty() { return vec![]; }
+    if pinzu.is_empty() {
+        return vec![];
+    }
 
     let souzu = get_group_patterns(counts, 19, 27);
-    if souzu.is_empty() { return vec![]; }
+    if souzu.is_empty() {
+        return vec![];
+    }
 
     let honors = get_group_patterns(counts, 28, 34);
-    if honors.is_empty() { return vec![]; }
+    if honors.is_empty() {
+        return vec![];
+    }
 
     let mut patterns = Vec::new();
 
@@ -894,10 +906,18 @@ fn generate_patterns(
             for s in &souzu {
                 for h in &honors {
                     let mut pairs = Vec::new();
-                    if let Some(pair) = m.pair { pairs.push(pair); }
-                    if let Some(pair) = p.pair { pairs.push(pair); }
-                    if let Some(pair) = s.pair { pairs.push(pair); }
-                    if let Some(pair) = h.pair { pairs.push(pair); }
+                    if let Some(pair) = m.pair {
+                        pairs.push(pair);
+                    }
+                    if let Some(pair) = p.pair {
+                        pairs.push(pair);
+                    }
+                    if let Some(pair) = s.pair {
+                        pairs.push(pair);
+                    }
+                    if let Some(pair) = h.pair {
+                        pairs.push(pair);
+                    }
 
                     if pairs.len() == 1 {
                         let mut all_melds = closed_melds.to_vec();
