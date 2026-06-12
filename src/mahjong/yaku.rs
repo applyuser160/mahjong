@@ -748,7 +748,14 @@ fn generate_patterns(
         working[i] -= 2;
         let pair = TileName::from_usize(i);
         current_melds.clear();
-        search_melds(&mut working, &mut current_melds, &mut patterns, pair, open_melds, closed_melds);
+        search_melds(
+            &mut working,
+            &mut current_melds,
+            &mut patterns,
+            pair,
+            open_melds,
+            closed_melds,
+        );
     }
 
     patterns
