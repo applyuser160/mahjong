@@ -21,7 +21,11 @@ mod tests {
             win_tile: Some(OneM),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let mut counts = [0u8; 35];
+        for &t in &tiles {
+            counts[t as usize] += 1;
+        }
+        let result = judge_yaku(&tiles, &counts, &[], ctx);
         assert!(
             !result.contains(&YakuId::Junchan),
             "Junchan should not be valid with a non-terminal pair"
@@ -46,7 +50,11 @@ mod tests {
             win_tile: Some(OneM),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let mut counts = [0u8; 35];
+        for &t in &tiles {
+            counts[t as usize] += 1;
+        }
+        let result = judge_yaku(&tiles, &counts, &[], ctx);
         assert!(
             result.contains(&YakuId::Junchan),
             "Junchan should be valid with a terminal pair"

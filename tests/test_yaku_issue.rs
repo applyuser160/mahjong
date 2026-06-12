@@ -30,7 +30,11 @@ fn detect_pinfu_overlapping_kanchan_is_not_misidentified() {
         win_tile: Some(TwoM), // won on 2m
         ..Default::default()
     };
-    let result = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let result = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(
         result.contains(&YakuId::Pinfu),
         "Should be Pinfu under standard high-score rules"
@@ -53,7 +57,11 @@ fn detect_pinfu_nobetan_is_correctly_rejected() {
         win_tile: Some(FiveM),
         ..Default::default()
     };
-    let result = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let result = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(
         !result.contains(&YakuId::Pinfu),
         "Nobetan should not be Pinfu"
@@ -76,7 +84,11 @@ fn detect_pinfu_overlapping_pair_tanki_rejected() {
         win_tile: Some(FourM),
         ..Default::default()
     };
-    let result = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let result = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(
         !result.contains(&YakuId::Pinfu),
         "Aryamen/tanki should not be Pinfu"

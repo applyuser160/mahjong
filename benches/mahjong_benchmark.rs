@@ -32,6 +32,7 @@ fn bench_yaku(c: &mut Criterion) {
         b.iter(|| {
             judge_yaku(
                 black_box(complex_hand.tiles()),
+                black_box(complex_hand.counts()),
                 black_box(&[] as &[Meld]),
                 black_box(complex_ctx.clone()),
             )
@@ -59,6 +60,7 @@ fn bench_yaku(c: &mut Criterion) {
         b.iter(|| {
             judge_yaku(
                 black_box(simple_hand.tiles()),
+                black_box(simple_hand.counts()),
                 black_box(&[] as &[Meld]),
                 black_box(simple_ctx.clone()),
             )
@@ -92,6 +94,7 @@ fn bench_yaku(c: &mut Criterion) {
         b.iter(|| {
             judge_yaku(
                 black_box(open_hand.tiles()),
+                black_box(open_hand.counts()),
                 black_box(&open_melds),
                 black_box(open_ctx.clone()),
             )
@@ -119,6 +122,7 @@ fn bench_yaku(c: &mut Criterion) {
         b.iter(|| {
             judge_yaku(
                 black_box(worst_case_hand.tiles()),
+                black_box(worst_case_hand.counts()),
                 black_box(&[] as &[Meld]),
                 black_box(worst_case_ctx.clone()),
             )
@@ -146,6 +150,7 @@ fn bench_yaku(c: &mut Criterion) {
         b.iter(|| {
             judge_yaku(
                 black_box(no_yaku_hand.tiles()),
+                black_box(no_yaku_hand.counts()),
                 black_box(&[] as &[Meld]),
                 black_box(no_yaku_ctx.clone()),
             )

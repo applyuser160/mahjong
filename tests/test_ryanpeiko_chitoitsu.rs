@@ -8,7 +8,11 @@ fn test_ryanpeiko_does_not_have_chitoitsu() {
         SevenM,
     ];
 
-    let result = judge_yaku(&tiles, &[], WinContext::default());
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let result = judge_yaku(&tiles, &counts, &[], WinContext::default());
     assert!(result.contains(&YakuId::Ryanpeiko));
     assert!(!result.contains(&YakuId::Chitoitsu));
 }

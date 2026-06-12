@@ -457,6 +457,7 @@ impl Default for WinContext {
 /// 役満が成立している場合は、通常の役は除外されます。
 pub fn judge_yaku(
     tiles: &[TileName],
+    closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
     mut ctx: WinContext,
 ) -> HashSet<YakuId> {
@@ -484,11 +485,8 @@ pub fn judge_yaku(
     }
 
     let mut counts = [0usize; 35];
-    for tile in tiles.iter().copied() {
-        let idx = tile as usize;
-        if idx < counts.len() {
-            counts[idx] += 1;
-        }
+    for (i, &c) in closed_counts.iter().enumerate() {
+        counts[i] = c as usize;
     }
 
     for meld in open_melds_input {
@@ -544,17 +542,14 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let mut closed_counts = [0usize; 35];
-    for tile in tiles.iter().copied() {
-        let idx = tile as usize;
-        if idx < closed_counts.len() {
-            closed_counts[idx] += 1;
-        }
+    let mut closed_counts_usize = [0usize; 35];
+    for (i, &c) in closed_counts.iter().enumerate() {
+        closed_counts_usize[i] = c as usize;
     }
 
     // 手牌のパターン生成には、副露（鳴き）を除外した門前（メンゼン）の牌のみを使用します。
     // そうしないと、副露した牌を再度パースしようとしてしまいます。
-    let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
+    let patterns = generate_patterns(&closed_counts_usize, &open_melds, &closed_melds);
 
     result.extend(check_situational_yaku(&ctx));
 

@@ -30,7 +30,11 @@ fn test_rinshan_kaihou() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::RinshanKaihou));
 }
 
@@ -43,7 +47,11 @@ fn test_chankan() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::Chankan));
 }
 
@@ -56,7 +64,11 @@ fn test_haitei_raoyue() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::HaiteiRaoyue));
 }
 
@@ -69,7 +81,11 @@ fn test_houtei_raoyui() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::HouteiRaoyui));
 }
 
@@ -83,7 +99,11 @@ fn test_double_riichi_and_ippatsu() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::DoubleRiichi));
     assert!(yaku.contains(&YakuId::Ippatsu));
     assert!(!yaku.contains(&YakuId::Riichi)); // Double Riichi supersedes Riichi
@@ -99,7 +119,11 @@ fn test_ippatsu_with_normal_riichi() {
         ..WinContext::default()
     };
 
-    let yaku = judge_yaku(&tiles, &[], ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let yaku = judge_yaku(&tiles, &counts, &[], ctx);
     assert!(yaku.contains(&YakuId::Riichi));
     assert!(yaku.contains(&YakuId::Ippatsu));
     assert!(!yaku.contains(&YakuId::DoubleRiichi));

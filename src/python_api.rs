@@ -795,6 +795,11 @@ pub fn py_judge_yaku(
     let rs_melds: Vec<Meld> = melds.into_iter().map(|m| m.into()).collect();
     let rs_context: WinContext = context.into();
 
-    let result = judge_yaku(&rs_tiles, &rs_melds, rs_context);
+    let mut closed_counts = [0u8; 35];
+    for &t in &rs_tiles {
+        closed_counts[t as usize] += 1;
+    }
+
+    let result = judge_yaku(&rs_tiles, &closed_counts, &rs_melds, rs_context);
     result.into_iter().map(|y| y.into()).collect()
 }

@@ -27,6 +27,10 @@ fn test_yaku_open_melds() {
         ..WinContext::default()
     };
 
-    let result = judge_yaku(&tiles, &melds, ctx);
+    let mut counts = [0u8; 35];
+    for &t in &tiles {
+        counts[t as usize] += 1;
+    }
+    let result = judge_yaku(&tiles, &counts, &melds, ctx);
     assert!(result.contains(&YakuId::YakuhaiHaku));
 }
