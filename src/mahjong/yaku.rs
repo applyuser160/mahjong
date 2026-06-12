@@ -483,7 +483,7 @@ pub fn judge_yaku(
         ctx.is_closed = false;
     }
 
-    let mut counts = [0usize; 35];
+    let mut counts = [0u8; 35];
     for tile in tiles.iter().copied() {
         let idx = tile as usize;
         if idx < counts.len() {
@@ -544,7 +544,7 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let mut closed_counts = [0usize; 35];
+    let mut closed_counts = [0u8; 35];
     for tile in tiles.iter().copied() {
         let idx = tile as usize;
         if idx < closed_counts.len() {
@@ -748,7 +748,7 @@ fn is_simple(tile: TileName) -> bool {
 }
 
 fn generate_patterns(
-    counts: &[usize; 35],
+    counts: &[u8; 35],
     open_melds: &[MeldKind],
     closed_melds: &[MeldKind],
 ) -> Vec<HandPattern> {
@@ -761,7 +761,7 @@ fn generate_patterns(
         }
         let mut working = *counts;
         working[i] -= 2;
-        let pair = TileName::from_usize(i);
+        let pair = TileName::from_u8(i as u8);
         current_melds.clear();
         search_melds(
             &mut working,
@@ -777,7 +777,7 @@ fn generate_patterns(
 }
 
 fn search_melds(
-    counts: &mut [usize; 35],
+    counts: &mut [u8; 35],
     melds: &mut Vec<MeldKind>,
     patterns: &mut Vec<HandPattern>,
     pair: TileName,
@@ -801,7 +801,7 @@ fn search_melds(
         return;
     };
 
-    let tile = TileName::from_usize(i);
+    let tile = TileName::from_u8(i as u8);
 
     if counts[i] >= 3 {
         counts[i] -= 3;
@@ -821,10 +821,10 @@ fn search_melds(
     let next1 = i + 1;
     let next2 = i + 2;
 
-    let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) else {
+    let Some((s1, r1)) = is_number_tile(TileName::from_u8(next1 as u8)) else {
         return;
     };
-    let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) else {
+    let Some((s2, r2)) = is_number_tile(TileName::from_u8(next2 as u8)) else {
         return;
     };
 
@@ -846,12 +846,12 @@ fn search_melds(
     counts[next2] += 1;
 }
 
-fn is_tanyao(counts: &[usize; 35]) -> bool {
+fn is_tanyao(counts: &[u8; 35]) -> bool {
     counts
         .iter()
         .enumerate()
         .skip(1)
-        .all(|(i, count)| *count == 0 || is_simple(TileName::from_usize(i)))
+        .all(|(i, count)| *count == 0 || is_simple(TileName::from_u8(i as u8)))
 }
 
 fn has_ipeiko(patterns: &[HandPattern]) -> bool {
@@ -948,7 +948,7 @@ fn detect_pinfu(patterns: &[HandPattern], ctx: &WinContext) -> Option<bool> {
 }
 
 fn contains_yakuhai(
-    counts: &[usize; 35],
+    counts: &[u8; 35],
     seat_wind: Option<TileName>,
     round_wind: Option<TileName>,
 ) -> bool {
@@ -965,8 +965,13 @@ fn is_value_pair(tile: TileName, ctx: &WinContext) -> bool {
         || ctx.round_wind.map(|w| w == tile).unwrap_or(false)
 }
 
-fn is_chitoitsu(counts: &[usize; 35]) -> bool {
-    let pair_count = counts.iter().skip(1).filter(|c| **c == 2).count();
+fn is_chitoitsu(counts: &[u8; 35]) -> bool {
+    let mut pair_count = 0;
+    for i in 1..35 {
+        if counts[i] == 2 {
+            pair_count += 1;
+        }
+    }
     pair_count == 7
 }
 
@@ -986,7 +991,7 @@ const TERMINALS_AND_HONORS: [usize; 13] = [
     TileName::White as usize,
 ];
 
-fn is_kokushi(counts: &[usize; 35]) -> bool {
+fn is_kokushi(counts: &[u8; 35]) -> bool {
     let (missing, has_pair) = TERMINALS_AND_HONORS
         .iter()
         .fold((0, false), |(m, p), &idx| {
@@ -1059,7 +1064,7 @@ fn is_shousangen(pattern: &HandPattern) -> bool {
     dragon_triplets == 2 && dragon_pair
 }
 
-fn is_daisangen(counts: &[usize; 35]) -> bool {
+fn is_daisangen(counts: &[u8; 35]) -> bool {
     counts[TileName::Red as usize] >= 3
         && counts[TileName::Green as usize] >= 3
         && counts[TileName::White as usize] >= 3
@@ -1109,14 +1114,14 @@ fn has_sanshoku_doukou(patterns: &[HandPattern]) -> bool {
     })
 }
 
-fn is_honitsu(counts: &[usize; 35]) -> bool {
+fn is_honitsu(counts: &[u8; 35]) -> bool {
     let mut suit_seen = None;
     let mut has_number = false;
     for (i, count) in counts.iter().enumerate().skip(1) {
         if *count == 0 {
             continue;
         }
-        let tile = TileName::from_usize(i);
+        let tile = TileName::from_u8(i as u8);
         if let Some((suit, _)) = is_number_tile(tile) {
             has_number = true;
             match suit_seen {
@@ -1129,13 +1134,13 @@ fn is_honitsu(counts: &[usize; 35]) -> bool {
     suit_seen.is_some() && has_number
 }
 
-fn is_chinitsu(counts: &[usize; 35]) -> bool {
+fn is_chinitsu(counts: &[u8; 35]) -> bool {
     let mut suit_seen = None;
     for (i, count) in counts.iter().enumerate().skip(1) {
         if *count == 0 {
             continue;
         }
-        let tile = TileName::from_usize(i);
+        let tile = TileName::from_u8(i as u8);
         if is_honor(tile) {
             return false;
         }
@@ -1162,23 +1167,23 @@ fn is_junchan(patterns: &[HandPattern]) -> bool {
     })
 }
 
-fn is_honroutou(counts: &[usize; 35]) -> bool {
+fn is_honroutou(counts: &[u8; 35]) -> bool {
     counts
         .iter()
         .enumerate()
         .skip(1)
-        .all(|(i, c)| *c == 0 || is_terminal_or_honor(TileName::from_usize(i)))
+        .all(|(i, c)| *c == 0 || is_terminal_or_honor(TileName::from_u8(i as u8)))
 }
 
-fn is_chinroutou(counts: &[usize; 35]) -> bool {
+fn is_chinroutou(counts: &[u8; 35]) -> bool {
     counts
         .iter()
         .enumerate()
         .skip(1)
-        .all(|(i, c)| *c == 0 || is_terminal(TileName::from_usize(i)))
+        .all(|(i, c)| *c == 0 || is_terminal(TileName::from_u8(i as u8)))
 }
 
-fn detect_suushi(counts: &[usize; 35]) -> Option<(bool, bool)> {
+fn detect_suushi(counts: &[u8; 35]) -> Option<(bool, bool)> {
     let winds = [
         TileName::East as usize,
         TileName::South as usize,
@@ -1193,15 +1198,15 @@ fn detect_suushi(counts: &[usize; 35]) -> Option<(bool, bool)> {
     Some((small, all))
 }
 
-fn is_tsuuiisou(counts: &[usize; 35]) -> bool {
+fn is_tsuuiisou(counts: &[u8; 35]) -> bool {
     counts
         .iter()
         .enumerate()
         .skip(1)
-        .all(|(i, c)| *c == 0 || is_honor(TileName::from_usize(i)))
+        .all(|(i, c)| *c == 0 || is_honor(TileName::from_u8(i as u8)))
 }
 
-fn is_ryuuiisou(counts: &[usize; 35]) -> bool {
+fn is_ryuuiisou(counts: &[u8; 35]) -> bool {
     let allowed = [
         TileName::TwoS as usize,
         TileName::ThreeS as usize,
@@ -1248,13 +1253,13 @@ fn is_suuankou(patterns: &[HandPattern], closed: bool, ctx: &WinContext) -> bool
         })
 }
 
-fn is_chuuren_poutou(counts: &[usize; 35], tiles_len: usize) -> bool {
+fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
     if tiles_len != 14 {
         return false;
     }
     let suits = [0usize, 1, 2];
     for suit in suits {
-        let mut required = [0usize; 9];
+        let mut required = [0u8; 9];
         required[0] = 3;
         required[1] = 1;
         required[2] = 1;
@@ -1269,16 +1274,16 @@ fn is_chuuren_poutou(counts: &[usize; 35], tiles_len: usize) -> bool {
         let mut extra = 0;
         for rank in 1..=9 {
             let tile = match suit {
-                0 => TileName::from_usize(rank),
-                1 => TileName::from_usize(rank + 9),
-                _ => TileName::from_usize(rank + 18),
+                0 => TileName::from_u8(rank),
+                1 => TileName::from_u8(rank + 9),
+                _ => TileName::from_u8(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[rank - 1] {
+            if count < required[(rank - 1) as usize] {
                 valid = false;
                 break;
             }
-            extra += count - required[rank - 1];
+            extra += count - required[(rank - 1) as usize];
         }
         if valid && extra == 1 {
             return true;
@@ -1328,7 +1333,7 @@ fn check_situational_yaku(ctx: &WinContext) -> Vec<YakuId> {
     yaku
 }
 
-fn check_yakuman_yaku(counts: &[usize; 35], tiles_len: usize) -> Vec<YakuId> {
+fn check_yakuman_yaku(counts: &[u8; 35], tiles_len: usize) -> Vec<YakuId> {
     let mut yaku = Vec::new();
     if is_kokushi(counts) {
         yaku.push(YakuId::KokushiMusou);

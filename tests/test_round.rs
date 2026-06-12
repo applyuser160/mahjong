@@ -182,7 +182,7 @@ mod tests {
             }
             if counts.contains(&4) {
                 let tile_idx = counts.iter().position(|&c| c == 4).unwrap();
-                found_ankan = Some((seed, TileName::from_usize(tile_idx)));
+                found_ankan = Some((seed, TileName::from_u8(tile_idx as u8)));
                 break;
             }
         }
@@ -221,7 +221,7 @@ mod tests {
             }
             if counts.iter().any(|&c| c >= 4) {
                 let tile_idx = counts.iter().position(|&c| c >= 4).unwrap();
-                found_ankan = Some((seed, TileName::from_usize(tile_idx)));
+                found_ankan = Some((seed, TileName::from_u8(tile_idx as u8)));
                 break;
             }
         }
@@ -280,7 +280,7 @@ mod tests {
 
             if p0_counts.iter().any(|&c| c >= 3) {
                 let tile_idx = p0_counts.iter().position(|&c| c >= 3).unwrap();
-                let target_tile = TileName::from_usize(tile_idx);
+                let target_tile = TileName::from_u8(tile_idx as u8);
                 // P0 needs the tile to discard on their turn (which is the first turn)
                 if p3_hand[0] == target_tile {
                     found_kakan = Some((seed, target_tile));

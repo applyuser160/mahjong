@@ -47,7 +47,7 @@ mod tests {
         ];
 
         for (n, s) in zip(tile_numbers, tile_strings) {
-            let tile_name = TileName::from_usize(n);
+            let tile_name = TileName::from_u8(n as u8);
 
             let assert_number = if n > TILE_NAME_NUMBER { 0 } else { n };
             assert_eq!(tile_name as usize, assert_number);

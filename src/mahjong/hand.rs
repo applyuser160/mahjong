@@ -104,8 +104,11 @@ impl Hand {
 
         // 消費された牌を手牌から取り除きます
         for &t in &consumed_from_hand {
-            if let Some(pos) = self.tiles[..self.len].iter().position(|&x| x == t) {
-                self.discard(pos)?;
+            for i in 0..self.len {
+                if self.tiles[i] == t {
+                    self.discard(i)?;
+                    break;
+                }
             }
         }
 
