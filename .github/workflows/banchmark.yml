@@ -3,7 +3,7 @@ name: Benchmark Comparison
 on:
   pull_request:
     branches:
-      - master
+      - feature/*
 
 jobs:
   benchmark:
