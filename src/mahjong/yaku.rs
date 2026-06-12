@@ -617,50 +617,55 @@ pub fn judge_yaku(
         }
     };
 
-    generate_patterns(&closed_counts_usize, &open_melds, &closed_melds, |pattern| {
-        let mut current_yaku = pattern_independent_yaku.clone();
-        current_yaku.extend(yakuhai_yaku.iter().copied());
-        current_yaku.extend(kan_yaku.iter().copied());
+    generate_patterns(
+        &closed_counts_usize,
+        &open_melds,
+        &closed_melds,
+        |pattern| {
+            let mut current_yaku = pattern_independent_yaku.clone();
+            current_yaku.extend(yakuhai_yaku.iter().copied());
+            current_yaku.extend(kan_yaku.iter().copied());
 
-        if ctx.is_closed {
-            if has_ryanpeiko(&pattern) {
-                current_yaku.insert(YakuId::Ryanpeiko);
-            } else if has_ipeiko(&pattern) {
-                current_yaku.insert(YakuId::Ipeiko);
+            if ctx.is_closed {
+                if has_ryanpeiko(&pattern) {
+                    current_yaku.insert(YakuId::Ryanpeiko);
+                } else if has_ipeiko(&pattern) {
+                    current_yaku.insert(YakuId::Ipeiko);
+                }
             }
-        }
 
-        if detect_pinfu(&pattern, &ctx) {
-            current_yaku.insert(YakuId::Pinfu);
-        }
+            if detect_pinfu(&pattern, &ctx) {
+                current_yaku.insert(YakuId::Pinfu);
+            }
 
-        if is_toitoi(&pattern) {
-            current_yaku.insert(YakuId::Toitoi);
-        }
-        if is_sanankou(&pattern, &ctx) {
-            current_yaku.insert(YakuId::Sanankou);
-        }
-        if is_shousangen(&pattern) {
-            current_yaku.insert(YakuId::Shousangen);
-        }
-        if is_chantaiyao(&pattern) {
-            current_yaku.insert(YakuId::Chantaiyao);
-        }
-        if has_sanshoku_doujun(&pattern) {
-            current_yaku.insert(YakuId::SanshokuDoujun);
-        }
-        if has_sanshoku_doukou(&pattern) {
-            current_yaku.insert(YakuId::SanshokuDoukou);
-        }
-        if is_junchan(&pattern) {
-            current_yaku.insert(YakuId::Junchan);
-        }
-        if is_suuankou(&pattern, ctx.is_closed, &ctx) {
-            current_yaku.insert(YakuId::Suuankou);
-        }
+            if is_toitoi(&pattern) {
+                current_yaku.insert(YakuId::Toitoi);
+            }
+            if is_sanankou(&pattern, &ctx) {
+                current_yaku.insert(YakuId::Sanankou);
+            }
+            if is_shousangen(&pattern) {
+                current_yaku.insert(YakuId::Shousangen);
+            }
+            if is_chantaiyao(&pattern) {
+                current_yaku.insert(YakuId::Chantaiyao);
+            }
+            if has_sanshoku_doujun(&pattern) {
+                current_yaku.insert(YakuId::SanshokuDoujun);
+            }
+            if has_sanshoku_doukou(&pattern) {
+                current_yaku.insert(YakuId::SanshokuDoukou);
+            }
+            if is_junchan(&pattern) {
+                current_yaku.insert(YakuId::Junchan);
+            }
+            if is_suuankou(&pattern, ctx.is_closed, &ctx) {
+                current_yaku.insert(YakuId::Suuankou);
+            }
 
-        evaluate_yaku_set(current_yaku);
-    });
+            evaluate_yaku_set(current_yaku);
+        },
+    );
 
     if is_chitoitsu(&counts) && ctx.is_closed && !best_yaku.contains(&YakuId::Ryanpeiko) {
         let mut current_yaku = pattern_independent_yaku;
