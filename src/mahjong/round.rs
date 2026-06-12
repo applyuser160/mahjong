@@ -102,53 +102,26 @@ impl Round {
             }
         }
 
-        let original_hand = self.hands[player_index].clone();
-        let original_wall = self.wall.clone();
-        let original_river = self.rivers[previous_player].clone();
+        let is_kan = matches!(meld, Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_));
 
-        let res = (|| -> Result<(), &'static str> {
-            match meld {
-                Meld::Chii { called, .. } | Meld::Pon(called) | Meld::Daiminkan(called) => {
-                    // 直前に捨てられた牌を取得します
-                    let last_discard = self.rivers[previous_player]
-                        .tiles()
-                        .last()
-                        .copied()
-                        .ok_or("No tile in river to call")?;
+        if is_kan && !self.wall.can_draw_replacement() {
+            return Err("No replacement tile available in wall");
+        }
 
-                    if last_discard != called {
-                        return Err("Called tile does not match the last discarded tile");
-                    }
+        // `call_meld` は失敗時に内部状態を変更しないよう実装されているため、そのまま呼び出せます。
+        self.hands[player_index].call_meld(meld)?;
 
-                    self.hands[player_index].call_meld(meld)?;
+        // 自身のツモ番ではない（他家の捨て牌からの鳴き）場合、
+        // 捨て牌を河から取り除きます。
+        if !is_self_meld {
+            self.rivers[previous_player].pop();
+        }
 
-                    // 直前のプレイヤーの河から牌を取り除きます
-                    self.rivers[previous_player].pop();
-                }
-                Meld::Ankan(_) | Meld::Kakan(_) => {
-                    // 暗カンと加カンは他家の捨て牌に依存せず、
-                    // 直接鳴きを処理します。
-                    self.hands[player_index].call_meld(meld)?;
-                }
+        // カンの場合は嶺上牌を引きます。
+        if is_kan {
+            if let Some(replacement) = self.wall.draw_replacement() {
+                self.hands[player_index].push(replacement);
             }
-
-            // カンの嶺上牌（リンシャンハイ）をツモります
-            if matches!(meld, Meld::Daiminkan(_) | Meld::Ankan(_) | Meld::Kakan(_)) {
-                if let Some(replacement) = self.wall.draw_replacement() {
-                    self.hands[player_index].push(replacement);
-                } else {
-                    return Err("No replacement tile available in wall");
-                }
-            }
-
-            Ok(())
-        })();
-
-        if let Err(err) = res {
-            self.hands[player_index] = original_hand;
-            self.wall = original_wall;
-            self.rivers[previous_player] = original_river;
-            return Err(err);
         }
 
         // 手番を鳴いたプレイヤーに設定します。

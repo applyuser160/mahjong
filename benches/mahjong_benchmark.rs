@@ -65,7 +65,6 @@ fn bench_yaku(c: &mut Criterion) {
         })
     });
 
-    // 1. Open Hand
     let open_tiles = vec![White, White, East, East, East, OneP, TwoP];
     let open_win_tile = ThreeP;
     let mut open_hand = Hand::new();
@@ -99,7 +98,6 @@ fn bench_yaku(c: &mut Criterion) {
         })
     });
 
-    // 2. Worst Case Branching
     let worst_case_tiles = vec![
         TwoP, TwoP, ThreeP, ThreeP, FourP, FourP, FiveP, FiveP, SixP, SixP, SevenP, SevenP, EightP,
     ];
@@ -127,7 +125,6 @@ fn bench_yaku(c: &mut Criterion) {
         })
     });
 
-    // 3. No Yaku / Fast Reject
     let no_yaku_tiles = vec![
         OneM, FourM, SevenM, OneP, FourP, SevenP, OneS, FourS, SevenS, East, South, West, North,
     ];
@@ -192,9 +189,6 @@ fn bench_game_simulation(c: &mut Criterion) {
         )
     });
 
-    // To properly benchmark the happy path of `play_meld` logic without breaking
-    // encapsulation of `Round`, we can measure the underlying `Hand::call_meld`
-    // which handles the heavy lifting of state transitions for a successful meld.
     group.bench_function("Call Meld (Pon)", |b| {
         b.iter_batched(
             || {
@@ -211,7 +205,6 @@ fn bench_game_simulation(c: &mut Criterion) {
         )
     });
 
-    // 4. Kan Simulation
     group.bench_function("Call Meld (Ankan)", |b| {
         b.iter_batched(
             || {
@@ -225,6 +218,28 @@ fn bench_game_simulation(c: &mut Criterion) {
             |mut hand| {
                 let meld = Meld::Ankan(East);
                 black_box(hand.call_meld(meld))
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    group.bench_function("Round Play Meld (Fail Setup)", |b| {
+        b.iter_batched(
+            || {
+                let mut wall = Wall::new();
+                let mut rng = StdRng::seed_from_u64(42);
+                wall.shuffle(&mut rng);
+                let mut round = Round::new(wall);
+
+                // Let's just deal some cards, doesn't matter what, we just want to benchmark the failure case or basic case
+                // Or we can draw a tile to make it our turn
+                round.draw_tile();
+                round
+            },
+            |mut round| {
+                let meld = Meld::Ankan(East);
+                // It might fail if we don't have the tiles, but we're mostly testing the setup/clone cost which happens before tile checks
+                let _ = round.play_meld(0, meld);
             },
             BatchSize::SmallInput,
         )
