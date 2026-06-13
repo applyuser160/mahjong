@@ -540,6 +540,8 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
+    // closed_counts array is now passed as an argument.
+
     // 手牌のパターン生成には、副露（鳴き）を除外した門前（メンゼン）の牌のみを使用します。
     // そうしないと、副露した牌を再度パースしようとしてしまいます。
     let patterns = generate_patterns(closed_counts, &open_melds, &closed_melds);
@@ -1267,11 +1269,11 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
                 _ => TileName::from_usize(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[rank - 1 ] {
+            if count < required[rank - 1] {
                 valid = false;
                 break;
             }
-            extra += count - required[rank - 1 ];
+            extra += count - required[rank - 1];
         }
         if valid && extra == 1 {
             return true;
