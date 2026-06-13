@@ -457,7 +457,6 @@ impl Default for WinContext {
 /// 役満が成立している場合は、通常の役は除外されます。
 pub fn judge_yaku(
     tiles: &[TileName],
-    closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
     mut ctx: WinContext,
 ) -> HashSet<YakuId> {
@@ -485,7 +484,12 @@ pub fn judge_yaku(
     }
 
     let mut counts = [0u8; 35];
-    counts.copy_from_slice(closed_counts);
+    for tile in tiles.iter().copied() {
+        let idx = tile as usize;
+        if idx < counts.len() {
+            counts[idx] += 1;
+        }
+    }
 
     for meld in open_melds_input {
         match meld {
@@ -540,9 +544,17 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
+    let mut closed_counts = [0u8; 35];
+    for tile in tiles.iter().copied() {
+        let idx = tile as usize;
+        if idx < closed_counts.len() {
+            closed_counts[idx] += 1;
+        }
+    }
+
     // 手牌のパターン生成には、副露（鳴き）を除外した門前（メンゼン）の牌のみを使用します。
     // そうしないと、副露した牌を再度パースしようとしてしまいます。
-    let patterns = generate_patterns(closed_counts, &open_melds, &closed_melds);
+    let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
 
     result.extend(check_situational_yaku(&ctx));
 
@@ -1267,11 +1279,11 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
                 _ => TileName::from_usize(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[rank - 1 ] {
+            if count < required[(rank - 1) as usize] {
                 valid = false;
                 break;
             }
-            extra += count - required[rank - 1 ];
+            extra += count - required[(rank - 1) as usize];
         }
         if valid && extra == 1 {
             return true;
