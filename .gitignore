@@ -24,3 +24,4 @@ Cargo.lock
 .venv/
 __pycache__/
 *.py[cod]
+*.so
