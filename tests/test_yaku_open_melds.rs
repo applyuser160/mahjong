@@ -1,3 +1,13 @@
+#[allow(unused_macros)]
+macro_rules! to_counts {
+    ($tiles:expr) => {{
+        let mut counts = [0u8; 35];
+        for &t in $tiles {
+            counts[t as usize] += 1;
+        }
+        counts
+    }};
+}
 use mahjong::hand::Meld;
 use mahjong::tile::TileName;
 use mahjong::yaku::{judge_yaku, WinContext, YakuId};
@@ -27,6 +37,6 @@ fn test_yaku_open_melds() {
         ..WinContext::default()
     };
 
-    let result = judge_yaku(&tiles, &melds, ctx);
+    let result = judge_yaku(&to_counts!(&tiles), &melds, ctx);
     assert!(result.contains(&YakuId::YakuhaiHaku));
 }

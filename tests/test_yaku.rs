@@ -1,3 +1,13 @@
+#[allow(unused_macros)]
+macro_rules! to_counts {
+    ($tiles:expr) => {{
+        let mut counts = [0u8; 35];
+        for &t in $tiles {
+            counts[t as usize] += 1;
+        }
+        counts
+    }};
+}
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -21,7 +31,7 @@ mod tests {
             win_tile: Some(FourM),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         let expected: HashSet<YakuId> =
             HashSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
         assert!(expected.is_subset(&result));
@@ -45,7 +55,7 @@ mod tests {
             is_tsumo: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &open_melds, ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &open_melds, ctx);
         assert!(result.contains(&YakuId::Suukantsu));
         assert!(!result.contains(&YakuId::Sankantsu)); // Normal yaku should be filtered out
     }
@@ -57,7 +67,7 @@ mod tests {
             SevenS,
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Chitoitsu));
     }
 
@@ -68,7 +78,7 @@ mod tests {
             OneM,
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::KokushiMusou));
     }
 
@@ -78,7 +88,7 @@ mod tests {
             Red, Red, Red, Green, Green, Green, White, White, White, OneM, OneM, OneM, TwoM, TwoM,
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Daisangen));
         assert!(!result.contains(&YakuId::Toitoi));
     }
@@ -90,7 +100,7 @@ mod tests {
             NineP,
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::SanshokuDoujun));
     }
 
@@ -103,7 +113,7 @@ mod tests {
             FiveS, FiveS, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Ipeiko));
     }
 
@@ -116,7 +126,7 @@ mod tests {
             OneS, OneS, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Ipeiko));
     }
 
@@ -128,7 +138,7 @@ mod tests {
             SevenM, SevenM, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Ryanpeiko));
     }
 
@@ -147,7 +157,7 @@ mod tests {
             round_wind: Some(East),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(result.contains(&YakuId::YakuhaiJikaze));
         assert!(result.contains(&YakuId::YakuhaiBakaze));
     }
@@ -167,7 +177,7 @@ mod tests {
             round_wind: Some(East), // round wind is East
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         // It should contain Bakaze (round wind), but not Jikaze (seat wind)
         assert!(result.contains(&YakuId::YakuhaiBakaze));
         assert!(!result.contains(&YakuId::YakuhaiJikaze));
@@ -183,7 +193,7 @@ mod tests {
             White, White, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Honitsu));
     }
 
@@ -197,7 +207,7 @@ mod tests {
             East, East, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::SanshokuDoukou));
     }
 
@@ -211,7 +221,7 @@ mod tests {
             OneS, OneS, // pair
         ];
 
-        let result = judge_yaku(&tiles, &[], WinContext::default());
+        let result = judge_yaku(&to_counts!(&tiles), &[], WinContext::default());
         assert!(result.contains(&YakuId::Chinroutou));
         assert!(!result.contains(&YakuId::Honroutou));
     }
@@ -231,7 +241,7 @@ mod tests {
             is_closed: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         // This hand is Sanankou (222m, 666p, 999s are closed triplets).
         assert!(result.contains(&YakuId::Sanankou));
     }
@@ -250,7 +260,7 @@ mod tests {
             is_tsumo: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(result.contains(&YakuId::Sanankou));
     }
 
@@ -269,7 +279,7 @@ mod tests {
             is_tsumo: true, // Tsumo shouldn't matter if we rely on closed melds
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &open_melds, ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &open_melds, ctx);
         // We only have 2 closed triplets (111m, 222m) and 1 open triplet (333m).
         assert!(!result.contains(&YakuId::Sanankou));
     }
@@ -289,7 +299,7 @@ mod tests {
             win_tile: Some(ThreeM), // ron on 3m, making 333m open
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Sanankou));
     }
 
@@ -308,7 +318,7 @@ mod tests {
             win_tile: Some(FourM), // ron on 4m, making 456m open, but triplets remain closed
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(result.contains(&YakuId::Sanankou));
     }
 
@@ -327,7 +337,7 @@ mod tests {
             win_tile: Some(White), // ron on pair (Tanki), triplets remain closed
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(result.contains(&YakuId::Suuankou));
     }
 
@@ -346,7 +356,7 @@ mod tests {
             win_tile: Some(FourP), // ron on a triplet (Shanpon), downgrades to Sanankou + Toitoi
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Suuankou));
         assert!(result.contains(&YakuId::Sanankou));
         assert!(result.contains(&YakuId::Toitoi));
@@ -368,7 +378,7 @@ mod tests {
             win_tile: Some(FourM), // ryamen wait on 1m or 4m
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(result.contains(&YakuId::Pinfu));
     }
 
@@ -388,7 +398,7 @@ mod tests {
             win_tile: Some(ThreeM), // kanchan wait on 3m (2m 4m wait for 3m)
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Pinfu));
     }
 
@@ -408,7 +418,7 @@ mod tests {
             win_tile: Some(ThreeM), // penchan wait on 3m (1m 2m wait for 3m)
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Pinfu));
     }
 
@@ -428,7 +438,7 @@ mod tests {
             win_tile: Some(TwoM), // nobetan wait on 2m or 5m (acts as tanki pair)
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Pinfu));
     }
 
@@ -448,7 +458,7 @@ mod tests {
             win_tile: Some(FourM), // tanki wait on 4m
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(!result.contains(&YakuId::Pinfu));
     }
 }
@@ -474,7 +484,7 @@ mod tests_kan {
             is_tsumo: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &open_melds, ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &open_melds, ctx);
         // Ankan is a closed meld, so we have 3 closed triplets/quads (111m, 222m, 3333m)
         assert!(result.contains(&YakuId::Sanankou));
     }
@@ -497,7 +507,7 @@ mod tests_kan {
             is_tsumo: true,
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &open_melds, ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &open_melds, ctx);
         assert!(result.contains(&YakuId::Sankantsu));
     }
 
@@ -514,7 +524,7 @@ mod tests_kan {
             ..WinContext::default()
         };
 
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
 
         assert!(result.contains(&YakuId::KokushiMusou));
         assert!(!result.contains(&YakuId::Riichi));

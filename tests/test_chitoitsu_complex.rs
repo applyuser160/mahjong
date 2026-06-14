@@ -1,3 +1,13 @@
+#[allow(unused_macros)]
+macro_rules! to_counts {
+    ($tiles:expr) => {{
+        let mut counts = [0u8; 35];
+        for &t in $tiles {
+            counts[t as usize] += 1;
+        }
+        counts
+    }};
+}
 use mahjong::tile::TileName::*;
 use mahjong::yaku::{judge_yaku, WinContext, YakuId};
 
@@ -8,7 +18,7 @@ fn test_chitoitsu_honitsu() {
     ];
 
     let result = judge_yaku(
-        &tiles,
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -27,7 +37,7 @@ fn test_chitoitsu_chinitsu() {
     ];
 
     let result = judge_yaku(
-        &tiles,
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -45,7 +55,7 @@ fn test_chitoitsu_honroutou() {
     ];
 
     let result = judge_yaku(
-        &tiles,
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -63,7 +73,7 @@ fn test_chitoitsu_tsuuiisou() {
     ];
 
     let result = judge_yaku(
-        &tiles,
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
