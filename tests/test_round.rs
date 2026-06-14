@@ -1,4 +1,3 @@
-
 #[allow(unused_macros)]
 macro_rules! to_counts {
     ($tiles:expr) => {{
@@ -10,10 +9,8 @@ macro_rules! to_counts {
     }};
 }
 
-
 #[cfg(test)]
 mod tests {
-
 
     use rand::rngs::StdRng;
     use rand::SeedableRng;

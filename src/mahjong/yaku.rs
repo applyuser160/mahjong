@@ -1266,11 +1266,11 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
                 _ => TileName::from_usize(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[rank - 1 ] {
+            if count < required[rank - 1] {
                 valid = false;
                 break;
             }
-            extra += count - required[rank - 1 ];
+            extra += count - required[rank - 1];
         }
         if valid && extra == 1 {
             return true;

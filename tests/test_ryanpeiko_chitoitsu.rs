@@ -1,4 +1,3 @@
-
 #[allow(unused_macros)]
 macro_rules! to_counts {
     ($tiles:expr) => {{

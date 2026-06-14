@@ -1,4 +1,3 @@
-
 #[allow(unused_macros)]
 macro_rules! to_counts {
     ($tiles:expr) => {{
@@ -9,7 +8,6 @@ macro_rules! to_counts {
         counts
     }};
 }
-
 
 #[cfg(test)]
 mod tests {

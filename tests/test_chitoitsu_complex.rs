@@ -1,4 +1,3 @@
-
 #[allow(unused_macros)]
 macro_rules! to_counts {
     ($tiles:expr) => {{
@@ -18,7 +17,8 @@ fn test_chitoitsu_honitsu() {
         OneM, OneM, TwoM, TwoM, FourM, FourM, FiveM, FiveM, SevenM, SevenM, NineM, NineM, Red, Red,
     ];
 
-    let result = judge_yaku(&to_counts!(&tiles),
+    let result = judge_yaku(
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -36,7 +36,8 @@ fn test_chitoitsu_chinitsu() {
         NineM,
     ];
 
-    let result = judge_yaku(&to_counts!(&tiles),
+    let result = judge_yaku(
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -53,7 +54,8 @@ fn test_chitoitsu_honroutou() {
         OneM, OneM, NineM, NineM, OneP, OneP, NineP, NineP, OneS, OneS, NineS, NineS, East, East,
     ];
 
-    let result = judge_yaku(&to_counts!(&tiles),
+    let result = judge_yaku(
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
@@ -70,7 +72,8 @@ fn test_chitoitsu_tsuuiisou() {
         East, East, South, South, West, West, North, North, White, White, Green, Green, Red, Red,
     ];
 
-    let result = judge_yaku(&to_counts!(&tiles),
+    let result = judge_yaku(
+        &to_counts!(&tiles),
         &[],
         WinContext {
             is_closed: true,
