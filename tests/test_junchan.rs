@@ -1,3 +1,16 @@
+
+#[allow(unused_macros)]
+macro_rules! to_counts {
+    ($tiles:expr) => {{
+        let mut counts = [0u8; 35];
+        for &t in $tiles {
+            counts[t as usize] += 1;
+        }
+        counts
+    }};
+}
+
+
 #[cfg(test)]
 mod tests {
     use mahjong::tile::TileName::*;
@@ -21,7 +34,7 @@ mod tests {
             win_tile: Some(OneM),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(
             !result.contains(&YakuId::Junchan),
             "Junchan should not be valid with a non-terminal pair"
@@ -46,7 +59,7 @@ mod tests {
             win_tile: Some(OneM),
             ..Default::default()
         };
-        let result = judge_yaku(&tiles, &[], ctx);
+        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
         assert!(
             result.contains(&YakuId::Junchan),
             "Junchan should be valid with a terminal pair"

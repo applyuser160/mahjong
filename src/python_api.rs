@@ -791,10 +791,17 @@ pub fn py_judge_yaku(
     melds: Vec<PyMeld>,
     context: PyWinContext,
 ) -> Vec<PyYakuId> {
-    let rs_tiles: Vec<TileName> = tiles.into_iter().map(|t| t.into()).collect();
+    let mut closed_counts = [0u8; 35];
+    for py_tile in tiles {
+        let rs_tile: TileName = py_tile.into();
+        let idx = rs_tile as usize;
+        if idx < closed_counts.len() {
+            closed_counts[idx] += 1;
+        }
+    }
     let rs_melds: Vec<Meld> = melds.into_iter().map(|m| m.into()).collect();
     let rs_context: WinContext = context.into();
 
-    let result = judge_yaku(&rs_tiles, &rs_melds, rs_context);
+    let result = judge_yaku(&closed_counts, &rs_melds, rs_context);
     result.into_iter().map(|y| y.into()).collect()
 }

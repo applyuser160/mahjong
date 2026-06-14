@@ -19,6 +19,7 @@ pub struct Hand {
     tiles: [TileName; 14],
     len: usize,
     pub open_melds: Vec<Meld>,
+    pub counts: [u8; 35],
 }
 
 impl Default for Hand {
@@ -33,6 +34,7 @@ impl Hand {
             tiles: [TileName::None; 14],
             len: 0,
             open_melds: Vec::new(),
+            counts: [0; 35],
         }
     }
 
@@ -43,6 +45,7 @@ impl Hand {
     pub fn push(&mut self, tile: TileName) {
         self.tiles[self.len] = tile;
         self.len += 1;
+        self.counts[tile as usize] += 1;
     }
 
     pub fn discard(&mut self, index: usize) -> Result<TileName, &'static str> {
@@ -52,6 +55,7 @@ impl Hand {
         let removed = self.tiles[index];
         self.tiles.copy_within(index + 1..self.len, index);
         self.len -= 1;
+        self.counts[removed as usize] -= 1;
         Ok(removed)
     }
 
@@ -89,10 +93,7 @@ impl Hand {
         };
 
         // 手牌に必要な牌が含まれているか、重複を考慮して検証します
-        let mut available_counts = [0u8; 35];
-        for &t in self.tiles[..self.len].iter() {
-            available_counts[t as usize] += 1;
-        }
+        let mut available_counts = self.counts;
         for &t in &consumed_from_hand {
             let idx = t as usize;
             if available_counts[idx] > 0 {

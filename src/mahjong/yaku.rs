@@ -456,13 +456,14 @@ impl Default for WinContext {
 /// 手牌と副露、および和了（アガリ）時の状況から、成立している役を判定します。
 /// 役満が成立している場合は、通常の役は除外されます。
 pub fn judge_yaku(
-    tiles: &[TileName],
+    closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
     mut ctx: WinContext,
 ) -> HashSet<YakuId> {
     let mut result = HashSet::new();
 
-    if tiles.is_empty() {
+    let tiles_len = closed_counts.iter().map(|&c| c as usize).sum::<usize>();
+    if tiles_len == 0 {
         return result;
     }
 
@@ -483,13 +484,7 @@ pub fn judge_yaku(
         ctx.is_closed = false;
     }
 
-    let mut counts = [0u8; 35];
-    for tile in tiles.iter().copied() {
-        let idx = tile as usize;
-        if idx < counts.len() {
-            counts[idx] += 1;
-        }
-    }
+    let mut counts = *closed_counts;
 
     for meld in open_melds_input {
         match meld {
@@ -544,21 +539,13 @@ pub fn judge_yaku(
         ctx.kan_count = kan_count;
     }
 
-    let mut closed_counts = [0u8; 35];
-    for tile in tiles.iter().copied() {
-        let idx = tile as usize;
-        if idx < closed_counts.len() {
-            closed_counts[idx] += 1;
-        }
-    }
-
     // 手牌のパターン生成には、副露（鳴き）を除外した門前（メンゼン）の牌のみを使用します。
     // そうしないと、副露した牌を再度パースしようとしてしまいます。
-    let patterns = generate_patterns(&closed_counts, &open_melds, &closed_melds);
+    let patterns = generate_patterns(closed_counts, &open_melds, &closed_melds);
 
     result.extend(check_situational_yaku(&ctx));
 
-    let yakuman_list = check_yakuman_yaku(&counts, tiles.len());
+    let yakuman_list = check_yakuman_yaku(&counts, tiles_len);
     if !yakuman_list.is_empty() {
         result.extend(yakuman_list);
         retain_yakuman_only(&mut result);
@@ -1279,11 +1266,11 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
                 _ => TileName::from_usize(rank + 18),
             };
             let count = counts[tile as usize];
-            if count < required[(rank - 1) as usize] {
+            if count < required[rank - 1 ] {
                 valid = false;
                 break;
             }
-            extra += count - required[(rank - 1) as usize];
+            extra += count - required[rank - 1 ];
         }
         if valid && extra == 1 {
             return true;

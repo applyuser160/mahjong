@@ -1,5 +1,20 @@
+
+#[allow(unused_macros)]
+macro_rules! to_counts {
+    ($tiles:expr) => {{
+        let mut counts = [0u8; 35];
+        for &t in $tiles {
+            counts[t as usize] += 1;
+        }
+        counts
+    }};
+}
+
+
 #[cfg(test)]
 mod tests {
+
+
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
