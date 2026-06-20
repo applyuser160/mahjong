@@ -60,41 +60,67 @@ impl Hand {
     }
 
     pub fn call_meld(&mut self, meld: Meld) -> Result<(), &'static str> {
-        let consumed_from_hand: Vec<TileName> = match meld {
+        let (consumed_buffer, consumed_len) = match meld {
             Meld::Chii { called, consumed } => {
                 let info = crate::yaku::is_number_tile(called).ok_or("Invalid tile for Chii")?;
 
-                let mut ranks = vec![info.1];
-                for &c in &consumed {
+                let mut ranks = [info.1, 0, 0];
+                for (i, &c) in consumed.iter().enumerate() {
                     let consumed_info =
                         crate::yaku::is_number_tile(c).ok_or("Invalid consumed tile for Chii")?;
                     if consumed_info.0 != info.0 {
                         return Err("Cross-suit Chii is not allowed");
                     }
-                    ranks.push(consumed_info.1);
+                    ranks[i + 1] = consumed_info.1;
                 }
 
                 ranks.sort_unstable();
                 if ranks[1] != ranks[0] + 1 || ranks[2] != ranks[1] + 1 {
                     return Err("Tiles do not form a consecutive sequence");
                 }
-                consumed.to_vec()
+
+                let mut buf = [TileName::None; 4];
+                buf[0] = consumed[0];
+                buf[1] = consumed[1];
+                (buf, 2)
             }
-            Meld::Pon(tile) => vec![tile, tile],
-            Meld::Daiminkan(tile) => vec![tile, tile, tile],
-            Meld::Ankan(tile) => vec![tile, tile, tile, tile],
+            Meld::Pon(tile) => {
+                let mut buf = [TileName::None; 4];
+                buf[0] = tile;
+                buf[1] = tile;
+                (buf, 2)
+            }
+            Meld::Daiminkan(tile) => {
+                let mut buf = [TileName::None; 4];
+                buf[0] = tile;
+                buf[1] = tile;
+                buf[2] = tile;
+                (buf, 3)
+            }
+            Meld::Ankan(tile) => {
+                let mut buf = [TileName::None; 4];
+                buf[0] = tile;
+                buf[1] = tile;
+                buf[2] = tile;
+                buf[3] = tile;
+                (buf, 4)
+            }
             Meld::Kakan(tile) => {
                 // 対応するポンがすでに存在している必要があります
                 if !self.open_melds.contains(&Meld::Pon(tile)) {
                     return Err("Cannot call Kakan without an existing Pon");
                 }
-                vec![tile]
+                let mut buf = [TileName::None; 4];
+                buf[0] = tile;
+                (buf, 1)
             }
         };
 
+        let consumed_from_hand = &consumed_buffer[..consumed_len];
+
         // 手牌に必要な牌が含まれているか、重複を考慮して検証します
         let mut available_counts = self.counts;
-        for &t in &consumed_from_hand {
+        for &t in consumed_from_hand {
             let idx = t as usize;
             if available_counts[idx] > 0 {
                 available_counts[idx] -= 1;
@@ -104,7 +130,7 @@ impl Hand {
         }
 
         // 消費された牌を手牌から取り除きます
-        for &t in &consumed_from_hand {
+        for &t in consumed_from_hand {
             if let Some(pos) = self.tiles[..self.len].iter().position(|&x| x == t) {
                 self.discard(pos)?;
             }
