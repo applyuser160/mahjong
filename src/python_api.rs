@@ -257,6 +257,7 @@ impl PyTile {
 
 #[pyclass]
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct PyMeld {
     meld: Meld,
 }
@@ -799,9 +800,10 @@ pub fn py_judge_yaku(
             closed_counts[idx] += 1;
         }
     }
-    let rs_melds: Vec<Meld> = melds.into_iter().map(|m| m.into()).collect();
+    let rs_melds: &[Meld] =
+        unsafe { std::slice::from_raw_parts(melds.as_ptr() as *const Meld, melds.len()) };
     let rs_context: WinContext = context.into();
 
-    let result = judge_yaku(&closed_counts, &rs_melds, rs_context);
+    let result = judge_yaku(&closed_counts, rs_melds, rs_context);
     result.into_iter().map(|y| y.into()).collect()
 }

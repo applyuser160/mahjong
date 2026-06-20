@@ -15,5 +15,9 @@ rand = "0.8"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
+name = "python_api_benchmark"
+harness = false
+
+[[bench]]
 name = "mahjong_benchmark"
 harness = false
