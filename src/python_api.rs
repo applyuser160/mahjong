@@ -274,6 +274,12 @@ impl From<PyMeld> for Meld {
     }
 }
 
+impl From<&PyMeld> for Meld {
+    fn from(val: &PyMeld) -> Self {
+        val.meld
+    }
+}
+
 #[pymethods]
 impl PyMeld {
     #[staticmethod]
@@ -484,7 +490,7 @@ impl PyRound {
     }
 
     pub fn play_meld(&mut self, player_index: usize, meld: &PyMeld) -> PyResult<()> {
-        match self.round.play_meld(player_index, meld.clone().into()) {
+        match self.round.play_meld(player_index, meld.into()) {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
