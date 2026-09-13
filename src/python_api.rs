@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use crate::hand::{Hand, Meld};
 use crate::river::River;
 use crate::round::Round;
+use crate::shanten::{calculate_shanten, calculate_shanten_from_counts, ShantenResult};
 use crate::tile::{Tile, TileCategory, TileName, TileType};
 use crate::wall::Wall;
 use crate::yaku::{judge_yaku, WinContext, Yaku, YakuId, ALL_YAKU};
@@ -385,6 +386,10 @@ impl PyHand {
             Ok(_) => Ok(()),
             Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
+    }
+
+    pub fn shanten(&self) -> PyShantenResult {
+        calculate_shanten(&self.hand).into()
     }
 }
 
@@ -812,4 +817,56 @@ pub fn py_judge_yaku(
 
     let result = judge_yaku(&closed_counts, rs_melds, rs_context);
     result.into_iter().map(|y| y.into()).collect()
+}
+
+// ==========================================
+// 6. Shanten wrappers
+// ==========================================
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyShantenResult {
+    #[pyo3(get)]
+    pub min_shanten: i8,
+    #[pyo3(get)]
+    pub normal: i8,
+    #[pyo3(get)]
+    pub chitoitsu: i8,
+    #[pyo3(get)]
+    pub kokushi: i8,
+}
+
+#[pymethods]
+impl PyShantenResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "ShantenResult(min={}, normal={}, chitoitsu={}, kokushi={})",
+            self.min_shanten, self.normal, self.chitoitsu, self.kokushi
+        )
+    }
+}
+
+impl From<ShantenResult> for PyShantenResult {
+    fn from(res: ShantenResult) -> Self {
+        Self {
+            min_shanten: res.min_shanten,
+            normal: res.normal,
+            chitoitsu: res.chitoitsu,
+            kokushi: res.kokushi,
+        }
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (tiles, open_melds_count=0))]
+pub fn py_calculate_shanten(tiles: Vec<PyTileName>, open_melds_count: usize) -> PyShantenResult {
+    let mut counts = [0u8; 35];
+    for py_tile in tiles {
+        let rs_tile: TileName = py_tile.into();
+        let idx = rs_tile as usize;
+        if idx < counts.len() {
+            counts[idx] += 1;
+        }
+    }
+    calculate_shanten_from_counts(&counts, open_melds_count).into()
 }

@@ -189,6 +189,25 @@ fn bench_game_simulation(c: &mut Criterion) {
         )
     });
 
+    group.bench_function("Call Meld (Chii)", |b| {
+        b.iter_batched(
+            || {
+                let mut hand = Hand::new();
+                hand.push(OneM);
+                hand.push(TwoM);
+                hand
+            },
+            |mut hand| {
+                let meld = Meld::Chii {
+                    called: ThreeM,
+                    consumed: [OneM, TwoM],
+                };
+                let _ = hand.call_meld(meld);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
     group.bench_function("Call Meld (Pon)", |b| {
         b.iter_batched(
             || {

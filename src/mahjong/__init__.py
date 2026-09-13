@@ -11,8 +11,10 @@ from ._core import (
     PyYakuId as YakuId,
     PyYaku as Yaku,
     PyWinContext as WinContext,
+    PyShantenResult as ShantenResult,
     get_all_yaku,
     py_judge_yaku as judge_yaku,
+    py_calculate_shanten as calculate_shanten,
 )
 
 __all__ = [
@@ -28,6 +30,8 @@ __all__ = [
     "YakuId",
     "Yaku",
     "WinContext",
+    "ShantenResult",
     "get_all_yaku",
     "judge_yaku",
+    "calculate_shanten",
 ]

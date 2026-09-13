@@ -83,6 +83,7 @@ impl Hand {
                 if ranks[1] != ranks[0] + 1 || ranks[2] != ranks[1] + 1 {
                     return Err("Tiles do not form a consecutive sequence");
                 }
+
                 consumed_from_hand[0] = consumed[0];
                 consumed_from_hand[1] = consumed[1];
                 consumed_len = 2;
