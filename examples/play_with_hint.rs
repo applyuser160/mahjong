@@ -4,6 +4,7 @@ use mahjong::dora::indicator_to_dora;
 use mahjong::expectation::{evaluate_hand_discards, AnalysisContext};
 use mahjong::explanation::Explainer;
 use mahjong::hand::Hand;
+use mahjong::review::ReviewTracker;
 use mahjong::shanten::calculate_shanten;
 use mahjong::tile::TileName;
 use mahjong::wall::Wall;
@@ -17,7 +18,7 @@ fn main() {
     println!("操作方法:");
     println!("  ・手牌番号 (1〜14) または 牌名 (例: 9p, 1m, 東) を入力して打牌");
     println!("  ・'auto' または Enter のみ: AI推奨の最善打牌（1位）を自動選択");
-    println!("  ・'q': 終了\n");
+    println!("  ・'q': 終了（局後学習レポートを表示して終了）\n");
 
     let mut wall = Wall::new();
     let mut rng = StdRng::from_entropy();
@@ -35,15 +36,16 @@ fn main() {
         }
     }
 
+    let mut tracker = ReviewTracker::new();
     let mut turn_count = 1;
 
-    loop {
+    'game: loop {
         // 1. ツモ
         let drawn = match wall.draw() {
             Some(t) => t,
             None => {
                 println!("\n【流局】山牌がなくなりました。対局終了です。");
-                break;
+                break 'game;
             }
         };
         user_hand.push(drawn);
@@ -75,8 +77,9 @@ fn main() {
 
         // 4. 現在の向聴数判定
         let current_shanten = calculate_shanten(&user_hand);
-        if current_shanten.min_shanten < 0 {
-            println!("\n🎉 【和了可能】ツモ和了の形が完成しています！");
+        let is_agari = current_shanten.min_shanten < 0;
+        if is_agari {
+            println!("\n🎉 【和了可能】ツモ和了の形が完成しています！ ('tsumo' または 'ツモ' で和了終了できます)");
         }
 
         // 5. 期待値計算 & 要因モデル
@@ -85,7 +88,7 @@ fn main() {
             remaining_wall_tiles: remaining_wall,
             seat_wind: Some(TileName::East),
             round_wind: Some(TileName::East),
-            dora_indicators: Box::leak(vec![dora_indicator].into_boxed_slice()),
+            dora_indicators: &[dora_indicator],
             is_dealer: true,
         };
 
@@ -99,42 +102,47 @@ fn main() {
                 0 => "テンパイ".to_string(),
                 s => format!("{s}向聴"),
             };
+            let yaku_str = if !ev.value.primary_yaku.is_empty() {
+                format!("  役: {}", ev.value.primary_yaku.join(", "))
+            } else {
+                String::new()
+            };
 
-            let waits_sample: Vec<&str> = ev
-                .speed
-                .accepted_tiles
-                .iter()
-                .take(4)
-                .map(|t| t.as_str())
-                .collect();
-            let waits_str = waits_sample.join(",");
+            let waits_str = if !ev.speed.accepted_tiles.is_empty() {
+                let wait_names: Vec<&str> =
+                    ev.speed.accepted_tiles.iter().map(|t| t.as_str()).collect();
+                format!("  受入: [{}]", wait_names.join(","))
+            } else {
+                String::new()
+            };
 
+            let mark = if rank == 0 { "★最善" } else { "  候補" };
             println!(
-                "  {}位 [{}]  EV: {:+6.0}点 | {} (受入: {}種 {}枚 [{}]) | 想定打点: {:.0}点 ({})",
+                "  {} [{:2}] 打[{:2}] -> {:>4} | EV: {:>5.0}点 | 残り:{:>2}枚 | 想定:{:>5.0}点 ({:.1}翻){}{}",
+                mark,
                 rank + 1,
                 ev.discard_tile.as_str(),
-                ev.ev,
                 shanten_text,
-                ev.speed.accepted_tiles.len(),
+                ev.ev,
                 ev.speed.remaining_count,
-                waits_str,
                 ev.value.expected_score,
-                ev.value.primary_yaku.join("・")
+                ev.value.expected_han,
+                waits_str,
+                yaku_str,
             );
         }
 
-        // 6. 要因分析と意思決定理由 (Rationale)
+        // 6. 意思決定理由 (Rationale)
         let rationale = Explainer::generate_rationale(&evaluations);
-        println!("\n📊 【意思決定モデルの要因分析 (なぜ最善なのか)】");
+        println!("\n📖 【なぜその打牌なのか (AIの判断根拠)】");
         println!("  {rationale}");
-        println!("{}", "-".repeat(80));
+        println!("{}", "=".repeat(80));
 
+        // 7. ユーザーの打牌選択
         let best_discard_tile = evaluations[0].discard_tile;
-
-        // 7. ユーザーの打牌入力
         let chosen_index = loop {
             print!(
-                "打牌を選択してください (1〜14, または 'auto' [推奨: {}], 'q' で終了): ",
+                "何を切りますか？ (1〜14, 牌名, Enter/autoでAI最善[{}], q:終了): ",
                 best_discard_tile.as_str()
             );
             io::stdout().flush().unwrap();
@@ -146,8 +154,13 @@ fn main() {
             let input = input.trim();
 
             if input.eq_ignore_ascii_case("q") {
-                println!("対局を終了します。");
-                return;
+                println!("対局を中断します。");
+                break 'game;
+            }
+
+            if is_agari && (input.eq_ignore_ascii_case("tsumo") || input == "ツモ") {
+                println!("\n🎉 【ツモ和了】見事なアガリです！おめでとうございます！");
+                break 'game;
             }
 
             if input.is_empty() || input.eq_ignore_ascii_case("auto") {
@@ -184,6 +197,7 @@ fn main() {
         // 打牌実行
         if let Ok(discarded) = user_hand.discard(chosen_index) {
             println!(">> [{}] を打牌しました。", discarded.as_str());
+            tracker.record_decision(turn_count, discarded, &evaluations);
         }
 
         turn_count += 1;
@@ -192,4 +206,8 @@ fn main() {
             wall.draw();
         }
     }
+
+    // 局後学習振り返りレポート表示
+    let report = tracker.generate_report();
+    println!("{}", tracker.format_report(&report));
 }

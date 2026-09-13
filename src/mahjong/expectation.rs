@@ -42,16 +42,16 @@ pub struct CandidateEvaluation {
 
 /// 局の分析コンテキスト
 #[derive(Debug, Clone, Copy)]
-pub struct AnalysisContext {
-    pub turn_number: usize,                   // 現在の巡目 (1..=18)
-    pub remaining_wall_tiles: usize,          // 山の残り枚数 (目安: 70 - 巡目*4)
-    pub seat_wind: Option<TileName>,          // 自風
-    pub round_wind: Option<TileName>,         // 場風
-    pub dora_indicators: &'static [TileName], // ドラ表示牌
-    pub is_dealer: bool,                      // 親かどうか
+pub struct AnalysisContext<'a> {
+    pub turn_number: usize,              // 現在の巡目 (1..=18)
+    pub remaining_wall_tiles: usize,     // 山の残り枚数 (目安: 70 - 巡目*4)
+    pub seat_wind: Option<TileName>,     // 自風
+    pub round_wind: Option<TileName>,    // 場風
+    pub dora_indicators: &'a [TileName], // ドラ表示牌
+    pub is_dealer: bool,                 // 親かどうか
 }
 
-impl Default for AnalysisContext {
+impl Default for AnalysisContext<'static> {
     fn default() -> Self {
         Self {
             turn_number: 6,
@@ -68,7 +68,7 @@ impl Default for AnalysisContext {
 pub fn evaluate_hand_discards(
     hand: &Hand,
     visible_counts: Option<&[u8; 35]>,
-    ctx: &AnalysisContext,
+    ctx: &AnalysisContext<'_>,
 ) -> Vec<CandidateEvaluation> {
     let open_melds_count = hand.open_melds.len();
     let mut working = hand.counts;
@@ -185,7 +185,7 @@ fn estimate_hand_value(
     shanten: i8,
     accepted_tiles: &[TileName],
     open_melds: &[crate::hand::Meld],
-    ctx: &AnalysisContext,
+    ctx: &AnalysisContext<'_>,
 ) -> ValueMetric {
     let is_closed = open_melds.is_empty();
 

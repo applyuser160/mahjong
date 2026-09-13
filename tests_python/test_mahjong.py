@@ -133,3 +133,35 @@ def test_shanten_bindings():
     hand_res = hand.shanten()
     assert hand_res.min_shanten == 0
     assert hand_res.normal == 0
+
+
+def test_expectation_and_review_tracker():
+    tiles = [
+        mahjong.TileName.OneM,
+        mahjong.TileName.TwoM,
+        mahjong.TileName.ThreeM,
+        mahjong.TileName.FourP,
+        mahjong.TileName.FiveP,
+        mahjong.TileName.SixP,
+        mahjong.TileName.SevenS,
+        mahjong.TileName.EightS,
+        mahjong.TileName.NineS,
+        mahjong.TileName.East,
+        mahjong.TileName.East,
+        mahjong.TileName.TwoS,
+        mahjong.TileName.ThreeS,
+        mahjong.TileName.NineS,
+    ]
+    evals = mahjong.evaluate_hand_discards(tiles)
+    assert len(evals) > 0
+    best = evals[0]
+    assert best.discard_tile == mahjong.TileName.NineS
+    assert best.shanten_after == 0
+    assert best.ev > 2000.0
+
+    tracker = mahjong.ReviewTracker()
+    tracker.record_decision(1, best.discard_tile, evals)
+    assert tracker.get_accuracy_rate() == 1.0
+    assert tracker.get_total_ev_loss() == 0.0
+    report_text = tracker.format_report()
+    assert "局後学習振り返りレポート" in report_text

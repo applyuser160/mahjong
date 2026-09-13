@@ -267,3 +267,38 @@ def py_calculate_shanten(
 ) -> PyShantenResult:
     """Calculates the shanten number from a list of tiles and open melds count."""
     ...
+
+class PyCandidateEvaluation:
+    """Evaluation of a discard candidate tile."""
+
+    discard_tile: PyTileName
+    shanten_after: int
+    ev: float
+    remaining_count: int
+    expected_score: float
+    expected_han: float
+    risk_score: float
+    is_safe: bool
+    primary_yaku: list[str]
+
+def py_evaluate_hand_discards(
+    tiles: list[PyTileName],
+    is_dealer: bool = True,
+    dora_indicators: Optional[list[PyTileName]] = None,
+) -> list[PyCandidateEvaluation]:
+    """Evaluates all possible discards from the hand based on EV, acceptance, and value."""
+    ...
+
+class PyReviewTracker:
+    """Tracks discard decisions and generates post-match review reports."""
+
+    def __init__(self) -> None: ...
+    def record_decision(
+        self,
+        turn: int,
+        chosen_tile: PyTileName,
+        candidates: list[PyCandidateEvaluation],
+    ) -> None: ...
+    def get_accuracy_rate(self) -> float: ...
+    def get_total_ev_loss(self) -> float: ...
+    def format_report(self) -> str: ...

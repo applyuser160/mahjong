@@ -870,3 +870,157 @@ pub fn py_calculate_shanten(tiles: Vec<PyTileName>, open_melds_count: usize) -> 
     }
     calculate_shanten_from_counts(&counts, open_melds_count).into()
 }
+
+// ==========================================
+// 7. Expectation & Review wrappers
+// ==========================================
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyCandidateEvaluation {
+    #[pyo3(get)]
+    pub discard_tile: PyTileName,
+    #[pyo3(get)]
+    pub shanten_after: i8,
+    #[pyo3(get)]
+    pub ev: f64,
+    #[pyo3(get)]
+    pub remaining_count: usize,
+    #[pyo3(get)]
+    pub expected_score: f64,
+    #[pyo3(get)]
+    pub expected_han: f64,
+    #[pyo3(get)]
+    pub risk_score: f64,
+    #[pyo3(get)]
+    pub is_safe: bool,
+    #[pyo3(get)]
+    pub primary_yaku: Vec<String>,
+}
+
+#[pymethods]
+impl PyCandidateEvaluation {
+    fn __repr__(&self) -> String {
+        format!(
+            "CandidateEvaluation(discard={:?}, shanten={}, ev={:.0}, rem={}, score={:.0})",
+            self.discard_tile,
+            self.shanten_after,
+            self.ev,
+            self.remaining_count,
+            self.expected_score
+        )
+    }
+}
+
+impl From<crate::expectation::CandidateEvaluation> for PyCandidateEvaluation {
+    fn from(c: crate::expectation::CandidateEvaluation) -> Self {
+        Self {
+            discard_tile: c.discard_tile.into(),
+            shanten_after: c.shanten_after,
+            ev: c.ev,
+            remaining_count: c.speed.remaining_count,
+            expected_score: c.value.expected_score,
+            expected_han: c.value.expected_han,
+            risk_score: c.safety.risk_score,
+            is_safe: c.safety.is_safe,
+            primary_yaku: c.value.primary_yaku.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
+    fn from(c: &PyCandidateEvaluation) -> Self {
+        Self {
+            discard_tile: c.discard_tile.into(),
+            shanten_after: c.shanten_after,
+            ev: c.ev,
+            speed: crate::expectation::SpeedMetric {
+                accepted_tiles: Vec::new(),
+                remaining_count: c.remaining_count,
+                win_probability: 0.5,
+            },
+            value: crate::expectation::ValueMetric {
+                expected_score: c.expected_score,
+                expected_han: c.expected_han,
+                primary_yaku: Vec::new(),
+                has_high_value_potential: false,
+            },
+            safety: crate::expectation::SafetyMetric {
+                risk_score: c.risk_score,
+                is_safe: c.is_safe,
+            },
+        }
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (tiles, is_dealer=true, dora_indicators=None))]
+pub fn py_evaluate_hand_discards(
+    tiles: Vec<PyTileName>,
+    is_dealer: bool,
+    dora_indicators: Option<Vec<PyTileName>>,
+) -> Vec<PyCandidateEvaluation> {
+    let mut hand = Hand::new();
+    for t in tiles {
+        hand.push(t.into());
+    }
+
+    let dora_vec: Vec<TileName> = dora_indicators
+        .unwrap_or_else(|| vec![PyTileName::OneM])
+        .into_iter()
+        .map(|t| t.into())
+        .collect();
+
+    let ctx = crate::expectation::AnalysisContext {
+        turn_number: 6,
+        remaining_wall_tiles: 50,
+        seat_wind: Some(TileName::East),
+        round_wind: Some(TileName::East),
+        dora_indicators: &dora_vec,
+        is_dealer,
+    };
+
+    let evs = crate::expectation::evaluate_hand_discards(&hand, None, &ctx);
+    evs.into_iter().map(|e| e.into()).collect()
+}
+
+#[pyclass]
+#[derive(Default, Clone)]
+pub struct PyReviewTracker {
+    inner: crate::review::ReviewTracker,
+}
+
+#[pymethods]
+impl PyReviewTracker {
+    #[new]
+    pub fn new() -> Self {
+        Self {
+            inner: crate::review::ReviewTracker::new(),
+        }
+    }
+
+    pub fn record_decision(
+        &mut self,
+        turn: usize,
+        chosen_tile: PyTileName,
+        candidates: Vec<PyCandidateEvaluation>,
+    ) {
+        let rs_cands: Vec<crate::expectation::CandidateEvaluation> =
+            candidates.iter().map(|c| c.into()).collect();
+        self.inner
+            .record_decision(turn, chosen_tile.into(), &rs_cands);
+    }
+
+    pub fn get_accuracy_rate(&self) -> f64 {
+        self.inner.generate_report().accuracy_rate
+    }
+
+    pub fn get_total_ev_loss(&self) -> f64 {
+        self.inner.generate_report().total_ev_loss
+    }
+
+    pub fn format_report(&self) -> String {
+        let report = self.inner.generate_report();
+        self.inner.format_report(&report)
+    }
+}
