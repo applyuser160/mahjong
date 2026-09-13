@@ -16,11 +16,40 @@ pub mod yaku;
 #[path = "mahjong/river.rs"]
 pub mod river;
 
+#[path = "mahjong/shanten.rs"]
+pub mod shanten;
+
+#[path = "mahjong/acceptance.rs"]
+pub mod acceptance;
+
+#[path = "mahjong/dora.rs"]
+pub mod dora;
+
+#[path = "mahjong/score.rs"]
+pub mod score;
+
+#[path = "mahjong/expectation.rs"]
+pub mod expectation;
+
+#[path = "mahjong/explanation.rs"]
+pub mod explanation;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+pub use acceptance::{
+    analyze_all_discards, calculate_acceptance, AcceptanceResult, DiscardAnalysis, WaitTile,
+};
+pub use dora::{count_dora, indicator_to_dora};
+pub use expectation::{
+    evaluate_hand_discards, AnalysisContext, CandidateEvaluation, SafetyMetric, SpeedMetric,
+    ValueMetric,
+};
+pub use explanation::Explainer;
 pub use round::{Round, PLAYER_NUMBER};
+pub use score::{calculate_fu, calculate_score, PlayerSeat, ScoreResult};
+pub use shanten::{calculate_shanten, calculate_shanten_from_counts, ShantenResult};
 pub use tile::{
     Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY,
 };
@@ -64,7 +93,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_api::PyYakuId>()?;
     m.add_class::<python_api::PyYaku>()?;
     m.add_class::<python_api::PyWinContext>()?;
+    m.add_class::<python_api::PyShantenResult>()?;
     m.add_function(wrap_pyfunction!(python_api::get_all_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_judge_yaku, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_calculate_shanten, m)?)?;
     Ok(())
 }

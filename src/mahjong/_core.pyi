@@ -101,6 +101,9 @@ class PyHand:
     def call_meld(self, meld: PyMeld) -> None:
         """Calls a meld, updating the hand. Can raise ValueError."""
         ...
+    def shanten(self) -> 'PyShantenResult':
+        """Calculates the shanten number of the hand."""
+        ...
 
 class PyRiver:
     """Represents a player's discard river."""
@@ -236,4 +239,18 @@ def py_judge_yaku(
     context: PyWinContext
 ) -> list[PyYakuId]:
     """Judges the Yaku present in the given hand and context."""
+    ...
+
+class PyShantenResult:
+    """Represents the shanten (minimum steps to ready hand) calculation result."""
+    min_shanten: int
+    normal: int
+    chitoitsu: int
+    kokushi: int
+
+def py_calculate_shanten(
+    tiles: list[PyTileName],
+    open_melds_count: int = 0
+) -> PyShantenResult:
+    """Calculates the shanten number from a list of tiles and open melds count."""
     ...

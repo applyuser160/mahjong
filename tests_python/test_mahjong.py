@@ -87,3 +87,25 @@ def test_judge_yaku():
     assert mahjong.YakuId.MenzenTsumo in yaku_ids
     assert mahjong.YakuId.Tanyao in yaku_ids
     assert mahjong.YakuId.Pinfu in yaku_ids # All sequences + non-yakuhai pair + 2-sided wait
+
+def test_shanten_bindings():
+    # 1m 2m 3m 4p 5p 6p 7s 8s 9s East East East White White -> 和了形 (-1向聴)
+    tiles = [
+        mahjong.TileName.OneM, mahjong.TileName.TwoM, mahjong.TileName.ThreeM,
+        mahjong.TileName.FourP, mahjong.TileName.FiveP, mahjong.TileName.SixP,
+        mahjong.TileName.SevenS, mahjong.TileName.EightS, mahjong.TileName.NineS,
+        mahjong.TileName.East, mahjong.TileName.East, mahjong.TileName.East,
+        mahjong.TileName.White, mahjong.TileName.White,
+    ]
+    res = mahjong.calculate_shanten(tiles)
+    assert res.min_shanten == -1
+    assert res.normal == -1
+
+    # Hand instance method test
+    hand = mahjong.Hand()
+    for t in tiles[:13]: # 白単騎テンパイ (0向聴)
+        hand.push(t)
+    hand_res = hand.shanten()
+    assert hand_res.min_shanten == 0
+    assert hand_res.normal == 0
+
