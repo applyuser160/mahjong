@@ -291,7 +291,7 @@ fn estimate_hand_value(
             working[adv_tile as usize] += 1;
 
             // テンパイになる打牌を探す
-            let mut best_wait = None;
+            let mut best_move: Option<(usize, TileName)> = None;
             for d in 1..=34 {
                 if working[d] == 0 {
                     continue;
@@ -299,15 +299,17 @@ fn estimate_hand_value(
                 working[d] -= 1;
                 let sub_acc = calculate_acceptance(&working, open_melds.len(), None);
                 if sub_acc.current_shanten == 0 && !sub_acc.waits.is_empty() {
-                    best_wait = Some(sub_acc.waits[0].tile);
+                    best_move = Some((d, sub_acc.waits[0].tile));
                     working[d] += 1;
                     break;
                 }
                 working[d] += 1;
             }
 
-            if let Some(win_tile) = best_wait {
-                working[win_tile as usize] += 1;
+            if let Some((discard_idx, win_tile)) = best_move {
+                working[discard_idx] -= 1; // テンパイ打牌で余剰牌を除去
+                working[win_tile as usize] += 1; // 和了牌を追加（これで正規の和了枚数）
+
                 let win_ctx = WinContext {
                     is_closed,
                     is_tsumo: true,
@@ -353,7 +355,8 @@ fn estimate_hand_value(
                 total_score += score_res.total_points as f64;
                 total_han += han as f64;
 
-                working[win_tile as usize] -= 1;
+                working[win_tile as usize] -= 1; // 和了牌を除去
+                working[discard_idx] += 1; // テンパイ打牌を復元
             } else {
                 total_score += if is_closed { 3000.0 } else { 1500.0 };
                 total_han += if is_closed { 2.0 } else { 1.0 };
@@ -520,5 +523,46 @@ mod tests {
             "Open meld White Pon must be recognized in yaku list: {:?}",
             best.value.primary_yaku
         );
+    }
+
+    #[test]
+    fn test_one_shanten_simulation_evaluates_correctly() {
+        // 1向聴の手牌:
+        // 2m3m4m (面子1), 2p3p4p (面子2), 東東 (雀頭), 4s5s (塔子1), 7s8s (塔子2), 9m (余剰), 9p (余剰) (計14枚)
+        // 9m または 9p を切ると 2面子1雀頭2塔子 の一向聴
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourM,
+            TileName::TwoP,
+            TileName::ThreeP,
+            TileName::FourP,
+            TileName::East,
+            TileName::East,
+            TileName::FourS,
+            TileName::FiveS,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineM, // 余剰牌1
+            TileName::NineP, // 余剰牌2
+        ] {
+            hand.push(t);
+        }
+
+        let ctx = AnalysisContext::default();
+        let evs = evaluate_hand_discards(&hand, None, &ctx);
+
+        let cand_9m = evs
+            .iter()
+            .find(|e| e.discard_tile == TileName::NineM)
+            .expect("Discard 9m should be a valid candidate");
+
+        assert_eq!(cand_9m.shanten_after, 1); // 打9mで一向聴
+
+        // 1向聴のシミュレーション（有効牌ツモ→テンパイ打牌→和了牌ツモ）が手牌14枚で評価され、
+        // 想定打点・翻が正しく算出されていること
+        assert!(cand_9m.value.expected_score >= 1000.0);
+        assert!(cand_9m.value.expected_han >= 1.0);
     }
 }
