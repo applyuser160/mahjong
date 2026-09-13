@@ -1,5 +1,5 @@
-import pytest
 import mahjong
+
 
 def test_tile_bindings():
     # Test PyTileName Enum and its methods
@@ -13,6 +13,7 @@ def test_tile_bindings():
     assert tile.name == mahjong.TileName.East
     assert tile.tile_type == mahjong.TileType.Winds
     assert tile.category == mahjong.TileCategory.Honors
+
 
 def test_hand_melds():
     hand = mahjong.Hand()
@@ -38,6 +39,7 @@ def test_hand_melds():
     assert len(hand.open_melds) == 1
     assert hand.open_melds[0].kind == "pon"
 
+
 def test_round_wall():
     wall = mahjong.Wall()
     wall.shuffle(42)
@@ -59,24 +61,35 @@ def test_round_wall():
     assert len(round_obj.hand(0)) == 13
     assert round_obj.turn() == 1
 
+
 def test_judge_yaku():
     # Tsumo, Closed, Seat East, Round East
     ctx = mahjong.WinContext(
         is_closed=True,
         is_tsumo=True,
         seat_wind=mahjong.TileName.East,
-        round_wind=mahjong.TileName.East, win_tile=mahjong.TileName.FourM,
+        round_wind=mahjong.TileName.East,
+        win_tile=mahjong.TileName.FourM,
     )
 
     # Chinitsu + Tanyao (1s 1s 1s 2s 3s 4s 5s 6s 7s 8s 9s 9s 9s) -> Chinitsu, Chuuren Poutou...
     # Let's just do a simple Riichi Menzen Tsumo Tanyao
     # 2m 3m 4m, 3p 4p 5p, 4s 5s 6s, 6s 7s 8s, 2p 2p
     tiles = [
-        mahjong.TileName.TwoM, mahjong.TileName.ThreeM, mahjong.TileName.FourM,
-        mahjong.TileName.ThreeP, mahjong.TileName.FourP, mahjong.TileName.FiveP,
-        mahjong.TileName.FourS, mahjong.TileName.FiveS, mahjong.TileName.SixS,
-        mahjong.TileName.SixS, mahjong.TileName.SevenS, mahjong.TileName.EightS,
-        mahjong.TileName.TwoP, mahjong.TileName.TwoP,
+        mahjong.TileName.TwoM,
+        mahjong.TileName.ThreeM,
+        mahjong.TileName.FourM,
+        mahjong.TileName.ThreeP,
+        mahjong.TileName.FourP,
+        mahjong.TileName.FiveP,
+        mahjong.TileName.FourS,
+        mahjong.TileName.FiveS,
+        mahjong.TileName.SixS,
+        mahjong.TileName.SixS,
+        mahjong.TileName.SevenS,
+        mahjong.TileName.EightS,
+        mahjong.TileName.TwoP,
+        mahjong.TileName.TwoP,
     ]
     melds = []
 
@@ -86,16 +99,28 @@ def test_judge_yaku():
     assert mahjong.YakuId.Riichi in yaku_ids
     assert mahjong.YakuId.MenzenTsumo in yaku_ids
     assert mahjong.YakuId.Tanyao in yaku_ids
-    assert mahjong.YakuId.Pinfu in yaku_ids # All sequences + non-yakuhai pair + 2-sided wait
+    assert (
+        mahjong.YakuId.Pinfu in yaku_ids
+    )  # All sequences + non-yakuhai pair + 2-sided wait
+
 
 def test_shanten_bindings():
     # 1m 2m 3m 4p 5p 6p 7s 8s 9s East East East White White -> 和了形 (-1向聴)
     tiles = [
-        mahjong.TileName.OneM, mahjong.TileName.TwoM, mahjong.TileName.ThreeM,
-        mahjong.TileName.FourP, mahjong.TileName.FiveP, mahjong.TileName.SixP,
-        mahjong.TileName.SevenS, mahjong.TileName.EightS, mahjong.TileName.NineS,
-        mahjong.TileName.East, mahjong.TileName.East, mahjong.TileName.East,
-        mahjong.TileName.White, mahjong.TileName.White,
+        mahjong.TileName.OneM,
+        mahjong.TileName.TwoM,
+        mahjong.TileName.ThreeM,
+        mahjong.TileName.FourP,
+        mahjong.TileName.FiveP,
+        mahjong.TileName.SixP,
+        mahjong.TileName.SevenS,
+        mahjong.TileName.EightS,
+        mahjong.TileName.NineS,
+        mahjong.TileName.East,
+        mahjong.TileName.East,
+        mahjong.TileName.East,
+        mahjong.TileName.White,
+        mahjong.TileName.White,
     ]
     res = mahjong.calculate_shanten(tiles)
     assert res.min_shanten == -1
@@ -103,9 +128,8 @@ def test_shanten_bindings():
 
     # Hand instance method test
     hand = mahjong.Hand()
-    for t in tiles[:13]: # 白単騎テンパイ (0向聴)
+    for t in tiles[:13]:  # 白単騎テンパイ (0向聴)
         hand.push(t)
     hand_res = hand.shanten()
     assert hand_res.min_shanten == 0
     assert hand_res.normal == 0
-

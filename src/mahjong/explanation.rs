@@ -26,7 +26,8 @@ impl Explainer {
         let second_tile = second.discard_tile.as_str();
 
         let shanten_diff = second.shanten_after - best.shanten_after;
-        let count_diff = best.speed.remaining_count as isize - second.speed.remaining_count as isize;
+        let count_diff =
+            best.speed.remaining_count as isize - second.speed.remaining_count as isize;
         let score_diff = best.value.expected_score - second.value.expected_score;
 
         let best_yaku_str = if !best.value.primary_yaku.is_empty() {

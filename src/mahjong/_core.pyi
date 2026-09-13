@@ -3,6 +3,7 @@ from typing import Optional
 
 class PyTileType(Enum):
     """Represents the type of a Mahjong tile."""
+
     None_ = 0
     Characters = 1
     Circles = 2
@@ -12,12 +13,14 @@ class PyTileType(Enum):
 
 class PyTileCategory(Enum):
     """Represents the category of a Mahjong tile."""
+
     None_ = 0
     Simples = 1
     Honors = 2
 
 class PyTileName(Enum):
     """Represents the exact name of a Mahjong tile."""
+
     None_ = 0
     OneM = 1
     TwoM = 2
@@ -62,6 +65,7 @@ class PyTileName(Enum):
 
 class PyTile:
     """Represents a Mahjong tile with name, type, and category."""
+
     def __init__(self, name: PyTileName) -> None: ...
     @property
     def name(self) -> PyTileName: ...
@@ -72,16 +76,17 @@ class PyTile:
 
 class PyMeld:
     """Represents a Mahjong meld (Chii, Pon, Kan)."""
+
     @staticmethod
-    def chii(called: PyTileName, consumed: list[PyTileName]) -> 'PyMeld': ...
+    def chii(called: PyTileName, consumed: list[PyTileName]) -> "PyMeld": ...
     @staticmethod
-    def pon(tile: PyTileName) -> 'PyMeld': ...
+    def pon(tile: PyTileName) -> "PyMeld": ...
     @staticmethod
-    def daiminkan(tile: PyTileName) -> 'PyMeld': ...
+    def daiminkan(tile: PyTileName) -> "PyMeld": ...
     @staticmethod
-    def ankan(tile: PyTileName) -> 'PyMeld': ...
+    def ankan(tile: PyTileName) -> "PyMeld": ...
     @staticmethod
-    def kakan(tile: PyTileName) -> 'PyMeld': ...
+    def kakan(tile: PyTileName) -> "PyMeld": ...
     @property
     def kind(self) -> str: ...
     @property
@@ -89,6 +94,7 @@ class PyMeld:
 
 class PyHand:
     """Represents a player's hand."""
+
     def __init__(self) -> None: ...
     @property
     def tiles(self) -> list[PyTileName]: ...
@@ -98,21 +104,25 @@ class PyHand:
     def discard(self, index: int) -> PyTileName:
         """Discards a tile by index. Can raise ValueError."""
         ...
+
     def call_meld(self, meld: PyMeld) -> None:
         """Calls a meld, updating the hand. Can raise ValueError."""
         ...
-    def shanten(self) -> 'PyShantenResult':
+
+    def shanten(self) -> "PyShantenResult":
         """Calculates the shanten number of the hand."""
         ...
 
 class PyRiver:
     """Represents a player's discard river."""
+
     def __init__(self) -> None: ...
     @property
     def tiles(self) -> list[PyTileName]: ...
 
 class PyWall:
     """Represents the Mahjong wall."""
+
     def __init__(self) -> None: ...
     def shuffle(self, seed: int) -> None: ...
     def draw(self) -> Optional[PyTileName]: ...
@@ -121,6 +131,7 @@ class PyWall:
 
 class PyRound:
     """Represents a round of Mahjong."""
+
     def __init__(self, wall: PyWall) -> None: ...
     def turn(self) -> int: ...
     def hand(self, index: int) -> list[PyTileName]: ...
@@ -129,12 +140,14 @@ class PyRound:
     def discard_tile(self, index: int) -> PyTileName:
         """Discards a tile for the current turn. Can raise ValueError."""
         ...
+
     def play_meld(self, player_index: int, meld: PyMeld) -> None:
         """Plays a meld. Can raise ValueError."""
         ...
 
 class PyYakuId(Enum):
     """Enum representing all possible Yaku IDs."""
+
     Riichi = 0
     MenzenTsumo = 1
     Tanyao = 2
@@ -179,6 +192,7 @@ class PyYakuId(Enum):
 
 class PyYaku:
     """Represents a Yaku with its properties."""
+
     @property
     def id(self) -> PyYakuId: ...
     @property
@@ -198,6 +212,7 @@ def get_all_yaku() -> list[PyYaku]:
 
 class PyWinContext:
     """Context required to judge Yaku."""
+
     is_closed: bool
     is_tsumo: bool
     seat_wind: Optional[PyTileName]
@@ -234,23 +249,21 @@ class PyWinContext:
     ) -> None: ...
 
 def py_judge_yaku(
-    tiles: list[PyTileName],
-    melds: list[PyMeld],
-    context: PyWinContext
+    tiles: list[PyTileName], melds: list[PyMeld], context: PyWinContext
 ) -> list[PyYakuId]:
     """Judges the Yaku present in the given hand and context."""
     ...
 
 class PyShantenResult:
     """Represents the shanten (minimum steps to ready hand) calculation result."""
+
     min_shanten: int
     normal: int
     chitoitsu: int
     kokushi: int
 
 def py_calculate_shanten(
-    tiles: list[PyTileName],
-    open_melds_count: int = 0
+    tiles: list[PyTileName], open_melds_count: int = 0
 ) -> PyShantenResult:
     """Calculates the shanten number from a list of tiles and open melds count."""
     ...

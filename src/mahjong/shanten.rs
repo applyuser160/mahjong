@@ -2,11 +2,11 @@ use crate::hand::Hand;
 
 /// 13種の公九牌のインデックス一覧（1m, 9m, 1p, 9p, 1s, 9s, 東, 南, 西, 北, 白, 発, 中）
 pub const TERMINAL_AND_HONOR_INDICES: [usize; 13] = [
-    1, 9,   // 1m, 9m
+    1, 9, // 1m, 9m
     10, 18, // 1p, 9p
     19, 27, // 1s, 9s
     28, 29, 30, 31, // 東, 南, 西, 北
-    32, 33, 34,     // 白, 発, 中
+    32, 33, 34, // 白, 発, 中
 ];
 
 /// 手牌の向聴数（シャンテン数）の内訳
@@ -60,8 +60,7 @@ pub fn calculate_chitoitsu_shanten(counts: &[u8; 35]) -> i8 {
     let mut pairs = 0;
     let mut kinds = 0;
 
-    for i in 1..=34 {
-        let c = counts[i];
+    for &c in &counts[1..=34] {
         if c >= 2 {
             pairs += 1;
             kinds += 1;
@@ -216,21 +215,15 @@ fn search_normal(
 }
 
 /// 面子数・搭子数・雀頭の有無からシャンテン数を評価
-fn evaluate_normal_shanten(
-    has_head: bool,
-    melds: usize,
-    taatsu: usize,
-    target_melds: usize,
-) -> i8 {
+fn evaluate_normal_shanten(has_head: bool, melds: usize, taatsu: usize, target_melds: usize) -> i8 {
     // 面子と搭子の合計が目標面子数を超えないよう搭子を制限
     let max_taatsu = target_melds.saturating_sub(melds);
     let valid_taatsu = taatsu.min(max_taatsu);
 
     // 基本向聴数: (目標面子数 * 2) - (面子数 * 2) - 有効搭子数 - (雀頭があれば1)
     let base = (target_melds as i8) * 2;
-    let shanten = base - (melds as i8) * 2 - (valid_taatsu as i8) - if has_head { 1 } else { 0 };
 
-    shanten
+    base - (melds as i8) * 2 - (valid_taatsu as i8) - if has_head { 1 } else { 0 }
 }
 
 #[cfg(test)]
@@ -401,7 +394,8 @@ mod tests {
             hand.push(t);
         }
         // 1面子副露
-        hand.open_melds.push(crate::hand::Meld::Pon(TileName::White));
+        hand.open_melds
+            .push(crate::hand::Meld::Pon(TileName::White));
 
         let res = calculate_shanten(&hand);
         assert_eq!(res.normal, 0); // テンパイ (7s-8s の両面待ち)

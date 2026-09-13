@@ -100,6 +100,16 @@ pub fn analyze_all_discards(
     let open_melds_count = hand.open_melds.len();
     let mut results = Vec::new();
 
+    // 候補評価では、打牌前の14枚の手牌（および外部指定の可視牌）をすべて可視牌として含める
+    let mut base_visible = [0u8; 35];
+    if let Some(v) = visible_counts {
+        for i in 1..=34 {
+            base_visible[i] = v[i].max(hand.counts[i]);
+        }
+    } else {
+        base_visible = hand.counts;
+    }
+
     let mut working = hand.counts;
 
     // 手牌に含まれるユニークな牌を走査
@@ -111,7 +121,8 @@ pub fn analyze_all_discards(
         let discard_tile = TileName::from_usize(i);
         working[i] -= 1;
 
-        let acceptance = calculate_acceptance(&working, open_melds_count, visible_counts);
+        // 切った牌を含む base_visible を可視牌として渡すことで、切った牌の残り枚数も正しく減算される
+        let acceptance = calculate_acceptance(&working, open_melds_count, Some(&base_visible));
         let shanten_after = acceptance.current_shanten;
 
         results.push(DiscardAnalysis {
@@ -130,8 +141,16 @@ pub fn analyze_all_discards(
     results.sort_by(|a, b| {
         a.shanten_after
             .cmp(&b.shanten_after)
-            .then_with(|| b.acceptance.total_remaining.cmp(&a.acceptance.total_remaining))
-            .then_with(|| b.acceptance.tile_types_count.cmp(&a.acceptance.tile_types_count))
+            .then_with(|| {
+                b.acceptance
+                    .total_remaining
+                    .cmp(&a.acceptance.total_remaining)
+            })
+            .then_with(|| {
+                b.acceptance
+                    .tile_types_count
+                    .cmp(&a.acceptance.tile_types_count)
+            })
     });
 
     results
@@ -236,5 +255,52 @@ mod tests {
         assert_eq!(best.discard_tile, TileName::NineP);
         assert_eq!(best.shanten_after, 0);
         assert_eq!(best.acceptance.total_remaining, 8);
+    }
+
+    #[test]
+    fn test_discarded_tile_included_in_visible_counts() {
+        // 2m2m3m4m (4枚) + 4p5p6p + 7s8s9s + 東東東 (13枚) + 1s (ツモ)
+        // ここで 2m を切ると、手牌は 2m 3m 4m で雀頭なし、または 3m4m 待ち (2m, 5m)
+        // 手牌に元々2枚あった 2m のうち 1枚を切った場合、
+        // 切った 2m (1枚) + 残った手牌の 2m (1枚) = 計2枚 が可視なので、残り 2m は 4 - 2 = 2枚になるべき！
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::TwoM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::East,
+            TileName::East,
+            TileName::East,
+            TileName::OneS,
+        ] {
+            hand.push(t);
+        }
+
+        let analyses = analyze_all_discards(&hand, None);
+        // 2m を切った分析結果を探す
+        let analysis_2m = analyses
+            .iter()
+            .find(|a| a.discard_tile == TileName::TwoM)
+            .expect("Should contain 2m discard analysis");
+
+        // もし 2m が受け入れ牌に含まれているなら、残り枚数は手牌(1枚)+切った牌(1枚)を除いた2枚であること
+        if let Some(wait_2m) = analysis_2m
+            .acceptance
+            .waits
+            .iter()
+            .find(|w| w.tile == TileName::TwoM)
+        {
+            assert_eq!(
+                wait_2m.remaining, 2,
+                "Discarded 2m must be counted in visible tiles (remaining 4 - 2 = 2)"
+            );
+        }
     }
 }

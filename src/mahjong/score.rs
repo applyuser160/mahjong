@@ -20,12 +20,12 @@ pub struct ScoreResult {
 
 /// 100点単位で切り上げます (例: 1120 -> 1200, 1000 -> 1000)
 pub fn ceil100(val: usize) -> usize {
-    ((val + 99) / 100) * 100
+    val.div_ceil(100) * 100
 }
 
 /// 10符単位で切り上げます (例: 22 -> 30, 30 -> 30)
 pub fn ceil10_fu(fu: usize) -> usize {
-    ((fu + 9) / 10) * 10
+    fu.div_ceil(10) * 10
 }
 
 /// 翻数と符から得点を算出します。
@@ -49,12 +49,10 @@ pub fn calculate_score(
             } else {
                 (32000, "役満 (子: 32000点)")
             }
+        } else if is_dealer {
+            (48000, "数え役満 (親: 48000点)")
         } else {
-            if is_dealer {
-                (48000, "数え役満 (親: 48000点)")
-            } else {
-                (32000, "数え役満 (子: 32000点)")
-            }
+            (32000, "数え役満 (子: 32000点)")
         };
 
         let tsumo_payments = if is_tsumo {
@@ -191,27 +189,25 @@ pub fn calculate_score(
                 tsumo_payments: None,
             }
         }
+    } else if is_tsumo {
+        let child_pay = ceil100(basic_points);
+        let dealer_pay = ceil100(basic_points * 2);
+        let total_points = child_pay * 2 + dealer_pay;
+        ScoreResult {
+            han,
+            fu,
+            total_points,
+            points_description: desc,
+            tsumo_payments: Some((child_pay, dealer_pay)),
+        }
     } else {
-        if is_tsumo {
-            let child_pay = ceil100(basic_points);
-            let dealer_pay = ceil100(basic_points * 2);
-            let total_points = child_pay * 2 + dealer_pay;
-            ScoreResult {
-                han,
-                fu,
-                total_points,
-                points_description: desc,
-                tsumo_payments: Some((child_pay, dealer_pay)),
-            }
-        } else {
-            let total_points = ceil100(basic_points * 4);
-            ScoreResult {
-                han,
-                fu,
-                total_points,
-                points_description: desc,
-                tsumo_payments: None,
-            }
+        let total_points = ceil100(basic_points * 4);
+        ScoreResult {
+            han,
+            fu,
+            total_points,
+            points_description: desc,
+            tsumo_payments: None,
         }
     }
 }
@@ -225,6 +221,7 @@ pub fn calculate_score(
 /// `seat_wind`: 自風
 /// `round_wind`: 場風
 /// `wait_is_isolated`: 待ち形が単騎・嵌張・辺張か（両面・双ポンでなければtrue）
+#[allow(clippy::too_many_arguments)]
 pub fn calculate_fu(
     is_pinfu: bool,
     is_chitoitsu: bool,

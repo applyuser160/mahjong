@@ -851,10 +851,7 @@ impl From<ShantenResult> for PyShantenResult {
 
 #[pyfunction]
 #[pyo3(signature = (tiles, open_melds_count=0))]
-pub fn py_calculate_shanten(
-    tiles: Vec<PyTileName>,
-    open_melds_count: usize,
-) -> PyShantenResult {
+pub fn py_calculate_shanten(tiles: Vec<PyTileName>, open_melds_count: usize) -> PyShantenResult {
     let mut counts = [0u8; 35];
     for py_tile in tiles {
         let rs_tile: TileName = py_tile.into();
@@ -865,4 +862,3 @@ pub fn py_calculate_shanten(
     }
     calculate_shanten_from_counts(&counts, open_melds_count).into()
 }
-
