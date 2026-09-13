@@ -34,6 +34,9 @@ pub mod expectation;
 #[path = "mahjong/explanation.rs"]
 pub mod explanation;
 
+#[path = "mahjong/review.rs"]
+pub mod review;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -47,6 +50,9 @@ pub use expectation::{
     ValueMetric,
 };
 pub use explanation::Explainer;
+pub use review::{
+    BlunderRecord, BlunderSeverity, MatchReviewReport, ReviewTracker, TurnDecisionRecord,
+};
 pub use round::{Round, PLAYER_NUMBER};
 pub use score::{calculate_fu, calculate_score, PlayerSeat, ScoreResult};
 pub use shanten::{calculate_shanten, calculate_shanten_from_counts, ShantenResult};
@@ -94,8 +100,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_api::PyYaku>()?;
     m.add_class::<python_api::PyWinContext>()?;
     m.add_class::<python_api::PyShantenResult>()?;
+    m.add_class::<python_api::PyCandidateEvaluation>()?;
+    m.add_class::<python_api::PyReviewTracker>()?;
     m.add_function(wrap_pyfunction!(python_api::get_all_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_judge_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_calculate_shanten, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_evaluate_hand_discards, m)?)?;
     Ok(())
 }

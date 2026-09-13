@@ -15,6 +15,9 @@ from ._core import (
     get_all_yaku,
     py_judge_yaku as judge_yaku,
     py_calculate_shanten as calculate_shanten,
+    PyCandidateEvaluation as CandidateEvaluation,
+    PyReviewTracker as ReviewTracker,
+    py_evaluate_hand_discards as evaluate_hand_discards,
 )
 
 __all__ = [
@@ -31,7 +34,10 @@ __all__ = [
     "Yaku",
     "WinContext",
     "ShantenResult",
+    "CandidateEvaluation",
+    "ReviewTracker",
     "get_all_yaku",
     "judge_yaku",
     "calculate_shanten",
+    "evaluate_hand_discards",
 ]
