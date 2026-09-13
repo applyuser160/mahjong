@@ -971,14 +971,12 @@ pub fn py_evaluate_hand_discards(
         .map(|t| t.into())
         .collect();
 
-    let dora_slice: &'static [TileName] = Box::leak(dora_vec.into_boxed_slice());
-
     let ctx = crate::expectation::AnalysisContext {
         turn_number: 6,
         remaining_wall_tiles: 50,
         seat_wind: Some(TileName::East),
         round_wind: Some(TileName::East),
-        dora_indicators: dora_slice,
+        dora_indicators: &dora_vec,
         is_dealer,
     };
 

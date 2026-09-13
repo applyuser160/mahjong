@@ -88,7 +88,7 @@ fn main() {
             remaining_wall_tiles: remaining_wall,
             seat_wind: Some(TileName::East),
             round_wind: Some(TileName::East),
-            dora_indicators: Box::leak(vec![dora_indicator].into_boxed_slice()),
+            dora_indicators: &[dora_indicator],
             is_dealer: true,
         };
 
