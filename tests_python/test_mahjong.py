@@ -165,3 +165,35 @@ def test_expectation_and_review_tracker():
     assert tracker.get_total_ev_loss() == 0.0
     report_text = tracker.format_report()
     assert "局後学習振り返りレポート" in report_text
+
+
+def test_call_advisor():
+    # 手牌: 123m 45p 789s EE (11枚)
+    tiles = [
+        mahjong.TileName.OneM,
+        mahjong.TileName.TwoM,
+        mahjong.TileName.ThreeM,
+        mahjong.TileName.FourP,
+        mahjong.TileName.FiveP,
+        mahjong.TileName.SevenS,
+        mahjong.TileName.EightS,
+        mahjong.TileName.NineS,
+        mahjong.TileName.East,
+        mahjong.TileName.East,
+    ]
+    # 上家から 6p (チー可能)
+    advice = mahjong.advise_call(tiles, mahjong.TileName.SixP, is_kamicha=True)
+    assert advice is not None
+    assert advice.target_tile == mahjong.TileName.SixP
+    assert len(advice.choices) >= 2  # Chii and Pass
+    assert len(advice.recommendation) > 0
+
+
+def test_drill_problem():
+    problem = mahjong.generate_drill_problem(target_shanten=0)
+    assert problem is not None
+    assert len(problem.tiles) == 14
+    assert len(problem.candidates) > 0
+    assert problem.best_tile is not None
+    assert len(problem.rationale) > 0
+

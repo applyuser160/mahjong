@@ -18,6 +18,11 @@ from ._core import (
     PyCandidateEvaluation as CandidateEvaluation,
     PyReviewTracker as ReviewTracker,
     py_evaluate_hand_discards as evaluate_hand_discards,
+    PyCallChoice as CallChoice,
+    PyCallAdvice as CallAdvice,
+    py_advise_call as advise_call,
+    PyDrillProblem as DrillProblem,
+    py_generate_drill_problem as generate_drill_problem,
 )
 
 __all__ = [
@@ -36,8 +41,14 @@ __all__ = [
     "ShantenResult",
     "CandidateEvaluation",
     "ReviewTracker",
+    "CallChoice",
+    "CallAdvice",
+    "DrillProblem",
     "get_all_yaku",
     "judge_yaku",
     "calculate_shanten",
     "evaluate_hand_discards",
+    "advise_call",
+    "generate_drill_problem",
 ]
+

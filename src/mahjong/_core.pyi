@@ -302,3 +302,48 @@ class PyReviewTracker:
     def get_accuracy_rate(self) -> float: ...
     def get_total_ev_loss(self) -> float: ...
     def format_report(self) -> str: ...
+
+class PyCallChoice:
+    """A call action choice evaluation."""
+
+    action: str
+    post_shanten: int
+    post_acceptance: int
+    estimated_score: float
+    ev: float
+
+class PyCallAdvice:
+    """Comprehensive call advice for a discarded tile."""
+
+    target_tile: PyTileName
+    is_kamicha: bool
+    best_action: str
+    recommendation: str
+    rationale: str
+    choices: list[PyCallChoice]
+
+def py_advise_call(
+    tiles: list[PyTileName],
+    target_tile: PyTileName,
+    is_kamicha: bool = True,
+    dora_indicators: Optional[list[PyTileName]] = None,
+) -> Optional[PyCallAdvice]:
+    """Generates advice on whether to call (chii, pon, kan) or pass."""
+    ...
+
+class PyDrillProblem:
+    """A generated what-to-discard drill problem."""
+
+    tiles: list[PyTileName]
+    dora_indicator: PyTileName
+    turn_number: int
+    best_tile: PyTileName
+    rationale: str
+    candidates: list[PyCandidateEvaluation]
+
+def py_generate_drill_problem(
+    target_shanten: Optional[int] = None,
+) -> Optional[PyDrillProblem]:
+    """Generates a what-to-discard drill problem for the specified shanten level."""
+    ...
+
