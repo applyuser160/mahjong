@@ -120,11 +120,19 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_api::PyCallChoice>()?;
     m.add_class::<python_api::PyCallAdvice>()?;
     m.add_class::<python_api::PyDrillProblem>()?;
+    m.add_class::<python_api::PyRuleConfig>()?;
+    m.add_class::<python_api::PyMatchContext>()?;
+    m.add_class::<python_api::PyWinCondition>()?;
+    m.add_class::<python_api::PyPlacementEvaluation>()?;
+    m.add_class::<python_api::PyTableState>()?;
     m.add_function(wrap_pyfunction!(python_api::get_all_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_judge_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_calculate_shanten, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_evaluate_hand_discards, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_advise_call, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_generate_drill_problem, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_evaluate_placement_discards, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_calculate_orasu_conditions, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_get_ai_hud_data, m)?)?;
     Ok(())
 }

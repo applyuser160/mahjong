@@ -23,6 +23,14 @@ from ._core import (
     py_advise_call as advise_call,
     PyDrillProblem as DrillProblem,
     py_generate_drill_problem as generate_drill_problem,
+    PyRuleConfig as RuleConfig,
+    PyMatchContext as MatchContext,
+    PyWinCondition as WinCondition,
+    PyPlacementEvaluation as PlacementEvaluation,
+    PyTableState as TableState,
+    py_evaluate_placement_discards as evaluate_placement_discards,
+    py_calculate_orasu_conditions as calculate_orasu_conditions,
+    py_get_ai_hud_data as get_ai_hud_data,
 )
 
 __all__ = [
@@ -44,11 +52,19 @@ __all__ = [
     "CallChoice",
     "CallAdvice",
     "DrillProblem",
+    "RuleConfig",
+    "MatchContext",
+    "WinCondition",
+    "PlacementEvaluation",
+    "TableState",
     "get_all_yaku",
     "judge_yaku",
     "calculate_shanten",
     "evaluate_hand_discards",
     "advise_call",
     "generate_drill_problem",
+    "evaluate_placement_discards",
+    "calculate_orasu_conditions",
+    "get_ai_hud_data",
 ]
 

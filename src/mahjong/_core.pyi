@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 class PyTileType(Enum):
     """Represents the type of a Mahjong tile."""
@@ -58,6 +58,7 @@ class PyTileName(Enum):
     White = 34
 
     def as_str(self) -> str: ...
+    def mpsz(self) -> str: ...
     @property
     def tile_type(self) -> PyTileType: ...
     @property
@@ -73,6 +74,9 @@ class PyTile:
     def tile_type(self) -> PyTileType: ...
     @property
     def category(self) -> PyTileCategory: ...
+    def as_str(self) -> str: ...
+    def mpsz(self) -> str: ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 class PyMeld:
     """Represents a Mahjong meld (Chii, Pon, Kan)."""
@@ -91,6 +95,7 @@ class PyMeld:
     def kind(self) -> str: ...
     @property
     def tiles(self) -> list[PyTileName]: ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 class PyHand:
     """Represents a player's hand."""
@@ -112,13 +117,15 @@ class PyHand:
     def shanten(self) -> "PyShantenResult":
         """Calculates the shanten number of the hand."""
         ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 class PyRiver:
-    """Represents a player's discard river."""
+    """Represents a player's river (discard pile)."""
 
     def __init__(self) -> None: ...
     @property
     def tiles(self) -> list[PyTileName]: ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 class PyWall:
     """Represents the Mahjong wall."""
@@ -281,6 +288,8 @@ class PyCandidateEvaluation:
     is_safe: bool
     primary_yaku: list[str]
 
+    def to_dict(self) -> dict[str, Any]: ...
+
 def py_evaluate_hand_discards(
     tiles: list[PyTileName],
     is_dealer: bool = True,
@@ -302,6 +311,10 @@ class PyReviewTracker:
     def get_accuracy_rate(self) -> float: ...
     def get_total_ev_loss(self) -> float: ...
     def format_report(self) -> str: ...
+    def to_dict(self) -> dict[str, Any]: ...
+    def get_blunders_dict(
+        self, threshold: Optional[float] = None
+    ) -> list[dict[str, Any]]: ...
 
 class PyCallChoice:
     """A call action choice evaluation."""
@@ -312,6 +325,8 @@ class PyCallChoice:
     estimated_score: float
     ev: float
 
+    def to_dict(self) -> dict[str, Any]: ...
+
 class PyCallAdvice:
     """Comprehensive call advice for a discarded tile."""
 
@@ -321,6 +336,8 @@ class PyCallAdvice:
     recommendation: str
     rationale: str
     choices: list[PyCallChoice]
+
+    def to_dict(self) -> dict[str, Any]: ...
 
 def py_advise_call(
     tiles: list[PyTileName],
@@ -341,9 +358,152 @@ class PyDrillProblem:
     rationale: str
     candidates: list[PyCandidateEvaluation]
 
+    def to_dict(self) -> dict[str, Any]: ...
+
 def py_generate_drill_problem(
     target_shanten: Optional[int] = None,
 ) -> Optional[PyDrillProblem]:
     """Generates a what-to-discard drill problem for the specified shanten level."""
+    ...
+
+class PyRuleConfig:
+    """Point and placement rule configuration (Uma, Oka)."""
+
+    origin_score: int
+    return_score: int
+    uma: list[int]
+    oka: int
+
+    def __init__(
+        self,
+        origin_score: int = 25000,
+        return_score: int = 30000,
+        uma: Optional[list[int]] = None,
+        oka: int = 0,
+    ) -> None: ...
+    @staticmethod
+    def mleague() -> "PyRuleConfig": ...
+    @staticmethod
+    def general() -> "PyRuleConfig": ...
+    @staticmethod
+    def tenhou_dan() -> "PyRuleConfig": ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class PyMatchContext:
+    """Current match context including player scores, round, and rules."""
+
+    scores: list[int]
+    round_wind: PyTileName
+    round_number: int
+    honba: int
+    riichi_sticks: int
+    dealer_idx: int
+    rule: PyRuleConfig
+
+    def __init__(
+        self,
+        scores: Optional[list[int]] = None,
+        round_wind: Optional[PyTileName] = None,
+        round_number: int = 1,
+        honba: int = 0,
+        riichi_sticks: int = 0,
+        dealer_idx: int = 0,
+        rule: Optional[PyRuleConfig] = None,
+    ) -> None: ...
+    def current_ranks(self) -> list[int]: ...
+    def score_diff(self, p: int, target: int) -> int: ...
+    def is_orasu(self) -> bool: ...
+    def remaining_rounds(self) -> int: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class PyWinCondition:
+    """Final round (orasu) win condition requirement to overturn rank."""
+
+    target_rank: int
+    target_player: int
+    diff: int
+    ron_direct_req: Optional[int]
+    tsumo_req: Optional[int]
+    ron_other_req: Optional[int]
+    summary: str
+
+    def to_dict(self) -> dict[str, Any]: ...
+
+class PyPlacementEvaluation:
+    """Discard candidate evaluation incorporating placement EV and rank odds."""
+
+    discard_tile: PyTileName
+    raw_ev: float
+    placement_ev: float
+    expected_rank: float
+    rank_probabilities: list[float]
+    situational_note: str
+    shanten_after: int
+    remaining_count: int
+    expected_score: float
+    risk_score: float
+    is_safe: bool
+
+    def to_dict(self) -> dict[str, Any]: ...
+
+class PyTableState:
+    """Full table snapshot for graphical UI rendering."""
+
+    round_wind: PyTileName
+    round_number: int
+    honba: int
+    riichi_sticks: int
+    dealer_idx: int
+    current_turn: int
+    dora_indicators: list[PyTileName]
+    remaining_wall_tiles: int
+    scores: list[int]
+    is_riichi: list[bool]
+    hands: list[list[PyTileName]]
+    melds: list[list[PyMeld]]
+    rivers: list[list[PyTileName]]
+
+    def __init__(
+        self,
+        round_wind: PyTileName,
+        round_number: int,
+        honba: int,
+        riichi_sticks: int,
+        dealer_idx: int,
+        current_turn: int,
+        dora_indicators: list[PyTileName],
+        remaining_wall_tiles: int,
+        scores: list[int],
+        is_riichi: list[bool],
+        hands: list[list[PyTileName]],
+        melds: list[list[PyMeld]],
+        rivers: list[list[PyTileName]],
+    ) -> None: ...
+    def to_dict(self, reveal_all: bool = False) -> dict[str, Any]: ...
+
+def py_evaluate_placement_discards(
+    tiles: list[PyTileName],
+    match_context: PyMatchContext,
+    player_idx: int = 0,
+    is_dealer: Optional[bool] = None,
+    dora_indicators: Optional[list[PyTileName]] = None,
+) -> list[PyPlacementEvaluation]:
+    """Evaluates all discards taking placement expectations and rank points into account."""
+    ...
+
+def py_calculate_orasu_conditions(
+    match_context: PyMatchContext, player_idx: int = 0
+) -> list[PyWinCondition]:
+    """Calculates win condition requirements for orasu."""
+    ...
+
+def py_get_ai_hud_data(
+    tiles: list[PyTileName],
+    match_context: PyMatchContext,
+    player_idx: int = 0,
+    is_dealer: Optional[bool] = None,
+    dora_indicators: Optional[list[PyTileName]] = None,
+) -> dict[str, Any]:
+    """Provides a unified dictionary with all HUD cards and AI metrics for UI rendering."""
     ...
 
