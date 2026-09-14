@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use mahjong::call_advisor::{CallAction, CallAdvisor, CallRecommendation};
 use mahjong::dora::indicator_to_dora;
-use mahjong::expectation::{evaluate_hand_discards, AnalysisContext};
+use mahjong::expectation::{evaluate_hand_discards, AnalysisContext, CandidateEvaluation};
 use mahjong::explanation::Explainer;
 use mahjong::hand::{Hand, Meld};
 use mahjong::review::ReviewTracker;
@@ -12,6 +12,9 @@ use mahjong::wall::Wall;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use mahjong::placement_ev::{
+    calculate_orasu_conditions, evaluate_hand_discards_with_placement, MatchContext, RuleConfig,
+};
 use mahjong::yaku::{judge_yaku, WinContext};
 
 const PLAYER_NAMES: [&str; 4] = [
@@ -85,10 +88,11 @@ fn main() {
     println!("🀄 リアルタイム期待値ヒント＆意思決定モデル 4人対局CPU学習モード (副露対応) 🀄");
     println!("================================================================================");
     println!("ルール:");
-    println!("  ・東1局 0本場、あなた（東家/起家）vs CPU 3名");
+    println!("  ・東1局 0本場、あなた（東家/起家）vs CPU 3名 (25,000点持ち / 30,000点返し)");
+    println!("  ・順位点: Mリーグ基準 (+50 / +10 / -10 / -30, オカ+20)");
     println!("  ・他家の打牌に対してリアルタイムにチー・ポンの期待値（EV）を判定・提示");
-    println!("  ・各手番でAIが打牌期待値・受入・打点・放銃リスクをリアルタイム算出");
-    println!("  ・他家のリーチや仕掛けに対する守備・押し引き判断も学習可能");
+    println!("  ・各手番でAIが打牌期待値（素点EV ＆ 順位Pt EV）・受入・打点・放銃リスクをリアルタイム算出");
+    println!("  ・他家のリーチや点差に応じた点況判断・オーラス逆転条件・押し引きを学習可能");
     println!("  ・終局時にあなたの打牌精度スコア・総EV損失・悪手ワースト診断を表示\n");
 
     let mut wall = Wall::new();
@@ -97,6 +101,16 @@ fn main() {
 
     let dora_indicator = wall.tiles()[135];
     let dora_tile = indicator_to_dora(dora_indicator);
+
+    let mut match_ctx = MatchContext {
+        scores: [25000, 25000, 25000, 25000],
+        round_wind: TileName::East,
+        round_number: 1,
+        honba: 0,
+        riichi_sticks: 0,
+        dealer_idx: 0,
+        rule: RuleConfig::mleague(),
+    };
 
     // 4人の手牌と河
     let mut hands: [Hand; 4] = [Hand::new(), Hand::new(), Hand::new(), Hand::new()];
@@ -142,11 +156,37 @@ fn main() {
         // --- A. 自家（プレイヤー）の手番 ---
         if current_turn == 0 {
             let remaining_wall = wall.remaining();
+            let ranks = match_ctx.current_ranks();
             println!("\n{}", "=".repeat(80));
             println!(
                 "【東1局 0本場】 巡目: {}巡目 (親/自家) | 残り山牌: {}枚 | ドラ表示牌: [{}] (ドラ: [{}])",
                 turn_count, remaining_wall, dora_indicator.as_str(), dora_tile.as_str()
             );
+
+            // 点況・スコア状況の表示
+            println!("{}", "-".repeat(80));
+            print!("📊 【点況・スコア状況 (Mリーグ順位点: +50/+10/-10/-30)】: ");
+            for p in 0..4 {
+                let diff = match_ctx.scores[p] - match_ctx.scores[0];
+                let diff_str = if p == 0 {
+                    "".to_string()
+                } else if diff >= 0 {
+                    format!(" (+{}点)", diff)
+                } else {
+                    format!(" ({}点)", diff)
+                };
+                print!(
+                    "{}位: {} ({}点{})  ",
+                    ranks[p], PLAYER_NAMES[p], match_ctx.scores[p], diff_str
+                );
+            }
+            println!();
+
+            // オーラス／点況逆転ガイド
+            let orasu_conds = calculate_orasu_conditions(&match_ctx, 0);
+            if !orasu_conds.is_empty() {
+                println!("🎯 【点況ガイド】: {}", orasu_conds[0].summary);
+            }
 
             // 他家の河とリーチ・副露状況を表示
             println!("{}", "-".repeat(80));
@@ -207,7 +247,7 @@ fn main() {
                 println!("\n🎉 【ツモ和了可能】完成形です！ ('tsumo' または 'ツモ' で和了可能)");
             }
 
-            // 期待値計算 & リアルタイムヒント
+            // 期待値計算 & リアルタイムヒント（順位EV統合）
             let ctx = AnalysisContext {
                 turn_number: turn_count,
                 remaining_wall_tiles: remaining_wall,
@@ -217,61 +257,67 @@ fn main() {
                 is_dealer: true,
             };
 
-            // 他家の現物（安全牌）を考慮して危険度を補正
-            let mut evaluations = evaluate_hand_discards(&hands[0], None, &ctx);
+            let mut placement_evals =
+                evaluate_hand_discards_with_placement(&hands[0], None, &ctx, &match_ctx, 0);
             let any_riichi = riichi_declared[1] || riichi_declared[2] || riichi_declared[3];
 
             if any_riichi {
-                for ev in &mut evaluations {
+                for pev in &mut placement_evals {
                     // リーチ者の河にある牌は現物（100%安全）
                     let is_genbutsu = (1..4)
                         .filter(|&p| riichi_declared[p])
-                        .all(|p| rivers[p].contains(&ev.discard_tile));
+                        .all(|p| rivers[p].contains(&pev.base.discard_tile));
 
                     if is_genbutsu {
-                        ev.safety.risk_score = 0.0;
-                        ev.safety.is_safe = true;
+                        pev.base.safety.risk_score = 0.0;
+                        pev.base.safety.is_safe = true;
                     } else {
-                        // 筋・字牌・端牌などに応じた危険度
-                        let d = ev.discard_tile;
+                        let d = pev.base.discard_tile;
                         let is_honor = d as usize >= 28;
                         let rank = (d as usize - 1) % 9 + 1;
                         let is_terminal = rank == 1 || rank == 9;
 
                         if is_honor || is_terminal {
-                            ev.safety.risk_score = 0.15;
+                            pev.base.safety.risk_score = 0.15;
                         } else {
-                            ev.safety.risk_score = 0.45; // 無筋中張牌は危険
+                            pev.base.safety.risk_score = 0.45; // 無筋中張牌
                         }
-                        ev.safety.is_safe = false;
+                        pev.base.safety.is_safe = false;
                     }
-                    // EVを再計算: EV = 和了確率 * 想定打点 - 放銃危険度 * 8000点
-                    let win_prob = ev.speed.win_probability;
-                    let value = ev.value.expected_score;
-                    ev.ev = win_prob * value - ev.safety.risk_score * 8000.0;
+                    let win_prob = pev.base.speed.win_probability;
+                    let value = pev.base.value.expected_score;
+                    pev.base.ev = win_prob * value - pev.base.safety.risk_score * 8000.0;
+                    // 放銃リスクに応じた順位EVペナルティ
+                    pev.placement_ev -= pev.base.safety.risk_score * 30.0; // 満貫放銃で約30pt損失想定
                 }
 
-                // EV降順で再ソート
-                evaluations
-                    .sort_by(|a, b| b.ev.partial_cmp(&a.ev).unwrap_or(std::cmp::Ordering::Equal));
+                // 順位EV降順で再ソート
+                placement_evals.sort_by(|a, b| {
+                    b.placement_ev
+                        .partial_cmp(&a.placement_ev)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
 
             println!("{}", "-".repeat(80));
-            println!("💡 【リアルタイム期待値ヒント (AI Advisor)】");
+            println!("💡 【リアルタイム期待値＆順位EVヒント (AI Advisor)】");
             if any_riichi {
                 println!(
                     "  ⚠️ 他家リーチが入っています！放銃失点リスクを反映した押し引き評価です。"
                 );
             }
+            if !placement_evals.is_empty() {
+                println!("  🎯 点況戦術: {}", placement_evals[0].situational_note);
+            }
 
-            for (rank, ev) in evaluations.iter().take(4).enumerate() {
-                let shanten_text = match ev.shanten_after {
+            for (rank, pev) in placement_evals.iter().take(4).enumerate() {
+                let shanten_text = match pev.base.shanten_after {
                     0 => "テンパイ".to_string(),
                     s => format!("{s}向聴"),
                 };
-                let safety_text = if ev.safety.risk_score == 0.0 {
+                let safety_text = if pev.base.safety.risk_score == 0.0 {
                     "🛡️ 現物(安全)"
-                } else if ev.safety.risk_score < 0.25 {
+                } else if pev.base.safety.risk_score < 0.25 {
                     "🟡 比較的安全"
                 } else {
                     "🔴 危険牌"
@@ -279,25 +325,29 @@ fn main() {
 
                 let mark = if rank == 0 { "★最善" } else { "  候補" };
                 println!(
-                    "  {} [{:2}] 打[{:2}] -> {:>4} | EV: {:>+6.0}点 | 受入:{:>2}枚 | 打点:{:>5.0}点 | 守備: {}",
+                    "  {} [{:2}] 打[{:2}] -> {:>4} | Pt EV:{:>+5.1}pt | 素点EV:{:>+6.0}点 | 期待着順:{:.1}位 | 受入:{:>2}枚 | 打点:{:>5.0}点 | 守備: {}",
                     mark,
                     rank + 1,
-                    ev.discard_tile.as_str(),
+                    pev.base.discard_tile.as_str(),
                     shanten_text,
-                    ev.ev,
-                    ev.speed.remaining_count,
-                    ev.value.expected_score,
+                    pev.placement_ev,
+                    pev.base.ev,
+                    pev.expected_rank,
+                    pev.base.speed.remaining_count,
+                    pev.base.value.expected_score,
                     safety_text
                 );
             }
 
-            let rationale = Explainer::generate_rationale(&evaluations);
+            let raw_evals: Vec<CandidateEvaluation> =
+                placement_evals.iter().map(|p| p.base.clone()).collect();
+            let rationale = Explainer::generate_rationale(&raw_evals);
             println!("\n📖 【なぜその打牌なのか (AIの判断根拠)】");
             println!("  {rationale}");
             println!("{}", "=".repeat(80));
 
             // 打牌入力
-            let best_discard_tile = evaluations[0].discard_tile;
+            let best_discard_tile = placement_evals[0].base.discard_tile;
             let chosen_index = loop {
                 print!(
                     "何を切りますか？ (1〜{}, 牌名, Enter/autoで最善[{}], q:中断): ",
@@ -318,7 +368,13 @@ fn main() {
                 }
 
                 if is_agari && (input.eq_ignore_ascii_case("tsumo") || input == "ツモ") {
-                    println!("\n🎉 【ツモ和了！】見事なアガリです！対局終了！");
+                    println!(
+                        "\n🎉 【ツモ和了！】見事なアガリです！親満貫 12,000点 (各子 4,000点オール)"
+                    );
+                    match_ctx.scores[0] += 12000;
+                    match_ctx.scores[1] -= 4000;
+                    match_ctx.scores[2] -= 4000;
+                    match_ctx.scores[3] -= 4000;
                     break 'game;
                 }
 
@@ -358,7 +414,7 @@ fn main() {
             };
             println!(">> あなたが [{}] を打牌しました。", discarded_tile.as_str());
             rivers[0].push(discarded_tile);
-            tracker.record_decision(turn_count, discarded_tile, &evaluations);
+            tracker.record_decision(turn_count, discarded_tile, &raw_evals);
             turn_count += 1;
         } else {
             // --- B. CPUの手番 ---
@@ -381,7 +437,14 @@ fn main() {
                     TileName::East,
                     riichi_declared[current_turn],
                 ) {
-                    println!("\n💥 【ツモ！】{} がツモアガリしました！", p_name);
+                    println!("\n💥 【ツモ！】{} がツモアガリしました！子満貫 8,000点 (親 4,000点 / 子 2,000点)", p_name);
+                    match_ctx.scores[current_turn] += 8000;
+                    match_ctx.scores[0] -= 4000;
+                    for p in 1..4 {
+                        if p != current_turn {
+                            match_ctx.scores[p] -= 2000;
+                        }
+                    }
                     break 'game;
                 }
             }
@@ -450,7 +513,12 @@ fn main() {
                 let mut ron_in = String::new();
                 let _ = io::stdin().read_line(&mut ron_in);
                 if !ron_in.trim().eq_ignore_ascii_case("n") {
-                    println!("\n🎊 【ロン和了成立！】お見事です！局終了となります。");
+                    println!(
+                        "\n🎊 【ロン和了成立！】お見事です！親満貫 12,000点（放銃: {}）",
+                        PLAYER_NAMES[discarder]
+                    );
+                    match_ctx.scores[0] += 12000;
+                    match_ctx.scores[discarder] -= 12000;
                     break 'game;
                 }
             }
@@ -469,12 +537,16 @@ fn main() {
                 TileName::East,
                 riichi_declared[p],
             ) {
+                let score = if discarder == 0 { 12000 } else { 8000 };
                 println!(
-                    "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！",
+                    "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！満貫 {}点",
                     PLAYER_NAMES[p],
                     PLAYER_NAMES[discarder],
-                    discarded_tile.as_str()
+                    discarded_tile.as_str(),
+                    score
                 );
+                match_ctx.scores[p] += score;
+                match_ctx.scores[discarder] -= score;
                 break 'game;
             }
         }
@@ -631,6 +703,35 @@ fn main() {
         // 3. 通常ターン進行（誰も鳴かなかった場合）
         current_turn = (discarder + 1) % 4;
     }
+
+    // 終局時順位・ポイント精算発表
+    println!("\n{}", "=".repeat(80));
+    println!("🏆 【対局結果・最終成績 (Mリーグ順位点精算: +50/+10/-10/-30, オカ+20)】");
+    println!("{}", "=".repeat(80));
+    let final_ranks = match_ctx.current_ranks();
+    let mut result_list: Vec<(usize, usize, i32, f64)> = (0..4)
+        .map(|p| {
+            let r = final_ranks[p];
+            let s = match_ctx.scores[p];
+            let pt = match_ctx.rule.calculate_point(r, s);
+            (r, p, s, pt)
+        })
+        .collect();
+    result_list.sort_by_key(|item| item.0);
+
+    for (rank, p, score, pt) in result_list {
+        let medal = match rank {
+            1 => "🥇",
+            2 => "🥈",
+            3 => "🥉",
+            _ => "  ",
+        };
+        println!(
+            "  {} 第{}位: {:<16} | 素点: {:>6}点 | 最終Pt: {:>+6.1}pt",
+            medal, rank, PLAYER_NAMES[p], score, pt
+        );
+    }
+    println!("{}", "=".repeat(80));
 
     // 局後学習振り返りレポート表示
     let report = tracker.generate_report();
