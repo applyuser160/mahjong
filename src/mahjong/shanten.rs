@@ -103,14 +103,23 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
     let target_melds = 4 - open_melds_count;
     let mut best_shanten = 8 - 2 * open_melds_count as i8;
 
+    let total_tiles: usize = counts.iter().map(|&c| c as usize).sum();
     let mut working = *counts;
 
     // 1. 雀頭ありのケースを探索（対子を1つ雀頭として固定する）
     for i in 1..=34 {
         if working[i] >= 2 {
             working[i] -= 2;
-            let shanten =
-                search_normal(&mut working, 1, true, 0, 0, target_melds, &mut best_shanten);
+            let shanten = search_normal(
+                &mut working,
+                1,
+                true,
+                0,
+                0,
+                target_melds,
+                total_tiles - 2,
+                &mut best_shanten,
+            );
             best_shanten = best_shanten.min(shanten);
             working[i] += 2;
 
@@ -128,6 +137,7 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
         0,
         0,
         target_melds,
+        total_tiles,
         &mut best_shanten,
     );
     best_shanten = best_shanten.min(shanten);
@@ -143,6 +153,7 @@ fn search_normal(
     melds: usize,
     taatsu: usize,
     target_melds: usize,
+    remaining_tiles: usize,
     current_best: &mut i8,
 ) -> i8 {
     // 次の牌があるインデックスを探す
@@ -158,13 +169,19 @@ fn search_normal(
         return s;
     }
 
-    // 下限バウンド枝刈り
-    let lower_bound = evaluate_normal_shanten(has_head, melds, taatsu, target_melds);
-    // 残りの牌の最大枚数
-    let remaining_tiles: u8 = counts[next_idx..=34].iter().sum();
-    // 残りの牌すべてが面子/搭子に寄与したときの最大減少数 (ざっくり)
-    if lower_bound - (remaining_tiles as i8) >= *current_best {
-        return lower_bound;
+    // 下限バウンド枝刈り（残りの牌から作れる理論上の最大面子・搭子数から算出）
+    let max_add_melds = (remaining_tiles / 3).min(target_melds.saturating_sub(melds));
+    let rem_after_melds = remaining_tiles - max_add_melds * 3;
+    let max_add_taatsu =
+        (rem_after_melds / 2).min(target_melds.saturating_sub(melds + max_add_melds));
+    let min_possible_shanten = evaluate_normal_shanten(
+        has_head,
+        melds + max_add_melds,
+        taatsu + max_add_taatsu,
+        target_melds,
+    );
+    if min_possible_shanten >= *current_best {
+        return min_possible_shanten;
     }
 
     let mut min_shanten = 8;
@@ -181,6 +198,7 @@ fn search_normal(
                 melds + 1,
                 taatsu,
                 target_melds,
+                remaining_tiles - 3,
                 current_best,
             );
             min_shanten = min_shanten.min(s);
@@ -197,6 +215,7 @@ fn search_normal(
             melds,
             taatsu,
             target_melds,
+            remaining_tiles - counts[i] as usize,
             current_best,
         );
         return min_shanten.min(s);
@@ -215,6 +234,7 @@ fn search_normal(
             melds + 1,
             taatsu,
             target_melds,
+            remaining_tiles - 3,
             current_best,
         );
         min_shanten = min_shanten.min(s);
@@ -236,6 +256,7 @@ fn search_normal(
             melds + 1,
             taatsu,
             target_melds,
+            remaining_tiles - 3,
             current_best,
         );
         min_shanten = min_shanten.min(s);
@@ -257,6 +278,7 @@ fn search_normal(
             melds,
             taatsu + 1,
             target_melds,
+            remaining_tiles - 2,
             current_best,
         );
         min_shanten = min_shanten.min(s);
@@ -277,6 +299,7 @@ fn search_normal(
             melds,
             taatsu + 1,
             target_melds,
+            remaining_tiles - 2,
             current_best,
         );
         min_shanten = min_shanten.min(s);
@@ -298,6 +321,7 @@ fn search_normal(
             melds,
             taatsu + 1,
             target_melds,
+            remaining_tiles - 2,
             current_best,
         );
         min_shanten = min_shanten.min(s);
@@ -316,6 +340,7 @@ fn search_normal(
         melds,
         taatsu,
         target_melds,
+        remaining_tiles - counts[i] as usize,
         current_best,
     );
     min_shanten.min(s)
