@@ -151,20 +151,11 @@ pub fn evaluate_hand_discards(
         // 4. 総合期待値 (EV)
         // 相手にリーチ者がいる場合は放銃失点ペナルティを重くし（ベタオリの優位性）、
         // リーチ者がいない平時は手作りを阻害しないようペナルティを抑制
-        let has_riichi_threat = ctx
-            .riichi_status
-            .iter()
-            .enumerate()
-            .skip(1)
-            .any(|(_, &r)| r);
+        let has_riichi_threat = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
 
         let deal_loss_penalty = if has_riichi_threat {
-            let dealer_riichi = ctx
-                .riichi_status
-                .iter()
-                .enumerate()
-                .skip(1)
-                .any(|(p, &r)| r && ctx.player_is_dealer[p]);
+            let dealer_riichi = (0..4)
+                .any(|p| p != ctx.target_player && ctx.riichi_status[p] && ctx.player_is_dealer[p]);
             if dealer_riichi {
                 6500.0 // 親リーチに対する失点期待値ペナルティ
             } else {
@@ -1159,6 +1150,84 @@ mod tests {
         assert!(
             val.primary_yaku.contains(&"立直") || val.expected_han >= 2.0,
             "門前役（立直等）が評価に含まれるべき"
+        );
+    }
+
+    #[test]
+    fn test_evaluate_hand_discards_riichi_threat_target_player_alignment() {
+        // レビュー指摘事項対応: target_player = 2 で「座席0のみがリーチ」と「座席2自身のみがリーチ」を比較
+        // 前者のみ他家リーチ脅威となり、後者は自身のリーチなので平時ペナルティとなることを検証
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::East,
+            TileName::East,
+            TileName::FiveM, // 無筋中張牌（危険牌）
+            TileName::West,  // 字牌
+            TileName::North, // 余剰牌
+        ] {
+            hand.push(t);
+        }
+
+        let ctx_base = AnalysisContext {
+            target_player: 2,
+            turn_number: 9,
+            remaining_wall_tiles: 50,
+            seat_wind: Some(TileName::West),
+            round_wind: Some(TileName::East),
+            ..Default::default()
+        };
+
+        // 1. 座席2自身のみがリーチしている局面
+        let mut ctx_self_riichi = ctx_base;
+        ctx_self_riichi.riichi_status = [false, false, true, false];
+
+        // 2. 全員ノーリーチの平時局面
+        let mut ctx_no_riichi = ctx_base;
+        ctx_no_riichi.riichi_status = [false, false, false, false];
+
+        // 3. 座席0（他家）のみがリーチしている局面
+        let mut ctx_p0_riichi = ctx_base;
+        ctx_p0_riichi.riichi_status = [true, false, false, false];
+
+        let evs_self_riichi = evaluate_hand_discards(&hand, None, &ctx_self_riichi);
+        let evs_no_riichi = evaluate_hand_discards(&hand, None, &ctx_no_riichi);
+        let evs_p0_riichi = evaluate_hand_discards(&hand, None, &ctx_p0_riichi);
+
+        // 自身のみリーチ（ctx_self_riichi）の場合、他家脅威がないため平時（ctx_no_riichi）と同一の打牌評価となること
+        let cand_5m_self = evs_self_riichi
+            .iter()
+            .find(|e| e.discard_tile == TileName::FiveM)
+            .unwrap();
+        let cand_5m_no = evs_no_riichi
+            .iter()
+            .find(|e| e.discard_tile == TileName::FiveM)
+            .unwrap();
+        assert!(
+            (cand_5m_self.ev - cand_5m_no.ev).abs() < 1e-4,
+            "自身のみリーチ時のEV ({}) は平時EV ({}) と一致するべき（自身のリーチは他家脅威ではない）",
+            cand_5m_self.ev,
+            cand_5m_no.ev
+        );
+
+        // 座席0がリーチ（ctx_p0_riichi）の場合、他家脅威ペナルティ（5000点）が適用され、危険牌（5m）のEVが大幅に低下すること
+        let cand_5m_p0 = evs_p0_riichi
+            .iter()
+            .find(|e| e.discard_tile == TileName::FiveM)
+            .unwrap();
+        assert!(
+            cand_5m_p0.ev < cand_5m_self.ev - 1000.0,
+            "座席0リーチ時の危険牌EV ({}) は自身のみリーチ時 ({}) より大幅に低いペナルティを受けるべき",
+            cand_5m_p0.ev,
+            cand_5m_self.ev
         );
     }
 }
