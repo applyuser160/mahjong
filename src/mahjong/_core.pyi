@@ -117,6 +117,7 @@ class PyHand:
     def shanten(self) -> "PyShantenResult":
         """Calculates the shanten number of the hand."""
         ...
+
     def to_dict(self) -> dict[str, Any]: ...
 
 class PyRiver:
@@ -294,6 +295,11 @@ def py_evaluate_hand_discards(
     tiles: list[PyTileName],
     is_dealer: bool = True,
     dora_indicators: Optional[list[PyTileName]] = None,
+    turn_number: Optional[int] = None,
+    remaining_wall_tiles: Optional[int] = None,
+    seat_wind: Optional[PyTileName] = None,
+    round_wind: Optional[PyTileName] = None,
+    visible_tiles: Optional[list[PyTileName]] = None,
 ) -> list[PyCandidateEvaluation]:
     """Evaluates all possible discards from the hand based on EV, acceptance, and value."""
     ...
@@ -487,6 +493,10 @@ def py_evaluate_placement_discards(
     player_idx: int = 0,
     is_dealer: Optional[bool] = None,
     dora_indicators: Optional[list[PyTileName]] = None,
+    turn_number: Optional[int] = None,
+    remaining_wall_tiles: Optional[int] = None,
+    seat_wind: Optional[PyTileName] = None,
+    visible_tiles: Optional[list[PyTileName]] = None,
 ) -> list[PyPlacementEvaluation]:
     """Evaluates all discards taking placement expectations and rank points into account."""
     ...
@@ -503,7 +513,10 @@ def py_get_ai_hud_data(
     player_idx: int = 0,
     is_dealer: Optional[bool] = None,
     dora_indicators: Optional[list[PyTileName]] = None,
+    turn_number: Optional[int] = None,
+    remaining_wall_tiles: Optional[int] = None,
+    seat_wind: Optional[PyTileName] = None,
+    visible_tiles: Optional[list[PyTileName]] = None,
 ) -> dict[str, Any]:
     """Provides a unified dictionary with all HUD cards and AI metrics for UI rendering."""
     ...
-

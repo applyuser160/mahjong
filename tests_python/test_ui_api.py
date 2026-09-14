@@ -94,11 +94,20 @@ def test_rule_config_and_match_context():
 
 def test_placement_evaluation_and_hud_data():
     tiles = [
-        TileName.OneM, TileName.TwoM, TileName.ThreeM,
-        TileName.FourP, TileName.FiveP, TileName.SixP,
-        TileName.SevenS, TileName.EightS, TileName.NineS,
-        TileName.East, TileName.East,
-        TileName.White, TileName.White, TileName.NineM,
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.ThreeM,
+        TileName.FourP,
+        TileName.FiveP,
+        TileName.SixP,
+        TileName.SevenS,
+        TileName.EightS,
+        TileName.NineS,
+        TileName.East,
+        TileName.East,
+        TileName.White,
+        TileName.White,
+        TileName.NineM,
     ]
     ctx = MatchContext(
         scores=[32000, 28000, 22000, 18000],
@@ -178,9 +187,9 @@ def test_table_state_masking():
     masked_dict = table.to_dict(reveal_all=False)
     players = masked_dict["players"]
     assert players[0]["hand"] == ["1m", "2m", "3m"]  # Seat 0 visible
-    assert players[1]["hand"] == ["?", "?", "?"]      # Seat 1 masked
-    assert players[2]["hand"] == ["?", "?", "?"]      # Seat 2 masked
-    assert players[3]["hand"] == ["?", "?", "?"]      # Seat 3 masked
+    assert players[1]["hand"] == ["?", "?", "?"]  # Seat 1 masked
+    assert players[2]["hand"] == ["?", "?", "?"]  # Seat 2 masked
+    assert players[3]["hand"] == ["?", "?", "?"]  # Seat 3 masked
 
     # Reveal all (e.g. spectator / replay mode)
     revealed_dict = table.to_dict(reveal_all=True)
@@ -200,11 +209,19 @@ def test_drill_and_call_advice_to_dict():
         assert "candidates" in p_dict
 
     tiles = [
-        TileName.OneM, TileName.TwoM, TileName.FourM,
-        TileName.FiveP, TileName.FiveP,
-        TileName.SevenS, TileName.EightS, TileName.NineS,
-        TileName.White, TileName.White, TileName.White,
-        TileName.East, TileName.East,
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.FourM,
+        TileName.FiveP,
+        TileName.FiveP,
+        TileName.SevenS,
+        TileName.EightS,
+        TileName.NineS,
+        TileName.White,
+        TileName.White,
+        TileName.White,
+        TileName.East,
+        TileName.East,
     ]
     advice = advise_call(tiles, TileName.ThreeM, is_kamicha=True)
     if advice is not None:
@@ -218,11 +235,20 @@ def test_drill_and_call_advice_to_dict():
 def test_review_tracker_to_dict():
     tracker = ReviewTracker()
     tiles = [
-        TileName.OneM, TileName.TwoM, TileName.ThreeM,
-        TileName.FourP, TileName.FiveP, TileName.SixP,
-        TileName.SevenS, TileName.EightS, TileName.NineS,
-        TileName.East, TileName.East,
-        TileName.White, TileName.White, TileName.NineM,
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.ThreeM,
+        TileName.FourP,
+        TileName.FiveP,
+        TileName.SixP,
+        TileName.SevenS,
+        TileName.EightS,
+        TileName.NineS,
+        TileName.East,
+        TileName.East,
+        TileName.White,
+        TileName.White,
+        TileName.NineM,
     ]
     cands = evaluate_hand_discards(tiles)
     tracker.record_decision(1, TileName.NineM, cands)
@@ -318,3 +344,74 @@ def test_invalid_player_and_dealer_indices():
     with pytest.raises(ValueError, match="current_turn"):
         table.current_turn = 5
 
+
+def test_evaluate_hand_discards_with_context():
+    # 1m-9m, 1p,2p,3p, 4p,4p (14 tiles)
+    hand = [
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.ThreeM,
+        TileName.FourM,
+        TileName.FiveM,
+        TileName.SixM,
+        TileName.SevenM,
+        TileName.EightM,
+        TileName.NineM,
+        TileName.OneP,
+        TileName.TwoP,
+        TileName.ThreeP,
+        TileName.FourP,
+        TileName.FourP,
+    ]
+    # Default call (backward compatibility)
+    evs_default = evaluate_hand_discards(hand)
+    assert len(evs_default) > 0
+
+    # Call with full context: late turn (17), small wall (4), visible tiles
+    # If 4p is all seen elsewhere, discarding 4p will affect evaluation
+    visible_tiles = [
+        TileName.FourP,
+        TileName.FourP,
+    ]  # 2 more 4p seen elsewhere -> total 4 of 4p seen
+    evs_context = evaluate_hand_discards(
+        hand,
+        is_dealer=False,
+        dora_indicators=[TileName.East],
+        turn_number=17,
+        remaining_wall_tiles=4,
+        seat_wind=TileName.South,
+        round_wind=TileName.East,
+        visible_tiles=visible_tiles,
+    )
+    assert len(evs_context) > 0
+
+
+def test_get_ai_hud_data_with_context():
+    hand = [
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.ThreeM,
+        TileName.FourM,
+        TileName.FiveM,
+        TileName.SixM,
+        TileName.SevenM,
+        TileName.EightM,
+        TileName.NineM,
+        TileName.OneP,
+        TileName.TwoP,
+        TileName.ThreeP,
+        TileName.FourP,
+        TileName.FourP,
+    ]
+    ctx = MatchContext(dealer_idx=0)
+    hud = get_ai_hud_data(
+        hand,
+        ctx,
+        player_idx=1,
+        turn_number=10,
+        remaining_wall_tiles=30,
+        seat_wind=TileName.South,
+        visible_tiles=[TileName.OneM] * 3,
+    )
+    assert "candidates" in hud
+    assert "best_tile" in hud
