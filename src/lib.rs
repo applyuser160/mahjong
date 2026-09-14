@@ -43,6 +43,9 @@ pub mod drill;
 #[path = "mahjong/call_advisor.rs"]
 pub mod call_advisor;
 
+#[path = "mahjong/placement_ev.rs"]
+pub mod placement_ev;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -58,6 +61,10 @@ pub use expectation::{
     SafetyMetric, SpeedMetric, StandingHandEvaluation, ValueMetric,
 };
 pub use explanation::Explainer;
+pub use placement_ev::{
+    calculate_orasu_conditions, evaluate_hand_discards_with_placement, MatchContext,
+    PlacementCandidateEvaluation, RuleConfig, WinCondition,
+};
 pub use review::{
     BlunderRecord, BlunderSeverity, MatchReviewReport, ReviewTracker, TurnDecisionRecord,
 };
