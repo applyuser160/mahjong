@@ -1097,6 +1097,7 @@ impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
 #[pyo3(signature = (
     tiles,
     is_dealer=true,
@@ -1986,6 +1987,7 @@ impl PyTableState {
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
 #[pyo3(signature = (
     tiles,
     match_context,
@@ -2081,6 +2083,7 @@ pub fn py_calculate_orasu_conditions(
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
 #[pyo3(signature = (
     tiles,
     match_context,
