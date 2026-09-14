@@ -1476,10 +1476,13 @@ impl PyDrillProblem {
     }
 }
 
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
+
 #[pyfunction]
 #[pyo3(signature = (target_shanten=None))]
 pub fn py_generate_drill_problem(target_shanten: Option<i8>) -> Option<PyDrillProblem> {
-    let mut rng = rand::thread_rng();
+    let mut rng = SmallRng::from_entropy();
     let problem = crate::drill::DrillEngine::generate_problem(target_shanten, 100, &mut rng)?;
 
     let tiles = problem.hand.tiles().iter().map(|&t| t.into()).collect();

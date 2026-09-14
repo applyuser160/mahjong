@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
-use rand::rngs::StdRng;
+use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use mahjong::acceptance::{analyze_all_discards, calculate_acceptance};
@@ -163,7 +163,7 @@ fn bench_round_init(c: &mut Criterion) {
     group.bench_function("Round::new", |b| {
         b.iter(|| {
             let mut wall = Wall::new();
-            let mut rng = StdRng::seed_from_u64(black_box(42));
+            let mut rng = SmallRng::seed_from_u64(black_box(42));
             wall.shuffle(&mut rng);
             Round::new(black_box(wall))
         })
@@ -179,7 +179,7 @@ fn bench_game_simulation(c: &mut Criterion) {
         b.iter_batched(
             || {
                 let mut wall = Wall::new();
-                let mut rng = StdRng::seed_from_u64(black_box(42));
+                let mut rng = SmallRng::seed_from_u64(black_box(42));
                 wall.shuffle(&mut rng);
                 Round::new(wall)
             },
@@ -248,7 +248,7 @@ fn bench_game_simulation(c: &mut Criterion) {
         b.iter_batched(
             || {
                 let mut wall = Wall::new();
-                let mut rng = StdRng::seed_from_u64(42);
+                let mut rng = SmallRng::seed_from_u64(42);
                 wall.shuffle(&mut rng);
                 let mut round = Round::new(wall);
 

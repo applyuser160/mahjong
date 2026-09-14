@@ -51,6 +51,7 @@ pub enum TileName {
 }
 
 impl TileName {
+    #[inline(always)]
     #[allow(dead_code)]
     pub fn from_usize(n: usize) -> TileName {
         match n {
@@ -93,6 +94,7 @@ impl TileName {
         }
     }
 
+    #[inline]
     #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -134,6 +136,7 @@ impl TileName {
         }
     }
 
+    #[inline]
     pub const fn tile_type(&self) -> TileType {
         match self {
             TileName::OneM
@@ -169,6 +172,7 @@ impl TileName {
         }
     }
 
+    #[inline]
     pub const fn category(&self) -> TileCategory {
         match self.tile_type() {
             TileType::Characters | TileType::Circles | TileType::Bamboos => TileCategory::Simples,
@@ -209,18 +213,22 @@ pub struct Tile {
 }
 
 impl Tile {
+    #[inline]
     pub const fn new(name: TileName) -> Self {
         Self { name }
     }
 
+    #[inline]
     pub const fn name(self) -> TileName {
         self.name
     }
 
+    #[inline]
     pub const fn tile_type(self) -> TileType {
         self.name.tile_type()
     }
 
+    #[inline]
     pub const fn category(self) -> TileCategory {
         self.name.category()
     }
