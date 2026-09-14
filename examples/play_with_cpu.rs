@@ -12,6 +12,8 @@ use mahjong::wall::Wall;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use mahjong::yaku::{judge_yaku, WinContext};
+
 const PLAYER_NAMES: [&str; 4] = [
     "あなた (東家)",
     "CPU下家 (南家)",
@@ -45,6 +47,37 @@ fn player_seat_wind(player_idx: usize) -> TileName {
         2 => TileName::West,
         _ => TileName::North,
     }
+}
+
+fn check_agari(
+    hand: &Hand,
+    win_tile: TileName,
+    is_tsumo: bool,
+    seat_wind: TileName,
+    round_wind: TileName,
+    is_riichi: bool,
+) -> bool {
+    let test_hand = if is_tsumo {
+        hand.clone()
+    } else {
+        let mut h = hand.clone();
+        h.push(win_tile);
+        h
+    };
+    if calculate_shanten(&test_hand).min_shanten >= 0 {
+        return false;
+    }
+    let win_ctx = WinContext {
+        is_closed: hand.open_melds.is_empty(),
+        is_tsumo,
+        seat_wind: Some(seat_wind),
+        round_wind: Some(round_wind),
+        riichi: is_riichi,
+        win_tile: Some(win_tile),
+        ..Default::default()
+    };
+    let yaku_set = judge_yaku(&test_hand.counts, &hand.open_melds, win_ctx);
+    !yaku_set.is_empty()
 }
 
 fn main() {
@@ -160,8 +193,16 @@ fn main() {
             println!();
 
             // 和了判定（ツモ和了）
-            let current_shanten = calculate_shanten(&hands[0]);
-            let is_agari = drawn_tile.is_some() && current_shanten.min_shanten < 0;
+            let is_agari = drawn_tile.is_some_and(|dt| {
+                check_agari(
+                    &hands[0],
+                    dt,
+                    true,
+                    TileName::East,
+                    TileName::East,
+                    riichi_declared[0],
+                )
+            });
             if is_agari {
                 println!("\n🎉 【ツモ和了可能】完成形です！ ('tsumo' または 'ツモ' で和了可能)");
             }
@@ -331,9 +372,15 @@ fn main() {
             };
 
             // CPUの和了チェック（ツモ和了）
-            if drawn_tile.is_some() {
-                let cpu_shanten = calculate_shanten(&hands[current_turn]);
-                if cpu_shanten.min_shanten < 0 {
+            if let Some(dt) = drawn_tile {
+                if check_agari(
+                    &hands[current_turn],
+                    dt,
+                    true,
+                    player_seat_wind(current_turn),
+                    TileName::East,
+                    riichi_declared[current_turn],
+                ) {
                     println!("\n💥 【ツモ！】{} がツモアガリしました！", p_name);
                     break 'game;
                 }
@@ -384,10 +431,15 @@ fn main() {
         // 1. ロン和了判定
         // 1-1. 自家（プレイヤー）へのロンチェック
         if discarder != 0 {
-            let mut test_hand = hands[0].clone();
-            test_hand.push(discarded_tile);
-            let ron_shanten = calculate_shanten(&test_hand);
-            if ron_shanten.min_shanten < 0 {
+            let can_ron = check_agari(
+                &hands[0],
+                discarded_tile,
+                false,
+                TileName::East,
+                TileName::East,
+                riichi_declared[0],
+            );
+            if can_ron {
                 println!(
                     "\n🎉 【ロン和了！】{} の捨てた [{}] でロン和了可能です！",
                     PLAYER_NAMES[discarder],
@@ -409,9 +461,14 @@ fn main() {
             if p == discarder {
                 continue;
             }
-            let mut test_hand = hands[p].clone();
-            test_hand.push(discarded_tile);
-            if calculate_shanten(&test_hand).min_shanten < 0 {
+            if check_agari(
+                &hands[p],
+                discarded_tile,
+                false,
+                player_seat_wind(p),
+                TileName::East,
+                riichi_declared[p],
+            ) {
                 println!(
                     "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！",
                     PLAYER_NAMES[p],
@@ -578,4 +635,71 @@ fn main() {
     // 局後学習振り返りレポート表示
     let report = tracker.generate_report();
     println!("{}", tracker.format_report(&report));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_agari_open_meld_without_yaku() {
+        // オタ風ポン（南家が北をポン）で牌姿は完成しているが役がない場合
+        let mut hand = Hand::new();
+        // 副露: 北ポン
+        hand.open_melds.push(Meld::Pon(TileName::North));
+        // 手牌: 1m, 2m, 3m, 4p, 5p, 6p, 9s, 9s, 1s, 2s (計10枚)
+        // 3s でロンすると牌姿は完成するが役なし
+        hand.push(TileName::OneM);
+        hand.push(TileName::TwoM);
+        hand.push(TileName::ThreeM);
+        hand.push(TileName::FourP);
+        hand.push(TileName::FiveP);
+        hand.push(TileName::SixP);
+        hand.push(TileName::NineS);
+        hand.push(TileName::NineS);
+        hand.push(TileName::OneS);
+        hand.push(TileName::TwoS);
+
+        let can_ron = check_agari(
+            &hand,
+            TileName::ThreeS,
+            false,
+            TileName::South, // 自家南風（北はオタ風）
+            TileName::East,  // 場風東
+            false,
+        );
+        assert!(!can_ron, "役なし副露手でロンが成立してはならない");
+    }
+
+    #[test]
+    fn test_check_agari_open_meld_with_yaku() {
+        // タンヤオ副露手でロンが成立する場合
+        let mut hand = Hand::new();
+        // 副露: 2m-3m-4m チー
+        hand.open_melds.push(Meld::Chii {
+            called: TileName::TwoM,
+            consumed: [TileName::ThreeM, TileName::FourM],
+        });
+        // 手牌: 2p, 3p, 4p, 5s, 6s, 7s, 8s, 8s, 2s, 3s
+        hand.push(TileName::TwoP);
+        hand.push(TileName::ThreeP);
+        hand.push(TileName::FourP);
+        hand.push(TileName::FiveS);
+        hand.push(TileName::SixS);
+        hand.push(TileName::SevenS);
+        hand.push(TileName::EightS);
+        hand.push(TileName::EightS);
+        hand.push(TileName::TwoS);
+        hand.push(TileName::ThreeS);
+
+        let can_ron = check_agari(
+            &hand,
+            TileName::FourS,
+            false,
+            TileName::South,
+            TileName::East,
+            false,
+        );
+        assert!(can_ron, "タンヤオ役がある副露手はロンが成立すべき");
+    }
 }
