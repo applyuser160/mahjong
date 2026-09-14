@@ -377,8 +377,8 @@ fn estimate_rank_probabilities(
     // 点差に応じた他家との勝率 (ロジスティック関数)
     // 10,000点差で約88%勝率、0点差で50%
     let win_vs = |s_my: i32, s_other: i32| -> f64 {
-        let diff = (s_my - s_other) as f64;
-        1.0 / (1.0 + (-diff / 5000.0).exp())
+        let x = (s_my - s_other) as f64 / 5000.0;
+        0.5 * (x / (1.0 + x.abs())) + 0.5
     };
 
     let p_vs_0 = win_vs(my_predicted_score, other_scores[0]);
