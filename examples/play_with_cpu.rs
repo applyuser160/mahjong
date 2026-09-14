@@ -17,12 +17,7 @@ use mahjong::placement_ev::{
 };
 use mahjong::yaku::{judge_yaku, WinContext};
 
-const PLAYER_NAMES: [&str; 4] = [
-    "あなた (東家)",
-    "CPU下家 (南家)",
-    "CPU対面 (西家)",
-    "CPU上家 (北家)",
-];
+const PLAYER_BASE_NAMES: [&str; 4] = ["あなた", "CPU下家", "CPU対面", "CPU上家"];
 
 fn format_meld(meld: &Meld) -> String {
     match meld {
@@ -43,13 +38,32 @@ fn format_meld(meld: &Meld) -> String {
     }
 }
 
-fn player_seat_wind(player_idx: usize) -> TileName {
-    match player_idx {
+fn seat_wind_str(wind: TileName) -> &'static str {
+    match wind {
+        TileName::East => "東家",
+        TileName::South => "南家",
+        TileName::West => "西家",
+        TileName::North => "北家",
+        _ => "",
+    }
+}
+
+fn player_seat_wind(player_idx: usize, dealer_idx: usize) -> TileName {
+    match (player_idx + 4 - dealer_idx) % 4 {
         0 => TileName::East,
         1 => TileName::South,
         2 => TileName::West,
         _ => TileName::North,
     }
+}
+
+fn player_name_with_wind(player_idx: usize, dealer_idx: usize) -> String {
+    let wind = player_seat_wind(player_idx, dealer_idx);
+    format!(
+        "{} ({})",
+        PLAYER_BASE_NAMES[player_idx],
+        seat_wind_str(wind)
+    )
 }
 
 fn check_agari(
@@ -147,6 +161,10 @@ fn main() {
             ""
         };
 
+        let player_names: Vec<String> = (0..4)
+            .map(|p| player_name_with_wind(p, match_ctx.dealer_idx))
+            .collect();
+
         println!("\n{}", "#".repeat(80));
         println!(
             "🀄 【{}{}局 {}本場{}】 親: {} | 供託: {}本",
@@ -154,7 +172,7 @@ fn main() {
             match_ctx.round_number,
             match_ctx.honba,
             orasu_badge,
-            PLAYER_NAMES[match_ctx.dealer_idx],
+            player_names[match_ctx.dealer_idx],
             match_ctx.riichi_sticks
         );
         println!("{}", "#".repeat(80));
@@ -184,7 +202,7 @@ fn main() {
         let mut skip_draw = false; // 副露直後の手番はツモをスキップ
 
         let renchan: bool = 'game: loop {
-            let p_name = PLAYER_NAMES[current_turn];
+            let p_name = &player_names[current_turn];
 
             // 1. ツモ処理（副露直後でない場合のみ山から引く）
             let drawn_tile = if !skip_draw {
@@ -223,9 +241,11 @@ fn main() {
 
             // --- A. 自家（プレイヤー）の手番 ---
             if current_turn == 0 {
+                let player_seat = player_seat_wind(0, match_ctx.dealer_idx);
+                let player_is_dealer = match_ctx.dealer_idx == 0;
                 let remaining_wall = wall.remaining();
                 let ranks = match_ctx.current_ranks();
-                let dealer_label = if match_ctx.dealer_idx == 0 {
+                let dealer_label = if player_is_dealer {
                     "親/自家"
                 } else {
                     "子"
@@ -250,7 +270,7 @@ fn main() {
                     };
                     print!(
                         "{}位: {} ({}点{})  ",
-                        ranks[p], PLAYER_NAMES[p], match_ctx.scores[p], diff_str
+                        ranks[p], player_names[p], match_ctx.scores[p], diff_str
                     );
                 }
                 println!();
@@ -279,7 +299,7 @@ fn main() {
                     let river_tiles: Vec<&str> = rivers[p].iter().map(|t| t.as_str()).collect();
                     println!(
                         "{:<16}{}{}: {}",
-                        PLAYER_NAMES[p],
+                        player_names[p],
                         riichi_str,
                         melds_str,
                         river_tiles.join(" ")
@@ -312,8 +332,8 @@ fn main() {
                         &hands[0],
                         dt,
                         true,
-                        TileName::East,
-                        TileName::East,
+                        player_seat,
+                        match_ctx.round_wind,
                         riichi_declared[0],
                     )
                 });
@@ -327,10 +347,10 @@ fn main() {
                 let ctx = AnalysisContext {
                     turn_number: turn_count,
                     remaining_wall_tiles: remaining_wall,
-                    seat_wind: Some(TileName::East),
-                    round_wind: Some(TileName::East),
+                    seat_wind: Some(player_seat),
+                    round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
-                    is_dealer: true,
+                    is_dealer: player_is_dealer,
                 };
 
                 let mut placement_evals =
@@ -508,13 +528,15 @@ fn main() {
                 turn_count += 1;
             } else {
                 // --- B. CPUの手番 ---
+                let cpu_seat = player_seat_wind(current_turn, match_ctx.dealer_idx);
+                let cpu_is_dealer = current_turn == match_ctx.dealer_idx;
                 let ctx = AnalysisContext {
                     turn_number: turn_count,
                     remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(player_seat_wind(current_turn)),
-                    round_wind: Some(TileName::East),
+                    seat_wind: Some(cpu_seat),
+                    round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
-                    is_dealer: false,
+                    is_dealer: cpu_is_dealer,
                 };
 
                 // CPUの和了チェック（ツモ和了）
@@ -523,8 +545,8 @@ fn main() {
                         &hands[current_turn],
                         dt,
                         true,
-                        player_seat_wind(current_turn),
-                        TileName::East,
+                        cpu_seat,
+                        match_ctx.round_wind,
                         riichi_declared[current_turn],
                     ) {
                         if current_turn == match_ctx.dealer_idx {
@@ -597,18 +619,19 @@ fn main() {
             // 1. ロン和了判定
             // 1-1. 自家（プレイヤー）へのロンチェック
             if discarder != 0 {
+                let player_seat = player_seat_wind(0, match_ctx.dealer_idx);
                 let can_ron = check_agari(
                     &hands[0],
                     discarded_tile,
                     false,
-                    TileName::East,
-                    TileName::East,
+                    player_seat,
+                    match_ctx.round_wind,
                     riichi_declared[0],
                 );
                 if can_ron {
                     println!(
                         "\n🎉 【ロン和了！】{} の捨てた [{}] でロン和了可能です！",
-                        PLAYER_NAMES[discarder],
+                        player_names[discarder],
                         discarded_tile.as_str()
                     );
                     print!("ロン和了しますか？ (Y/n): ");
@@ -617,12 +640,7 @@ fn main() {
                     let _ = io::stdin().read_line(&mut ron_in);
                     if !ron_in.trim().eq_ignore_ascii_case("n") {
                         let is_dealer_win = match_ctx.dealer_idx == 0;
-                        let is_dealer_deal = discarder == match_ctx.dealer_idx;
-                        let score = if is_dealer_win || is_dealer_deal {
-                            12000
-                        } else {
-                            8000
-                        };
+                        let score = if is_dealer_win { 12000 } else { 8000 };
                         let role = if is_dealer_win {
                             "親満貫 12,000点"
                         } else {
@@ -630,7 +648,7 @@ fn main() {
                         };
                         println!(
                             "\n🎊 【ロン和了成立！】お見事です！{}（放銃: {}）",
-                            role, PLAYER_NAMES[discarder]
+                            role, player_names[discarder]
                         );
                         match_ctx.scores[0] += score;
                         match_ctx.scores[discarder] -= score;
@@ -644,21 +662,17 @@ fn main() {
                 if p == discarder {
                     continue;
                 }
+                let cpu_seat = player_seat_wind(p, match_ctx.dealer_idx);
                 if check_agari(
                     &hands[p],
                     discarded_tile,
                     false,
-                    player_seat_wind(p),
-                    TileName::East,
+                    cpu_seat,
+                    match_ctx.round_wind,
                     riichi_declared[p],
                 ) {
                     let is_dealer_win = p == match_ctx.dealer_idx;
-                    let is_dealer_deal = discarder == match_ctx.dealer_idx;
-                    let score = if is_dealer_win || is_dealer_deal {
-                        12000
-                    } else {
-                        8000
-                    };
+                    let score = if is_dealer_win { 12000 } else { 8000 };
                     let role = if is_dealer_win {
                         "親満貫 12,000点"
                     } else {
@@ -666,8 +680,8 @@ fn main() {
                     };
                     println!(
                         "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！{}",
-                        PLAYER_NAMES[p],
-                        PLAYER_NAMES[discarder],
+                        player_names[p],
+                        player_names[discarder],
                         discarded_tile.as_str(),
                         role
                     );
@@ -680,14 +694,16 @@ fn main() {
             // 2. 副露（鳴き：チー・ポン）割り込み判定
             // 2-1. 自家（プレイヤー）の鳴き判定
             if discarder != 0 && !riichi_declared[0] {
-                let is_kamicha = discarder == 3; // 上家(北家)からの打牌ならチー可能
+                let is_kamicha = (discarder + 1) % 4 == 0; // 上家からの打牌ならチー可能
+                let player_seat = player_seat_wind(0, match_ctx.dealer_idx);
+                let player_is_dealer = match_ctx.dealer_idx == 0;
                 let call_ctx = AnalysisContext {
                     turn_number: turn_count,
                     remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(TileName::East),
-                    round_wind: Some(TileName::East),
+                    seat_wind: Some(player_seat),
+                    round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
-                    is_dealer: true,
+                    is_dealer: player_is_dealer,
                 };
 
                 if let Some(advice) =
@@ -710,7 +726,7 @@ fn main() {
                         };
                         println!(
                             "🔔 【鳴きアドバイザー (Call Advisor)】 {} から [{}] が切られました！",
-                            PLAYER_NAMES[discarder],
+                            player_names[discarder],
                             discarded_tile.as_str()
                         );
                         println!("  AI判定: {} {}", rec_label, advice.rationale);
@@ -784,13 +800,15 @@ fn main() {
                     continue;
                 }
                 let is_kamicha = (discarder + 1) % 4 == p;
+                let cpu_seat = player_seat_wind(p, match_ctx.dealer_idx);
+                let cpu_is_dealer = p == match_ctx.dealer_idx;
                 let cpu_call_ctx = AnalysisContext {
                     turn_number: turn_count,
                     remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(player_seat_wind(p)),
-                    round_wind: Some(TileName::East),
+                    seat_wind: Some(cpu_seat),
+                    round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
-                    is_dealer: false,
+                    is_dealer: cpu_is_dealer,
                 };
 
                 if let Some(advice) =
@@ -808,7 +826,7 @@ fn main() {
                                 if hands[p].call_meld(meld).is_ok() {
                                     println!(
                                         "\n⚡ {} が [{}] を宣言しました！ 副露: {}",
-                                        PLAYER_NAMES[p],
+                                        player_names[p],
                                         best_choice.action.label_ja(),
                                         format_meld(&meld)
                                     );
@@ -839,7 +857,7 @@ fn main() {
         for p in 0..4 {
             print!(
                 "{}位: {} ({}点)  ",
-                ranks[p], PLAYER_NAMES[p], match_ctx.scores[p]
+                ranks[p], player_names[p], match_ctx.scores[p]
             );
         }
         println!("\n{}", "-".repeat(80));
@@ -901,7 +919,7 @@ fn main() {
         };
         println!(
             "  {} 第{}位: {:<16} | 素点: {:>6}点 | 最終Pt: {:>+6.1}pt",
-            medal, rank, PLAYER_NAMES[p], score, pt
+            medal, rank, PLAYER_BASE_NAMES[p], score, pt
         );
     }
     println!("{}", "=".repeat(80));
@@ -975,5 +993,75 @@ mod tests {
             false,
         );
         assert!(can_ron, "タンヤオ役がある副露手はロンが成立すべき");
+    }
+
+    #[test]
+    fn test_player_seat_wind_rotation() {
+        // 東1局: dealer_idx = 0 (あなた親)
+        assert_eq!(player_seat_wind(0, 0), TileName::East);
+        assert_eq!(player_seat_wind(1, 0), TileName::South);
+        assert_eq!(player_seat_wind(2, 0), TileName::West);
+        assert_eq!(player_seat_wind(3, 0), TileName::North);
+
+        // 東2局: dealer_idx = 1 (下家親)
+        assert_eq!(player_seat_wind(0, 1), TileName::North); // あなたは北家
+        assert_eq!(player_seat_wind(1, 1), TileName::East); // 下家が東家
+        assert_eq!(player_seat_wind(2, 1), TileName::South);
+        assert_eq!(player_seat_wind(3, 1), TileName::West);
+
+        // 南4局: dealer_idx = 3 (上家親)
+        assert_eq!(player_seat_wind(0, 3), TileName::South); // あなたは南家
+        assert_eq!(player_seat_wind(1, 3), TileName::West);
+        assert_eq!(player_seat_wind(2, 3), TileName::North);
+        assert_eq!(player_seat_wind(3, 3), TileName::East);
+    }
+
+    #[test]
+    fn test_check_agari_seat_wind_yakuhai() {
+        // 西ポン副露手
+        let mut hand = Hand::new();
+        hand.open_melds.push(Meld::Pon(TileName::West));
+        hand.push(TileName::OneM);
+        hand.push(TileName::TwoM);
+        hand.push(TileName::ThreeM);
+        hand.push(TileName::FourP);
+        hand.push(TileName::FiveP);
+        hand.push(TileName::SixP);
+        hand.push(TileName::NineS);
+        hand.push(TileName::NineS);
+        hand.push(TileName::OneS);
+        hand.push(TileName::TwoS);
+
+        // dealer_idx = 2 (対面親) のとき、あなた(0)は西家 -> 西は自風で役牌あり
+        let your_seat_west = player_seat_wind(0, 2);
+        assert_eq!(your_seat_west, TileName::West);
+        let can_ron_as_west = check_agari(
+            &hand,
+            TileName::ThreeS,
+            false,
+            your_seat_west,
+            TileName::East, // 場風東
+            false,
+        );
+        assert!(
+            can_ron_as_west,
+            "自風が西のときは西ポンで役牌が成立し和了できるべき"
+        );
+
+        // dealer_idx = 0 (あなた親) のとき、あなた(0)は東家 -> 西はオタ風で役なし
+        let your_seat_east = player_seat_wind(0, 0);
+        assert_eq!(your_seat_east, TileName::East);
+        let can_ron_as_east = check_agari(
+            &hand,
+            TileName::ThreeS,
+            false,
+            your_seat_east,
+            TileName::East,
+            false,
+        );
+        assert!(
+            !can_ron_as_east,
+            "自風が東のときは西ポンはオタ風となり役なしで和了不可"
+        );
     }
 }
