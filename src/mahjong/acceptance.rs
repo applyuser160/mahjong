@@ -303,4 +303,305 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_hand_four_copies_excluded() {
+        // 2m2m2m2m (4枚) + 4p5p6p (3枚) + 7s8s9s (3枚) + 2s3s4s (3枚) = 13枚
+        // 4面子 (4p5p6p, 7s8s9s, 2s3s4s, 2m2m2m) 完成しているが雀頭がない手牌。
+        // 残り1枚の 2m が雀頭候補の単騎待ちの形だが、2m は既に手牌に4枚あるためツモれない！
+        // したがって 2m は有効牌リストから除外され、ツモれる有効牌は存在しない (0種0枚)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::TwoM,
+            TileName::TwoM,
+            TileName::TwoM,
+            TileName::TwoM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::TwoS,
+            TileName::ThreeS,
+            TileName::FourS,
+        ] {
+            hand.push(t);
+        }
+
+        let acceptance = calculate_acceptance(&hand.counts, 0, None);
+        assert_eq!(acceptance.current_shanten, 0); // テンパイ形
+        assert_eq!(acceptance.tile_types_count, 0);
+        assert_eq!(acceptance.waits.len(), 0);
+        assert_eq!(acceptance.total_remaining, 0);
+    }
+
+    #[test]
+    fn test_zero_remaining_visible_tiles() {
+        // 1m2m3m 4p5p6p 7s8s9s 東東 2s3s (テンパイ, 待ち: 1s, 4s)
+        let mut counts = [0u8; 35];
+        for &idx in &[1, 2, 3, 13, 14, 15, 25, 26, 27, 28, 28, 20, 21] {
+            counts[idx] += 1;
+        }
+
+        // 外部可視牌として 1s が4枚すべて見えている状態を設定
+        let mut visible = counts;
+        visible[19] = 4; // 1s = 19
+
+        let acceptance = calculate_acceptance(&counts, 0, Some(&visible));
+        assert_eq!(acceptance.current_shanten, 0);
+        assert_eq!(acceptance.tile_types_count, 2); // 1s (0枚) と 4s (4枚) の2種
+
+        let wait_1s = acceptance
+            .waits
+            .iter()
+            .find(|w| w.tile == TileName::OneS)
+            .unwrap();
+        assert_eq!(wait_1s.remaining, 0, "1s must have 0 remaining");
+
+        let wait_4s = acceptance
+            .waits
+            .iter()
+            .find(|w| w.tile == TileName::FourS)
+            .unwrap();
+        assert_eq!(wait_4s.remaining, 4, "4s must have 4 remaining");
+
+        // 合計枚数は 0 + 4 = 4枚
+        assert_eq!(acceptance.total_remaining, 4);
+    }
+
+    #[test]
+    fn test_completely_empty_remaining_waits() {
+        // 1m2m3m 4p5p6p 7s8s9s 東東 2s3s (テンパイ, 待ち: 1s, 4s)
+        let mut counts = [0u8; 35];
+        for &idx in &[1, 2, 3, 13, 14, 15, 25, 26, 27, 28, 28, 20, 21] {
+            counts[idx] += 1;
+        }
+
+        // 1s も 4s も場に4枚すべて見えている（完全純カラ・ヤマゼロ）
+        let mut visible = counts;
+        visible[19] = 4; // 1s
+        visible[22] = 4; // 4s
+
+        let acceptance = calculate_acceptance(&counts, 0, Some(&visible));
+        assert_eq!(acceptance.current_shanten, 0);
+        assert_eq!(acceptance.tile_types_count, 2);
+        assert_eq!(acceptance.total_remaining, 0);
+        for w in &acceptance.waits {
+            assert_eq!(w.remaining, 0);
+        }
+    }
+
+    #[test]
+    fn test_visible_counts_overflow_safe() {
+        // visible_counts に誤って 5 以上の値が渡された場合の saturating_sub 安全性検証
+        let mut counts = [0u8; 35];
+        counts[20] = 1; // 2s
+        counts[21] = 1; // 3s
+        counts[28] = 2; // 東東
+                        // 他面子
+        counts[1] = 3;
+        counts[4] = 3;
+        counts[7] = 3;
+
+        let mut visible = counts;
+        visible[19] = 10; // 1s に異常値 10
+
+        let acceptance = calculate_acceptance(&counts, 0, Some(&visible));
+        let wait_1s = acceptance
+            .waits
+            .iter()
+            .find(|w| w.tile == TileName::OneS)
+            .unwrap();
+        assert_eq!(wait_1s.remaining, 0);
+    }
+
+    #[test]
+    fn test_acceptance_already_agari() {
+        // 和了形（-1向聴）の手牌に対して即座に空結果が返ること
+        let mut counts = [0u8; 35];
+        counts[1] = 3; // 1m1m1m
+        counts[4] = 3; // 4m4m4m
+        counts[7] = 3; // 7m7m7m
+        counts[10] = 3; // 1p1p1p
+        counts[28] = 2; // 東東
+
+        let acceptance = calculate_acceptance(&counts, 0, None);
+        assert_eq!(acceptance.current_shanten, -1);
+        assert_eq!(acceptance.tile_types_count, 0);
+        assert_eq!(acceptance.total_remaining, 0);
+        assert!(acceptance.waits.is_empty());
+    }
+
+    #[test]
+    fn test_acceptance_open_melds_1_to_4() {
+        // 1副露 (手牌10枚, チー: 7s8s9s): 1m2m3m 4p5p6p 東東 2s3s (テンパイ, 待ち 1s, 4s)
+        let mut counts_1meld = [0u8; 35];
+        counts_1meld[1] = 1;
+        counts_1meld[2] = 1;
+        counts_1meld[3] = 1;
+        counts_1meld[13] = 1;
+        counts_1meld[14] = 1;
+        counts_1meld[15] = 1;
+        counts_1meld[28] = 2; // 東東
+        counts_1meld[20] = 1; // 2s
+        counts_1meld[21] = 1; // 3s
+
+        let acc_1 = calculate_acceptance(&counts_1meld, 1, None);
+        assert_eq!(acc_1.current_shanten, 0);
+        assert_eq!(acc_1.tile_types_count, 2);
+        assert_eq!(acc_1.total_remaining, 8);
+
+        // 2副露 (手牌7枚): 4p5p6p 東東 2s4s (嵌張待ち: 3s)
+        let mut counts_2melds = [0u8; 35];
+        counts_2melds[13] = 1;
+        counts_2melds[14] = 1;
+        counts_2melds[15] = 1;
+        counts_2melds[28] = 2; // 東東
+        counts_2melds[20] = 1; // 2s
+        counts_2melds[22] = 1; // 4s
+
+        let acc_2 = calculate_acceptance(&counts_2melds, 2, None);
+        assert_eq!(acc_2.current_shanten, 0);
+        assert_eq!(acc_2.tile_types_count, 1);
+        assert_eq!(acc_2.waits[0].tile, TileName::ThreeS);
+        assert_eq!(acc_2.total_remaining, 4);
+
+        // 3副露 (手牌4枚): 東東 2s3s (両面待ち: 1s, 4s)
+        let mut counts_3melds = [0u8; 35];
+        counts_3melds[28] = 2; // 東東
+        counts_3melds[20] = 1; // 2s
+        counts_3melds[21] = 1; // 3s
+
+        let acc_3 = calculate_acceptance(&counts_3melds, 3, None);
+        assert_eq!(acc_3.current_shanten, 0);
+        assert_eq!(acc_3.tile_types_count, 2);
+        assert_eq!(acc_3.total_remaining, 8);
+
+        // 4副露 (手牌1枚: 裸単騎): 東単騎
+        let mut counts_4melds = [0u8; 35];
+        counts_4melds[28] = 1; // 東1枚
+
+        let acc_4 = calculate_acceptance(&counts_4melds, 4, None);
+        assert_eq!(acc_4.current_shanten, 0); // 単騎テンパイ
+        assert_eq!(acc_4.tile_types_count, 1);
+        assert_eq!(acc_4.waits[0].tile, TileName::East);
+        // 手牌に1枚あるので、残り枚数は 4 - 1 = 3枚
+        assert_eq!(acc_4.waits[0].remaining, 3);
+        assert_eq!(acc_4.total_remaining, 3);
+    }
+
+    #[test]
+    fn test_acceptance_sanmenchan() {
+        // 3面張: 2m3m4m5m6m + 4p5p6p + 7s8s9s + 東東 (13枚)
+        // 待ち: 1m, 4m, 7m
+        let mut counts = [0u8; 35];
+        counts[2] = 1; // 2m
+        counts[3] = 1; // 3m
+        counts[4] = 1; // 4m
+        counts[5] = 1; // 5m
+        counts[6] = 1; // 6m
+        counts[13] = 1; // 4p
+        counts[14] = 1; // 5p
+        counts[15] = 1; // 6p
+        counts[25] = 1; // 7s
+        counts[26] = 1; // 8s
+        counts[27] = 1; // 9s
+        counts[28] = 2; // 東東
+
+        let acceptance = calculate_acceptance(&counts, 0, None);
+        assert_eq!(acceptance.current_shanten, 0);
+        assert_eq!(acceptance.tile_types_count, 3);
+
+        let wait_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
+        assert!(wait_tiles.contains(&TileName::OneM));
+        assert!(wait_tiles.contains(&TileName::FourM));
+        assert!(wait_tiles.contains(&TileName::SevenM));
+
+        // 1m: 4枚, 4m: 手牌に1枚あるので3枚, 7m: 4枚 -> 計 4 + 3 + 4 = 11枚
+        assert_eq!(acceptance.total_remaining, 11);
+    }
+
+    #[test]
+    fn test_acceptance_chuuren_poutou_9_waits() {
+        // 純正九蓮宝燈テンパイ: 1m1m1m 2m3m4m5m6m7m8m 9m9m9m (13枚)
+        // 待ち牌: 1m 〜 9m の全9種！
+        let mut counts = [0u8; 35];
+        counts[1] = 3;
+        counts[2] = 1;
+        counts[3] = 1;
+        counts[4] = 1;
+        counts[5] = 1;
+        counts[6] = 1;
+        counts[7] = 1;
+        counts[8] = 1;
+        counts[9] = 3;
+
+        let acceptance = calculate_acceptance(&counts, 0, None);
+        assert_eq!(acceptance.current_shanten, 0);
+        assert_eq!(acceptance.tile_types_count, 9);
+
+        // 1m: 4 - 3 = 1枚
+        // 2m..8m: 4 - 1 = 3枚 each (3 * 7 = 21枚)
+        // 9m: 4 - 3 = 1枚
+        // 合計: 1 + 21 + 1 = 23枚！
+        assert_eq!(acceptance.total_remaining, 23);
+
+        for (idx, &t) in [
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourM,
+            TileName::FiveM,
+            TileName::SixM,
+            TileName::SevenM,
+            TileName::EightM,
+            TileName::NineM,
+        ]
+        .iter()
+        .enumerate()
+        {
+            let wait = acceptance
+                .waits
+                .iter()
+                .find(|w| w.tile == t)
+                .expect("Must contain wait tile");
+            let expected_rem = if idx == 0 || idx == 8 { 1 } else { 3 };
+            assert_eq!(wait.remaining, expected_rem);
+        }
+    }
+
+    #[test]
+    fn test_acceptance_iishanten_ryamen_ryamen() {
+        // 典型的な両面×両面の一向聴:
+        // 1m2m3m (3枚) + 4p5p6p (3枚) + 東東 (2枚) + 2s3s (2枚) + 7s8s (2枚) + 西 (1枚) = 13枚
+        // 2面子 (1m2m3m, 4p5p6p) + 1雀頭 (東東) + 2両面搭子 (2s3s, 7s8s) + 孤立牌 (西)
+        // 有効牌: 1s, 4s, 6s, 9s (計4種16枚)
+        let mut counts = [0u8; 35];
+        counts[1] = 1; // 1m
+        counts[2] = 1; // 2m
+        counts[3] = 1; // 3m
+        counts[13] = 1; // 4p
+        counts[14] = 1; // 5p
+        counts[15] = 1; // 6p
+        counts[28] = 2; // 東東
+        counts[20] = 1; // 2s
+        counts[21] = 1; // 3s
+        counts[25] = 1; // 7s
+        counts[26] = 1; // 8s
+        counts[30] = 1; // 西
+
+        let acceptance = calculate_acceptance(&counts, 0, None);
+        assert_eq!(acceptance.current_shanten, 1); // 一向聴
+
+        let wait_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
+        assert_eq!(acceptance.tile_types_count, 4);
+        assert!(wait_tiles.contains(&TileName::OneS));
+        assert!(wait_tiles.contains(&TileName::FourS));
+        assert!(wait_tiles.contains(&TileName::SixS));
+        assert!(wait_tiles.contains(&TileName::NineS));
+
+        // 1s, 4s, 6s, 9s: 手牌に持っていないので各4枚 -> 計 16枚
+        assert_eq!(acceptance.total_remaining, 16);
+    }
 }

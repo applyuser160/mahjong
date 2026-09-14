@@ -2,8 +2,10 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use mahjong::acceptance::{analyze_all_discards, calculate_acceptance};
 use mahjong::hand::{Hand, Meld};
 use mahjong::round::Round;
+use mahjong::shanten::calculate_shanten;
 use mahjong::tile::TileName::*;
 use mahjong::wall::Wall;
 use mahjong::yaku::{judge_yaku, WinContext};
@@ -267,5 +269,120 @@ fn bench_game_simulation(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_yaku, bench_round_init, bench_game_simulation);
+fn bench_shanten_and_acceptance(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Shanten and Acceptance");
+
+    // 1. Shanten Calculation
+    let mut iishanten_hand = Hand::new();
+    for &t in &[
+        OneM, TwoM, ThreeM, FourP, FiveP, SixP, TwoS, ThreeS, SevenS, EightS, East, East, West,
+    ] {
+        iishanten_hand.push(t);
+    }
+    group.bench_function("calculate_shanten (Iishanten)", |b| {
+        b.iter(|| calculate_shanten(black_box(&iishanten_hand)))
+    });
+
+    let mut chinitsu_hand = Hand::new();
+    for &t in &[
+        OneM, OneM, OneM, TwoM, ThreeM, FourM, FiveM, SixM, SevenM, EightM, NineM, NineM, NineM,
+    ] {
+        chinitsu_hand.push(t);
+    }
+    group.bench_function("calculate_shanten (Complex Chinitsu)", |b| {
+        b.iter(|| calculate_shanten(black_box(&chinitsu_hand)))
+    });
+
+    let mut chitoi_hand = Hand::new();
+    for &t in &[
+        OneM, OneM, ThreeM, ThreeM, FiveP, FiveP, SevenP, SevenP, NineS, NineS, East, East, White,
+    ] {
+        chitoi_hand.push(t);
+    }
+    group.bench_function("calculate_shanten (Chitoitsu Tenpai)", |b| {
+        b.iter(|| calculate_shanten(black_box(&chitoi_hand)))
+    });
+
+    // 2. Acceptance Calculation
+    let mut tenpai_hand = Hand::new();
+    for &t in &[
+        OneM, TwoM, ThreeM, FourP, FiveP, SixP, SevenS, EightS, NineS, East, East, TwoS, ThreeS,
+    ] {
+        tenpai_hand.push(t);
+    }
+    group.bench_function("calculate_acceptance (Ryamen Tenpai)", |b| {
+        b.iter(|| {
+            calculate_acceptance(
+                black_box(&tenpai_hand.counts),
+                black_box(0),
+                black_box(std::option::Option::None),
+            )
+        })
+    });
+
+    group.bench_function("calculate_acceptance (Iishanten 4-waits)", |b| {
+        b.iter(|| {
+            calculate_acceptance(
+                black_box(&iishanten_hand.counts),
+                black_box(0),
+                black_box(std::option::Option::None),
+            )
+        })
+    });
+
+    let mut chuuren_hand = Hand::new();
+    for &t in &[
+        OneM, OneM, OneM, TwoM, ThreeM, FourM, FiveM, SixM, SevenM, EightM, NineM, NineM, NineM,
+    ] {
+        chuuren_hand.push(t);
+    }
+    group.bench_function("calculate_acceptance (Chuuren 9-waits)", |b| {
+        b.iter(|| {
+            calculate_acceptance(
+                black_box(&chuuren_hand.counts),
+                black_box(0),
+                black_box(std::option::Option::None),
+            )
+        })
+    });
+
+    let mut naked_hand = Hand::new();
+    naked_hand.push(East);
+    group.bench_function("calculate_acceptance (Naked Tanki 4-melds)", |b| {
+        b.iter(|| {
+            calculate_acceptance(
+                black_box(&naked_hand.counts),
+                black_box(4),
+                black_box(std::option::Option::None),
+            )
+        })
+    });
+
+    // 3. Analyze All Discards
+    let mut discards_hand = Hand::new();
+    for &t in &[
+        OneM, TwoM, ThreeM, FourP, FiveP, SixP, SevenS, EightS, NineS, East, East, TwoS, ThreeS,
+        NineP,
+    ] {
+        discards_hand.push(t);
+    }
+    group.bench_function("analyze_all_discards (14-tiles Hand)", |b| {
+        b.iter(|| {
+            analyze_all_discards(
+                black_box(&discards_hand),
+                black_box(std::option::Option::None),
+            )
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_yaku,
+    bench_round_init,
+    bench_game_simulation,
+    bench_shanten_and_acceptance
+);
 criterion_main!(benches);
