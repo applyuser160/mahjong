@@ -29,6 +29,19 @@ pub enum PyTileType {
     Dragons,
 }
 
+impl PyTileType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PyTileType::None => "None",
+            PyTileType::Characters => "Characters",
+            PyTileType::Circles => "Circles",
+            PyTileType::Bamboos => "Bamboos",
+            PyTileType::Winds => "Winds",
+            PyTileType::Dragons => "Dragons",
+        }
+    }
+}
+
 impl From<TileType> for PyTileType {
     fn from(t: TileType) -> Self {
         match t {
@@ -61,6 +74,16 @@ pub enum PyTileCategory {
     None = 0,
     Simples,
     Honors,
+}
+
+impl PyTileCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PyTileCategory::None => "None",
+            PyTileCategory::Simples => "Simples",
+            PyTileCategory::Honors => "Honors",
+        }
+    }
 }
 
 impl From<TileCategory> for PyTileCategory {
@@ -316,8 +339,8 @@ impl PyTile {
         let dict = PyDict::new(py);
         dict.set_item("name", self.name().as_str())?;
         dict.set_item("mpsz", self.name().mpsz())?;
-        dict.set_item("type", format!("{:?}", self.tile_type()))?;
-        dict.set_item("category", format!("{:?}", self.category()))?;
+        dict.set_item("type", self.tile_type().as_str())?;
+        dict.set_item("category", self.category().as_str())?;
         Ok(dict.unbind())
     }
 
@@ -426,8 +449,8 @@ impl PyMeld {
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("kind", self.kind())?;
-        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
-        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
+        let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
         dict.set_item("tiles", tiles_str)?;
         dict.set_item("mpsz", tiles_mpsz)?;
         Ok(dict.unbind())
@@ -487,8 +510,8 @@ impl PyHand {
 
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
-        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
-        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
+        let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
         dict.set_item("tiles", tiles_str)?;
         dict.set_item("mpsz", tiles_mpsz)?;
 
@@ -534,8 +557,8 @@ impl PyRiver {
 
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
-        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
-        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
+        let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
         dict.set_item("tiles", tiles_str)?;
         dict.set_item("mpsz", tiles_mpsz)?;
         Ok(dict.unbind())
@@ -987,7 +1010,11 @@ impl From<ShantenResult> for PyShantenResult {
 
 #[pyfunction]
 #[pyo3(signature = (tiles, open_melds_count=0))]
-pub fn py_calculate_shanten(tiles: Vec<PyTileName>, open_melds_count: usize) -> PyShantenResult {
+pub fn py_calculate_shanten(
+    py: Python<'_>,
+    tiles: Vec<PyTileName>,
+    open_melds_count: usize,
+) -> PyShantenResult {
     let mut counts = [0u8; 35];
     for py_tile in tiles {
         let rs_tile: TileName = py_tile.into();
@@ -996,7 +1023,8 @@ pub fn py_calculate_shanten(tiles: Vec<PyTileName>, open_melds_count: usize) -> 
             counts[idx] += 1;
         }
     }
-    calculate_shanten_from_counts(&counts, open_melds_count).into()
+    py.allow_threads(|| calculate_shanten_from_counts(&counts, open_melds_count))
+        .into()
 }
 
 // ==========================================
@@ -1113,6 +1141,7 @@ impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
     player_is_dealer=None,
 ))]
 pub fn py_evaluate_hand_discards(
+    py: Python<'_>,
     tiles: Vec<PyTileName>,
     is_dealer: bool,
     dora_indicators: Option<Vec<PyTileName>>,
@@ -1181,7 +1210,8 @@ pub fn py_evaluate_hand_discards(
         None
     };
 
-    let evs = crate::expectation::evaluate_hand_discards(&hand, visible_opt, &ctx);
+    let evs =
+        py.allow_threads(|| crate::expectation::evaluate_hand_discards(&hand, visible_opt, &ctx));
     evs.into_iter().map(|e| e.into()).collect()
 }
 
@@ -1353,6 +1383,7 @@ impl PyCallAdvice {
 #[pyfunction]
 #[pyo3(signature = (tiles, target_tile, is_kamicha=true, dora_indicators=None))]
 pub fn py_advise_call(
+    py: Python<'_>,
     tiles: Vec<PyTileName>,
     target_tile: PyTileName,
     is_kamicha: bool,
@@ -1379,8 +1410,9 @@ pub fn py_advise_call(
         ..Default::default()
     };
 
-    let advice =
-        crate::call_advisor::CallAdvisor::advise_call(&hand, target_tile.into(), is_kamicha, &ctx)?;
+    let advice = py.allow_threads(|| {
+        crate::call_advisor::CallAdvisor::advise_call(&hand, target_tile.into(), is_kamicha, &ctx)
+    })?;
 
     let choices = advice
         .choices
@@ -1425,8 +1457,8 @@ pub struct PyDrillProblem {
 impl PyDrillProblem {
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
-        let tiles_str: Vec<&'static str> = self.tiles.iter().map(|t| t.as_str()).collect();
-        let tiles_mpsz: Vec<&'static str> = self.tiles.iter().map(|t| t.mpsz()).collect();
+        let tiles_str = PyList::new(py, self.tiles.iter().map(|t| t.as_str()))?;
+        let tiles_mpsz = PyList::new(py, self.tiles.iter().map(|t| t.mpsz()))?;
         dict.set_item("tiles", tiles_str)?;
         dict.set_item("mpsz", tiles_mpsz)?;
         dict.set_item("dora_indicator", self.dora_indicator.as_str())?;
@@ -1626,26 +1658,22 @@ impl PyMatchContext {
     }
 
     pub fn current_ranks(&self) -> [usize; 4] {
-        let rs_ctx: MatchContext = self.clone().into();
-        rs_ctx.current_ranks()
+        MatchContext::from(self).current_ranks()
     }
 
     pub fn score_diff(&self, p: usize, target: usize) -> PyResult<i32> {
         if p >= 4 || target >= 4 {
             return Err(PyValueError::new_err("player index must be in range 0..4"));
         }
-        let rs_ctx: MatchContext = self.clone().into();
-        Ok(rs_ctx.score_diff(p, target))
+        Ok(MatchContext::from(self).score_diff(p, target))
     }
 
     pub fn is_orasu(&self) -> bool {
-        let rs_ctx: MatchContext = self.clone().into();
-        rs_ctx.is_orasu()
+        MatchContext::from(self).is_orasu()
     }
 
     pub fn remaining_rounds(&self) -> usize {
-        let rs_ctx: MatchContext = self.clone().into();
-        rs_ctx.remaining_rounds()
+        MatchContext::from(self).remaining_rounds()
     }
 
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
@@ -1704,6 +1732,20 @@ impl From<MatchContext> for PyMatchContext {
             riichi_sticks: c.riichi_sticks,
             dealer_idx: c.dealer_idx,
             rule: c.rule.into(),
+        }
+    }
+}
+
+impl From<&PyMatchContext> for MatchContext {
+    fn from(c: &PyMatchContext) -> Self {
+        Self {
+            scores: c.scores,
+            round_wind: c.round_wind.into(),
+            round_number: c.round_number,
+            honba: c.honba,
+            riichi_sticks: c.riichi_sticks,
+            dealer_idx: c.dealer_idx,
+            rule: c.rule.clone().into(),
         }
     }
 }
@@ -1951,8 +1993,8 @@ impl PyTableState {
         dict.set_item("dealer_idx", self.dealer_idx)?;
         dict.set_item("current_turn", self.current_turn)?;
 
-        let dora_str: Vec<&'static str> = self.dora_indicators.iter().map(|t| t.as_str()).collect();
-        let dora_mpsz: Vec<&'static str> = self.dora_indicators.iter().map(|t| t.mpsz()).collect();
+        let dora_str = PyList::new(py, self.dora_indicators.iter().map(|t| t.as_str()))?;
+        let dora_mpsz = PyList::new(py, self.dora_indicators.iter().map(|t| t.mpsz()))?;
         dict.set_item("dora_indicators", dora_str)?;
         dict.set_item("dora_indicators_mpsz", dora_mpsz)?;
         dict.set_item("remaining_wall_tiles", self.remaining_wall_tiles)?;
@@ -2035,6 +2077,7 @@ impl PyTableState {
     player_is_dealer=None,
 ))]
 pub fn py_evaluate_placement_discards(
+    py: Python<'_>,
     tiles: Vec<PyTileName>,
     match_context: &PyMatchContext,
     player_idx: usize,
@@ -2125,9 +2168,10 @@ pub fn py_evaluate_placement_discards(
         None
     };
 
-    let rs_match: MatchContext = match_context.clone().into();
-    let evs =
-        evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx);
+    let rs_match: MatchContext = match_context.into();
+    let evs = py.allow_threads(|| {
+        evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx)
+    });
     Ok(evs.into_iter().map(|e| e.into()).collect())
 }
 
@@ -2143,7 +2187,7 @@ pub fn py_calculate_orasu_conditions(
     if match_context.dealer_idx >= 4 {
         return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
     }
-    let rs_match: MatchContext = match_context.clone().into();
+    let rs_match: MatchContext = match_context.into();
     let conds = calculate_orasu_conditions(&rs_match, player_idx);
     Ok(conds.into_iter().map(|c| c.into()).collect())
 }
@@ -2188,6 +2232,7 @@ pub fn py_get_ai_hud_data(
         return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
     }
     let evs = py_evaluate_placement_discards(
+        py,
         tiles,
         match_context,
         player_idx,
