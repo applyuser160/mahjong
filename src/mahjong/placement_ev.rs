@@ -300,6 +300,9 @@ pub fn evaluate_hand_discards_with_placement(
     let current_rank = ranks[player_idx];
     let is_orasu = match_ctx.is_orasu();
 
+    // 放銃シナリオにおける想定失点額を動的に推定 (Issue #79: 親12000点 vs 子8000点、本場・ドラ補正)
+    let deal_loss = estimate_expected_deal_loss(match_ctx, analysis_ctx, player_idx);
+
     let mut placement_evals = Vec::new();
 
     for ev in raw_evaluations {
@@ -309,7 +312,7 @@ pub fn evaluate_hand_discards_with_placement(
 
         // 各シナリオにおける局後スコアの予測
         let score_on_win = match_ctx.scores[player_idx] + ev.value.expected_score as i32;
-        let score_on_deal = match_ctx.scores[player_idx] - 8000; // 満貫放銃想定
+        let score_on_deal = match_ctx.scores[player_idx] - deal_loss;
         let score_on_other = match_ctx.scores[player_idx];
 
         // 各シナリオでの着順確率分布をシミュレーション
@@ -418,5 +421,123 @@ fn generate_situational_note(
         "【ラス目挽回】点差が開いているため、満貫以上の高打点ルートを強く意識します。".to_string()
     } else {
         "【通常進行】素点効率とスピードのバランスを保ちつつ手を進めます。".to_string()
+    }
+}
+
+/// 放銃シナリオにおける想定失点額を計算 (Issue #79)
+pub fn estimate_expected_deal_loss(
+    match_ctx: &MatchContext,
+    analysis_ctx: &AnalysisContext,
+    player_idx: usize,
+) -> i32 {
+    // 1. 全リーチ者を走査し、親リーチが含まれているかを判定（最大失点リスク優先）
+    let riichi_opponents: Vec<usize> = (0..4)
+        .filter(|&p| p != player_idx && analysis_ctx.riichi_status[p])
+        .collect();
+
+    let has_any_riichi = !riichi_opponents.is_empty();
+    let has_dealer_riichi = riichi_opponents
+        .iter()
+        .any(|&p| p == match_ctx.dealer_idx || analysis_ctx.player_is_dealer[p]);
+
+    let honba_pts = (match_ctx.honba as i32) * 300;
+
+    let base_points = if has_dealer_riichi {
+        12000 // 親リーチ: 12000点最優先
+    } else if has_any_riichi {
+        8000 // 子リーチ: 8000点
+    } else if match_ctx.dealer_idx != player_idx {
+        9600 // ノーリーチ時: 自家が親でなければ親の平時・副露警戒
+    } else {
+        5200 // ノーリーチ時: 自家が親なら子の平時・副露警戒
+    };
+
+    base_points + honba_pts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimate_expected_deal_loss_dealer_vs_child() {
+        // Issue #79 検証: 親リーチへの放銃想定失点 vs 子リーチへの放銃想定失点
+        let match_ctx = MatchContext {
+            dealer_idx: 1, // 下家が親
+            honba: 1,      // 1本場 (+300点)
+            ..Default::default()
+        };
+
+        // 1. 親リーチに対する放銃
+        let mut ctx_dealer_riichi = AnalysisContext::default();
+        ctx_dealer_riichi.riichi_status[1] = true;
+        let loss_dealer = estimate_expected_deal_loss(&match_ctx, &ctx_dealer_riichi, 0);
+        // 12000 + 300 = 12300点
+        assert_eq!(loss_dealer, 12300);
+
+        // 2. 子リーチに対する放銃
+        let mut ctx_child_riichi = AnalysisContext::default();
+        ctx_child_riichi.riichi_status[2] = true; // 対面（子）がリーチ
+        let loss_child = estimate_expected_deal_loss(&match_ctx, &ctx_child_riichi, 0);
+        // 8000 + 300 = 8300点
+        assert_eq!(loss_child, 8300);
+
+        assert!(
+            loss_dealer > loss_child,
+            "Dealer deal loss ({}) must be significantly larger than child ({})",
+            loss_dealer,
+            loss_child
+        );
+    }
+
+    #[test]
+    fn test_estimate_expected_deal_loss_multiple_riichi_dealer_priority() {
+        // Issue #79 レビュー対応: 子（player 1）と親（player 2）の両方がリーチしている場合
+        // インデックス順（.find()）に引きずられず、親リーチ（12,000点）が最優先されること
+        let match_ctx = MatchContext {
+            dealer_idx: 2, // 対面が親
+            honba: 1,      // 1本場 (+300点)
+            ..Default::default()
+        };
+
+        let mut ctx_multi_riichi = AnalysisContext::default();
+        ctx_multi_riichi.riichi_status[1] = true; // 下家（子）リーチ
+        ctx_multi_riichi.riichi_status[2] = true; // 対面（親）リーチ
+
+        let loss = estimate_expected_deal_loss(&match_ctx, &ctx_multi_riichi, 0);
+        // 親リーチが優先されて 12000 + 300 = 12300点
+        assert_eq!(
+            loss, 12300,
+            "複数リーチ時は親リーチの失点リスク（12,000点+本場）が最優先されるべき"
+        );
+    }
+
+    #[test]
+    fn test_estimate_expected_deal_loss_dora_no_reduction() {
+        // Issue #79 レビュー対応: ドラ表示牌が3枚以上あっても失点が減衰されないこと
+        let match_ctx = MatchContext {
+            dealer_idx: 1,
+            honba: 0,
+            ..Default::default()
+        };
+
+        let doras = [
+            crate::tile::TileName::OneM,
+            crate::tile::TileName::TwoM,
+            crate::tile::TileName::ThreeM,
+        ];
+        let mut riichi_status = [false; 4];
+        riichi_status[1] = true; // 親リーチ
+        let ctx = AnalysisContext {
+            dora_indicators: &doras,
+            riichi_status,
+            ..Default::default()
+        };
+
+        let loss = estimate_expected_deal_loss(&match_ctx, &ctx, 0);
+        assert_eq!(
+            loss, 12000,
+            "ドラ表示牌が3枚以上あっても減衰されず親満貫12,000点であるべき"
+        );
     }
 }

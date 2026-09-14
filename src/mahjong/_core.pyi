@@ -300,6 +300,10 @@ def py_evaluate_hand_discards(
     seat_wind: Optional[PyTileName] = None,
     round_wind: Optional[PyTileName] = None,
     visible_tiles: Optional[list[PyTileName]] = None,
+    riichi_status: Optional[list[bool]] = None,
+    player_rivers: Optional[list[list[PyTileName]]] = None,
+    player_melds: Optional[list[list[PyMeld]]] = None,
+    player_is_dealer: Optional[list[bool]] = None,
 ) -> list[PyCandidateEvaluation]:
     """Evaluates all possible discards from the hand based on EV, acceptance, and value."""
     ...
@@ -497,6 +501,10 @@ def py_evaluate_placement_discards(
     remaining_wall_tiles: Optional[int] = None,
     seat_wind: Optional[PyTileName] = None,
     visible_tiles: Optional[list[PyTileName]] = None,
+    riichi_status: Optional[list[bool]] = None,
+    player_rivers: Optional[list[list[PyTileName]]] = None,
+    player_melds: Optional[list[list[PyMeld]]] = None,
+    player_is_dealer: Optional[list[bool]] = None,
 ) -> list[PyPlacementEvaluation]:
     """Evaluates all discards taking placement expectations and rank points into account."""
     ...
@@ -517,6 +525,10 @@ def py_get_ai_hud_data(
     remaining_wall_tiles: Optional[int] = None,
     seat_wind: Optional[PyTileName] = None,
     visible_tiles: Optional[list[PyTileName]] = None,
+    riichi_status: Optional[list[bool]] = None,
+    player_rivers: Optional[list[list[PyTileName]]] = None,
+    player_melds: Optional[list[list[PyMeld]]] = None,
+    player_is_dealer: Optional[list[bool]] = None,
 ) -> dict[str, Any]:
     """Provides a unified dictionary with all HUD cards and AI metrics for UI rendering."""
     ...

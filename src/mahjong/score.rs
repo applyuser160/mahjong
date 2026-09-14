@@ -212,6 +212,48 @@ pub fn calculate_score(
     }
 }
 
+use crate::yaku::{self, HandPattern, MeldKind};
+
+/// 牌がヤオ九牌（一九字牌）かどうかを判定します
+pub fn is_yaojiu(tile: TileName) -> bool {
+    let idx = tile as usize;
+    matches!(
+        tile,
+        TileName::OneM
+            | TileName::NineM
+            | TileName::OneP
+            | TileName::NineP
+            | TileName::OneS
+            | TileName::NineS
+    ) || idx >= 28
+}
+
+/// 門前順子と和了牌から待ち形符（嵌張・辺張なら2符、両面なら0符）を計算します
+pub fn get_sequence_wait_fu(seq_start: TileName, win_tile: TileName) -> usize {
+    let Some((start_suit, start_rank)) = yaku::is_number_tile(seq_start) else {
+        return 0;
+    };
+    let Some((win_suit, win_rank)) = yaku::is_number_tile(win_tile) else {
+        return 0;
+    };
+    if start_suit != win_suit {
+        return 0;
+    }
+    // 嵌張待ち: start_rank + 1 == win_rank (例: 13 の 2, 24 の 3)
+    if win_rank == start_rank + 1 {
+        return 2;
+    }
+    // 辺張待ち: 12 の 3 (start_rank == 1, win_rank == 3)
+    if start_rank == 1 && win_rank == 3 {
+        return 2;
+    }
+    // 辺張待ち: 89 の 7 (start_rank == 7, win_rank == 7)
+    if start_rank == 7 && win_rank == 7 {
+        return 2;
+    }
+    0
+}
+
 /// 和了形の手牌と状況から符（fu）を計算します。
 /// `is_pinfu`: 平和が成立しているか
 /// `is_chitoitsu`: 七対子か
@@ -281,6 +323,195 @@ pub fn calculate_fu(
     ceil10_fu(fu).max(30)
 }
 
+/// 分解された手牌パターン（HandPattern）と和了状況から符を計算します。
+pub fn calculate_pattern_fu(
+    pattern: &HandPattern,
+    win_tile: TileName,
+    is_tsumo: bool,
+    is_pinfu: bool,
+    is_closed: bool,
+    seat_wind: Option<TileName>,
+    round_wind: Option<TileName>,
+) -> usize {
+    // 門前ピンフツモは20符固定
+    if is_pinfu && is_closed && is_tsumo {
+        return 20;
+    }
+
+    // 副底: 20符
+    let mut fu = 20;
+
+    // 門前ロン加符: 10符
+    if is_closed && !is_tsumo {
+        fu += 10;
+    }
+
+    // ツモ符: 2符 (ピンフツモ以外)
+    if is_tsumo && !is_pinfu {
+        fu += 2;
+    }
+
+    // 雀頭符: 三元牌(+2)、自風(+2)、場風(+2)。連風牌なら+4
+    let pair_idx = pattern.pair as usize;
+    if (32..=34).contains(&pair_idx) {
+        fu += 2;
+    }
+    if Some(pattern.pair) == seat_wind {
+        fu += 2;
+    }
+    if Some(pattern.pair) == round_wind {
+        fu += 2;
+    }
+
+    // 待ち形符: 単騎・嵌張・辺張なら2符
+    let mut wait_fu = 0;
+    if pattern.pair == win_tile {
+        wait_fu = 2;
+    }
+    for meld in &pattern.melds {
+        if let MeldKind::Sequence(start) = meld {
+            let seq_wait = get_sequence_wait_fu(*start, win_tile);
+            if seq_wait > wait_fu {
+                wait_fu = seq_wait;
+            }
+        }
+    }
+    fu += wait_fu;
+
+    // 面子符
+    // 1. 副露面子
+    for meld in &pattern.open_melds {
+        match meld {
+            MeldKind::Sequence(_) => {}
+            MeldKind::Triplet(t) => {
+                fu += if is_yaojiu(*t) { 4 } else { 2 };
+            }
+            MeldKind::Quad(t) => {
+                fu += if is_yaojiu(*t) { 16 } else { 8 };
+            }
+        }
+    }
+    // 2. 門前面子
+    let mut ron_tile_used_for_triplet = false;
+    for meld in &pattern.melds {
+        match meld {
+            MeldKind::Sequence(_) => {}
+            MeldKind::Triplet(t) => {
+                // ロン和了でこの刻子を完成させた場合、1つのみ明刻扱い
+                if !is_tsumo && *t == win_tile && !ron_tile_used_for_triplet {
+                    ron_tile_used_for_triplet = true;
+                    fu += if is_yaojiu(*t) { 4 } else { 2 };
+                } else {
+                    fu += if is_yaojiu(*t) { 8 } else { 4 };
+                }
+            }
+            MeldKind::Quad(t) => {
+                fu += if is_yaojiu(*t) { 32 } else { 16 };
+            }
+        }
+    }
+
+    ceil10_fu(fu).max(30)
+}
+
+/// 手牌の面子・雀頭・待ち形から符を総合計算します（高点法：最大符を採用）。
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+pub fn calculate_hand_fu(
+    counts: &[u8; 35],
+    open_melds: &[crate::hand::Meld],
+    win_tile: TileName,
+    is_tsumo: bool,
+    is_pinfu: bool,
+    is_chitoitsu: bool,
+    seat_wind: Option<TileName>,
+    round_wind: Option<TileName>,
+) -> usize {
+    if is_chitoitsu {
+        return 25;
+    }
+    let is_closed = crate::hand::is_menzen(open_melds);
+    if is_pinfu && is_closed && is_tsumo {
+        return 20;
+    }
+
+    let patterns = yaku::get_hand_patterns(counts, open_melds);
+    if !patterns.is_empty() {
+        let mut max_fu = 0;
+        for pattern in &patterns {
+            let fu = calculate_pattern_fu(
+                pattern, win_tile, is_tsumo, is_pinfu, is_closed, seat_wind, round_wind,
+            );
+            if fu > max_fu {
+                max_fu = fu;
+            }
+        }
+        return max_fu.max(30);
+    }
+
+    // パターンに分解できない手（テストケース等、14枚揃っていない場合）のフォールバック
+    let mut fu = 20;
+    if is_closed && !is_tsumo {
+        fu += 10;
+    }
+    if is_tsumo && !is_pinfu {
+        fu += 2;
+    }
+    let mut meld_fu = 0;
+    for m in open_melds {
+        match m {
+            crate::hand::Meld::Chii { .. } => {}
+            crate::hand::Meld::Pon(t) => {
+                meld_fu += if is_yaojiu(*t) { 4 } else { 2 };
+            }
+            crate::hand::Meld::Daiminkan(t) | crate::hand::Meld::Kakan(t) => {
+                meld_fu += if is_yaojiu(*t) { 16 } else { 8 };
+            }
+            crate::hand::Meld::Ankan(t) => {
+                meld_fu += if is_yaojiu(*t) { 32 } else { 16 };
+            }
+        }
+    }
+    let mut pair_tile = None;
+    for i in 1..=34 {
+        let c = counts[i];
+        let t = TileName::from_usize(i);
+        if c >= 3 {
+            let is_ron_agari_tile = !is_tsumo && t == win_tile;
+            let val = if is_ron_agari_tile {
+                if is_yaojiu(t) {
+                    4
+                } else {
+                    2
+                }
+            } else if is_yaojiu(t) {
+                8
+            } else {
+                4
+            };
+            meld_fu += val;
+        } else if c == 2 && pair_tile.is_none() {
+            pair_tile = Some(t);
+        }
+    }
+    if let Some(p) = pair_tile {
+        let p_idx = p as usize;
+        if (32..=34).contains(&p_idx) {
+            fu += 2;
+        }
+        if Some(p) == seat_wind {
+            fu += 2;
+        }
+        if Some(p) == round_wind {
+            fu += 2;
+        }
+        if p == win_tile {
+            fu += 2;
+        }
+    }
+    fu += meld_fu;
+    ceil10_fu(fu).max(30)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,5 +569,178 @@ mod tests {
         // 基本点 25 * 2^4 = 400 -> 子ロン: 400 * 4 = 1600点
         let res = calculate_score(2, 25, false, false, false);
         assert_eq!(res.total_points, 1600);
+    }
+
+    #[test]
+    fn test_calculate_hand_fu_pinfu_and_chitoitsu_and_anko() {
+        let empty_melds = vec![];
+        let counts = [0u8; 35];
+
+        // 1. 七対子は25符
+        let fu_chitoi = calculate_hand_fu(
+            &counts,
+            &empty_melds,
+            TileName::East,
+            false,
+            false,
+            true, // is_chitoitsu
+            None,
+            None,
+        );
+        assert_eq!(fu_chitoi, 25);
+
+        // 2. 門前ピンフツモは20符
+        let fu_pinfu_tsumo = calculate_hand_fu(
+            &counts,
+            &empty_melds,
+            TileName::TwoM,
+            true, // is_tsumo
+            true, // is_pinfu
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_pinfu_tsumo, 20);
+
+        // 3. 役牌暗刻（白暗刻 8符）+ 門前ロン（10符）+ 副底（20符） = 38符 -> 40符
+        let mut counts_anko = [0u8; 35];
+        counts_anko[TileName::White as usize] = 3;
+        counts_anko[TileName::TwoM as usize] = 2; // 雀頭
+        let fu_anko = calculate_hand_fu(
+            &counts_anko,
+            &empty_melds,
+            TileName::FiveS,
+            false, // is_tsumo
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_anko, 40);
+    }
+
+    #[test]
+    fn test_calculate_hand_fu_continuous_sequences() {
+        // 123m 234m 345m (3mが3枚あるが順子3組) + 99m (雀頭) + 555s (暗刻 4符)
+        // ツモ: 5s 以外（例えば4mツモで平和形等、ここでは 3mツモ）
+        let mut counts = [0u8; 35];
+        // 123m, 234m, 345m: 1m:1, 2m:2, 3m:3, 4m:2, 5m:1
+        counts[TileName::OneM as usize] = 1;
+        counts[TileName::TwoM as usize] = 2;
+        counts[TileName::ThreeM as usize] = 3;
+        counts[TileName::FourM as usize] = 2;
+        counts[TileName::FiveM as usize] = 1;
+        counts[TileName::NineM as usize] = 2; // 雀頭
+        counts[TileName::FiveS as usize] = 3; // 中張牌暗刻: 4符
+
+        // ツモ和了 (3m ツモ)
+        // 符: 副底 20 + ツモ 2 + 5s暗刻 4 = 26符 -> 30符（3m暗刻の誤判定があれば +4符で 30+4=34 -> 40符になってしまう）
+        let fu = calculate_hand_fu(
+            &counts,
+            &[],
+            TileName::ThreeM,
+            true, // is_tsumo
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu, 30, "連続順子の3mは暗刻符にならず30符であるべき");
+    }
+
+    #[test]
+    fn test_calculate_hand_fu_penchan_and_kanchan() {
+        // 1. 辺張待ち: 111m (ヤオ九牌暗刻 8符) + 234p + 456p + 89s (7s辺張待ち) + 55m (雀頭)
+        let mut counts_penchan = [0u8; 35];
+        counts_penchan[TileName::OneM as usize] = 3; // 1m 暗刻 (8符)
+        counts_penchan[TileName::TwoP as usize] = 1;
+        counts_penchan[TileName::ThreeP as usize] = 1;
+        counts_penchan[TileName::FourP as usize] = 2;
+        counts_penchan[TileName::FiveP as usize] = 1;
+        counts_penchan[TileName::SixP as usize] = 1;
+        counts_penchan[TileName::EightS as usize] = 1;
+        counts_penchan[TileName::NineS as usize] = 1;
+        counts_penchan[TileName::SevenS as usize] = 1; // 和了牌 7s
+        counts_penchan[TileName::FiveM as usize] = 2; // 雀頭
+
+        // 7s ツモ和了: 副底 20 + ツモ 2 + 1m暗刻 8 + 辺張 2 = 32符 -> 40符
+        let fu_penchan = calculate_hand_fu(
+            &counts_penchan,
+            &[],
+            TileName::SevenS,
+            true,
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_penchan, 40, "7s辺張ツモは32符切り上げで40符になるべき");
+
+        // 2. 嵌張待ち: 111m (ヤオ九牌暗刻 8符) + 234p + 456p + 24s (3s嵌張待ち) + 55m (雀頭)
+        let mut counts_kanchan = [0u8; 35];
+        counts_kanchan[TileName::OneM as usize] = 3;
+        counts_kanchan[TileName::TwoP as usize] = 1;
+        counts_kanchan[TileName::ThreeP as usize] = 1;
+        counts_kanchan[TileName::FourP as usize] = 2;
+        counts_kanchan[TileName::FiveP as usize] = 1;
+        counts_kanchan[TileName::SixP as usize] = 1;
+        counts_kanchan[TileName::TwoS as usize] = 1;
+        counts_kanchan[TileName::FourS as usize] = 1;
+        counts_kanchan[TileName::ThreeS as usize] = 1; // 和了牌 3s
+        counts_kanchan[TileName::FiveM as usize] = 2; // 雀頭
+
+        // 3s ツモ和了: 副底 20 + ツモ 2 + 1m暗刻 8 + 嵌張 2 = 32符 -> 40符
+        let fu_kanchan = calculate_hand_fu(
+            &counts_kanchan,
+            &[],
+            TileName::ThreeS,
+            true,
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_kanchan, 40, "3s嵌張ツモは32符切り上げで40符になるべき");
+    }
+
+    #[test]
+    fn test_score_ankan_closed_ron_10_fu() {
+        // 暗槓（Meld::Ankan）のみを持つ手牌でのロン和了（出和了）
+        // 手牌: 234p 456p 789s 55m (11枚門前牌) + 1m暗槓 (Meld::Ankan(1m))
+        // 和了牌: 9s (ロン和了)
+        // 門前清であるため:
+        // - 副底: 20符
+        // - 門前ロン加符: 10符 (暗槓は副露扱いされず門前ロン加符が付くこと！)
+        // - 1m 暗槓 (ヤオ九牌): 32符
+        // - 待ち 789s (両面): 0符
+        // - 雀頭 5m: 0符
+        // 計: 20 + 10 + 32 = 62符 -> 切り上げで 70符
+        let mut counts = [0u8; 35];
+        counts[TileName::TwoP as usize] = 1;
+        counts[TileName::ThreeP as usize] = 1;
+        counts[TileName::FourP as usize] = 2;
+        counts[TileName::FiveP as usize] = 1;
+        counts[TileName::SixP as usize] = 1;
+        counts[TileName::SevenS as usize] = 1;
+        counts[TileName::EightS as usize] = 1;
+        counts[TileName::NineS as usize] = 1; // 和了牌 9s (ロン)
+        counts[TileName::FiveM as usize] = 2; // 雀頭
+
+        let open_melds = vec![crate::hand::Meld::Ankan(TileName::OneM)];
+
+        let fu = calculate_hand_fu(
+            &counts,
+            &open_melds,
+            TileName::NineS,
+            false, // ロン和了
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(
+            fu, 70,
+            "暗槓のみの手牌の出和了は門前ロン加符10符が付き70符になるべき"
+        );
     }
 }

@@ -351,57 +351,36 @@ fn main() {
                     );
                 }
 
-                // 期待値計算 & リアルタイムヒント（順位EV統合）
-                let ctx = AnalysisContext {
-                    turn_number: turn_count,
-                    remaining_wall_tiles: remaining_wall,
-                    seat_wind: Some(player_seat),
-                    round_wind: Some(match_ctx.round_wind),
-                    dora_indicators: &[dora_indicator],
-                    is_dealer: player_is_dealer,
+                let placement_evals = {
+                    let river_refs: Vec<&[TileName]> =
+                        rivers.iter().map(|r| r.as_slice()).collect();
+                    let meld_refs: Vec<&[Meld]> =
+                        hands.iter().map(|h| h.open_melds.as_slice()).collect();
+                    let is_dealer_arr = [
+                        match_ctx.dealer_idx == 0,
+                        match_ctx.dealer_idx == 1,
+                        match_ctx.dealer_idx == 2,
+                        match_ctx.dealer_idx == 3,
+                    ];
+
+                    // 期待値計算 & リアルタイムヒント（順位EV統合、他家リーチ・河・副露コンテキストを完全バインド）
+                    let ctx = AnalysisContext {
+                        target_player: 0,
+                        turn_number: turn_count,
+                        remaining_wall_tiles: remaining_wall,
+                        seat_wind: Some(player_seat),
+                        round_wind: Some(match_ctx.round_wind),
+                        dora_indicators: &[dora_indicator],
+                        is_dealer: player_is_dealer,
+                        riichi_status: riichi_declared,
+                        player_rivers: &river_refs,
+                        player_melds: &meld_refs,
+                        player_is_dealer: is_dealer_arr,
+                    };
+
+                    evaluate_hand_discards_with_placement(&hands[0], None, &ctx, &match_ctx, 0)
                 };
-
-                let mut placement_evals =
-                    evaluate_hand_discards_with_placement(&hands[0], None, &ctx, &match_ctx, 0);
                 let any_riichi = riichi_declared[1] || riichi_declared[2] || riichi_declared[3];
-
-                if any_riichi {
-                    for pev in &mut placement_evals {
-                        // リーチ者の河にある牌は現物（100%安全）
-                        let is_genbutsu = (1..4)
-                            .filter(|&p| riichi_declared[p])
-                            .all(|p| rivers[p].contains(&pev.base.discard_tile));
-
-                        if is_genbutsu {
-                            pev.base.safety.risk_score = 0.0;
-                            pev.base.safety.is_safe = true;
-                        } else {
-                            let d = pev.base.discard_tile;
-                            let is_honor = d as usize >= 28;
-                            let rank = (d as usize - 1) % 9 + 1;
-                            let is_terminal = rank == 1 || rank == 9;
-
-                            if is_honor || is_terminal {
-                                pev.base.safety.risk_score = 0.15;
-                            } else {
-                                pev.base.safety.risk_score = 0.45; // 無筋中張牌
-                            }
-                            pev.base.safety.is_safe = false;
-                        }
-                        let win_prob = pev.base.speed.win_probability;
-                        let value = pev.base.value.expected_score;
-                        pev.base.ev = win_prob * value - pev.base.safety.risk_score * 8000.0;
-                        // 放銃リスクに応じた順位EVペナルティ
-                        pev.placement_ev -= pev.base.safety.risk_score * 30.0; // 満貫放銃で約30pt損失想定
-                    }
-
-                    // 順位EV降順で再ソート
-                    placement_evals.sort_by(|a, b| {
-                        b.placement_ev
-                            .partial_cmp(&a.placement_ev)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                }
 
                 println!("{}", "-".repeat(80));
                 println!("💡 【リアルタイム期待値＆順位EVヒント (AI Advisor)】");
@@ -574,14 +553,6 @@ fn main() {
                 // --- B. CPUの手番 ---
                 let cpu_seat = player_seat_wind(current_turn, match_ctx.dealer_idx);
                 let cpu_is_dealer = current_turn == match_ctx.dealer_idx;
-                let ctx = AnalysisContext {
-                    turn_number: turn_count,
-                    remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(cpu_seat),
-                    round_wind: Some(match_ctx.round_wind),
-                    dora_indicators: &[dora_indicator],
-                    is_dealer: cpu_is_dealer,
-                };
 
                 // CPUの和了チェック（ツモ和了）
                 if let Some(dt) = drawn_tile {
@@ -641,7 +612,32 @@ fn main() {
                 }
 
                 // CPUの打牌決定（期待値最善牌）
-                let cpu_evals = evaluate_hand_discards(&hands[current_turn], None, &ctx);
+                let cpu_evals = {
+                    let river_refs: Vec<&[TileName]> =
+                        rivers.iter().map(|r| r.as_slice()).collect();
+                    let meld_refs: Vec<&[Meld]> =
+                        hands.iter().map(|h| h.open_melds.as_slice()).collect();
+                    let is_dealer_arr = [
+                        match_ctx.dealer_idx == 0,
+                        match_ctx.dealer_idx == 1,
+                        match_ctx.dealer_idx == 2,
+                        match_ctx.dealer_idx == 3,
+                    ];
+                    let ctx = AnalysisContext {
+                        target_player: current_turn,
+                        turn_number: turn_count,
+                        remaining_wall_tiles: wall.remaining(),
+                        seat_wind: Some(cpu_seat),
+                        round_wind: Some(match_ctx.round_wind),
+                        dora_indicators: &[dora_indicator],
+                        is_dealer: cpu_is_dealer,
+                        riichi_status: riichi_declared,
+                        player_rivers: &river_refs,
+                        player_melds: &meld_refs,
+                        player_is_dealer: is_dealer_arr,
+                    };
+                    evaluate_hand_discards(&hands[current_turn], None, &ctx)
+                };
                 let cpu_discard = if !cpu_evals.is_empty() {
                     cpu_evals[0].discard_tile
                 } else {
@@ -781,18 +777,34 @@ fn main() {
                 let is_kamicha = (discarder + 1) % 4 == 0; // 上家からの打牌ならチー可能
                 let player_seat = player_seat_wind(0, match_ctx.dealer_idx);
                 let player_is_dealer = match_ctx.dealer_idx == 0;
-                let call_ctx = AnalysisContext {
-                    turn_number: turn_count,
-                    remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(player_seat),
-                    round_wind: Some(match_ctx.round_wind),
-                    dora_indicators: &[dora_indicator],
-                    is_dealer: player_is_dealer,
+                let advice_opt = {
+                    let river_refs: Vec<&[TileName]> =
+                        rivers.iter().map(|r| r.as_slice()).collect();
+                    let meld_refs: Vec<&[Meld]> =
+                        hands.iter().map(|h| h.open_melds.as_slice()).collect();
+                    let is_dealer_arr = [
+                        match_ctx.dealer_idx == 0,
+                        match_ctx.dealer_idx == 1,
+                        match_ctx.dealer_idx == 2,
+                        match_ctx.dealer_idx == 3,
+                    ];
+                    let call_ctx = AnalysisContext {
+                        target_player: 0,
+                        turn_number: turn_count,
+                        remaining_wall_tiles: wall.remaining(),
+                        seat_wind: Some(player_seat),
+                        round_wind: Some(match_ctx.round_wind),
+                        dora_indicators: &[dora_indicator],
+                        is_dealer: player_is_dealer,
+                        riichi_status: riichi_declared,
+                        player_rivers: &river_refs,
+                        player_melds: &meld_refs,
+                        player_is_dealer: is_dealer_arr,
+                    };
+                    CallAdvisor::advise_call(&hands[0], discarded_tile, is_kamicha, &call_ctx)
                 };
 
-                if let Some(advice) =
-                    CallAdvisor::advise_call(&hands[0], discarded_tile, is_kamicha, &call_ctx)
-                {
+                if let Some(advice) = advice_opt {
                     let call_choices: Vec<_> = advice
                         .choices
                         .iter()
@@ -886,18 +898,34 @@ fn main() {
                 let is_kamicha = (discarder + 1) % 4 == p;
                 let cpu_seat = player_seat_wind(p, match_ctx.dealer_idx);
                 let cpu_is_dealer = p == match_ctx.dealer_idx;
-                let cpu_call_ctx = AnalysisContext {
-                    turn_number: turn_count,
-                    remaining_wall_tiles: wall.remaining(),
-                    seat_wind: Some(cpu_seat),
-                    round_wind: Some(match_ctx.round_wind),
-                    dora_indicators: &[dora_indicator],
-                    is_dealer: cpu_is_dealer,
+                let advice_opt = {
+                    let river_refs: Vec<&[TileName]> =
+                        rivers.iter().map(|r| r.as_slice()).collect();
+                    let meld_refs: Vec<&[Meld]> =
+                        hands.iter().map(|h| h.open_melds.as_slice()).collect();
+                    let is_dealer_arr = [
+                        match_ctx.dealer_idx == 0,
+                        match_ctx.dealer_idx == 1,
+                        match_ctx.dealer_idx == 2,
+                        match_ctx.dealer_idx == 3,
+                    ];
+                    let cpu_call_ctx = AnalysisContext {
+                        target_player: p,
+                        turn_number: turn_count,
+                        remaining_wall_tiles: wall.remaining(),
+                        seat_wind: Some(cpu_seat),
+                        round_wind: Some(match_ctx.round_wind),
+                        dora_indicators: &[dora_indicator],
+                        is_dealer: cpu_is_dealer,
+                        riichi_status: riichi_declared,
+                        player_rivers: &river_refs,
+                        player_melds: &meld_refs,
+                        player_is_dealer: is_dealer_arr,
+                    };
+                    CallAdvisor::advise_call(&hands[p], discarded_tile, is_kamicha, &cpu_call_ctx)
                 };
 
-                if let Some(advice) =
-                    CallAdvisor::advise_call(&hands[p], discarded_tile, is_kamicha, &cpu_call_ctx)
-                {
+                if let Some(advice) = advice_opt {
                     if advice.recommendation == CallRecommendation::AggressiveCall
                         && advice.best_action != CallAction::Pass
                     {

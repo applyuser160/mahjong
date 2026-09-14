@@ -13,6 +13,24 @@ pub enum Meld {
     Kakan(TileName),
 }
 
+impl Meld {
+    /// この副露が門前を崩す公開副露（チー・ポン・大明槓・加槓）かどうかを判定します。
+    /// 暗槓（Ankan）は手牌内で完結し門前を崩さないため false を返します。
+    pub fn is_open(&self) -> bool {
+        !matches!(self, Meld::Ankan(_))
+    }
+}
+
+/// 指定された面子リストに門前を崩す副露が含まれているかを判定します。
+pub fn has_open_meld(melds: &[Meld]) -> bool {
+    melds.iter().any(|m| m.is_open())
+}
+
+/// 指定された面子リストが門前清（暗槓のみ、または副露なし）かどうかを判定します。
+pub fn is_menzen(melds: &[Meld]) -> bool {
+    !has_open_meld(melds)
+}
+
 #[derive(Clone, Debug)]
 /// プレイヤーの手牌を表す構造体です。
 pub struct Hand {
@@ -29,6 +47,16 @@ impl Default for Hand {
 }
 
 impl Hand {
+    /// 手牌が門前清（暗槓のみ、または副露なし）かどうかを判定します。
+    pub fn is_menzen(&self) -> bool {
+        is_menzen(&self.open_melds)
+    }
+
+    /// 手牌に門前を崩す副露（チー・ポン・大明槓・加槓）があるかを判定します。
+    pub fn has_open_meld(&self) -> bool {
+        has_open_meld(&self.open_melds)
+    }
+
     pub const fn new() -> Self {
         Self {
             tiles: [TileName::None; 14],

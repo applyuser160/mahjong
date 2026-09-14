@@ -135,6 +135,7 @@ fn test_evaluate_hand_discards_with_placement() {
         round_wind: Some(TileName::East),
         dora_indicators: &[TileName::NineM],
         is_dealer: true,
+        ..Default::default()
     };
 
     let match_ctx = MatchContext {
@@ -151,7 +152,87 @@ fn test_evaluate_hand_discards_with_placement() {
     assert!(!evals.is_empty());
 
     let best = &evals[0];
-    assert_eq!(best.base.discard_tile, TileName::White); // 孤立字牌の白切りが最善
-    assert!(best.expected_rank >= 1.0 && best.expected_rank <= 4.0);
-    assert!(!best.situational_note.is_empty());
+    assert_eq!(best.base.discard_tile, TileName::White);
+    assert!(best.placement_ev > 0.0);
+    assert!(best.rank_probabilities[0] > 0.3);
+}
+
+#[test]
+fn test_placement_ev_dealer_riichi_defense() {
+    // Issue #79 検証: オーラスで親リーチが入っている局面での Placement EV
+    let mut hand = Hand::new();
+    // 手牌: 現物 4m と 無筋 5m を含む手
+    for &t in &[
+        TileName::FourM, // 親の現物
+        TileName::FiveM, // 無筋危険牌
+        TileName::NineP,
+        TileName::NineP,
+        TileName::OneS,
+        TileName::TwoS,
+        TileName::ThreeS,
+        TileName::SevenS,
+        TileName::EightS,
+        TileName::NineS,
+        TileName::West,
+        TileName::West,
+        TileName::North,
+        TileName::North,
+    ] {
+        hand.push(t);
+    }
+
+    let river_dealer = vec![TileName::FourM, TileName::East];
+    let rivers: [&[TileName]; 4] = [&[], &river_dealer, &[], &[]];
+
+    // 南4局（オーラス）、下家（1番）が親でリーチ
+    // 自家（0番）は 2位 27,000点、親は 3位 23,000点、ラス目は 18,000点
+    // 親に満貫（12,000点）放銃すると一撃でラス落ち！
+    let analysis_ctx = AnalysisContext {
+        turn_number: 10,
+        remaining_wall_tiles: 35,
+        seat_wind: Some(TileName::North),
+        round_wind: Some(TileName::South),
+        dora_indicators: &[TileName::NineM],
+        is_dealer: false,
+        riichi_status: [false, true, false, false], // 下家（親）リーチ
+        player_rivers: &rivers,
+        player_is_dealer: [false, true, false, false],
+        ..Default::default()
+    };
+
+    let match_ctx = MatchContext {
+        scores: [27000, 23000, 32000, 18000],
+        round_wind: TileName::South,
+        round_number: 4,
+        honba: 0,
+        riichi_sticks: 1,
+        dealer_idx: 1,
+        rule: RuleConfig::default(),
+    };
+
+    let evals = evaluate_hand_discards_with_placement(&hand, None, &analysis_ctx, &match_ctx, 0);
+
+    let eval_4m = evals
+        .iter()
+        .find(|e| e.base.discard_tile == TileName::FourM)
+        .unwrap();
+    let eval_5m = evals
+        .iter()
+        .find(|e| e.base.discard_tile == TileName::FiveM)
+        .unwrap();
+
+    // 親満貫放銃のラス落ちリスクが反映され、現物4mのPlacement EVが無筋5mを圧倒すること！
+    assert!(
+        eval_4m.placement_ev > eval_5m.placement_ev,
+        "Genbutsu 4m Placement EV ({}) must be significantly higher than dangerous 5m ({})",
+        eval_4m.placement_ev,
+        eval_5m.placement_ev
+    );
+    // 4位率（ラス率）も無筋5mの方が圧倒的に高くなること
+    assert!(
+        eval_5m.rank_probabilities[3] > eval_4m.rank_probabilities[3],
+        "4th place probability of 5m ({}) must be higher than 4m ({})",
+        eval_5m.rank_probabilities[3],
+        eval_4m.rank_probabilities[3]
+    );
 }
