@@ -451,8 +451,8 @@ impl PyMeld {
         dict.set_item("kind", self.kind())?;
         let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
         let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
-        dict.set_item("tiles", &tiles_str)?;
-        dict.set_item("mpsz", &tiles_mpsz)?;
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
         Ok(dict.unbind())
     }
 
@@ -512,8 +512,8 @@ impl PyHand {
         let dict = PyDict::new(py);
         let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
         let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
-        dict.set_item("tiles", &tiles_str)?;
-        dict.set_item("mpsz", &tiles_mpsz)?;
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
 
         let melds_list = PyList::empty(py);
         for m in self.open_melds() {
@@ -559,8 +559,8 @@ impl PyRiver {
         let dict = PyDict::new(py);
         let tiles_str = PyList::new(py, self.tiles().iter().map(|t| t.as_str()))?;
         let tiles_mpsz = PyList::new(py, self.tiles().iter().map(|t| t.mpsz()))?;
-        dict.set_item("tiles", &tiles_str)?;
-        dict.set_item("mpsz", &tiles_mpsz)?;
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
         Ok(dict.unbind())
     }
 
@@ -1010,7 +1010,11 @@ impl From<ShantenResult> for PyShantenResult {
 
 #[pyfunction]
 #[pyo3(signature = (tiles, open_melds_count=0))]
-pub fn py_calculate_shanten(py: Python<'_>, tiles: Vec<PyTileName>, open_melds_count: usize) -> PyShantenResult {
+pub fn py_calculate_shanten(
+    py: Python<'_>,
+    tiles: Vec<PyTileName>,
+    open_melds_count: usize,
+) -> PyShantenResult {
     let mut counts = [0u8; 35];
     for py_tile in tiles {
         let rs_tile: TileName = py_tile.into();
@@ -1019,7 +1023,8 @@ pub fn py_calculate_shanten(py: Python<'_>, tiles: Vec<PyTileName>, open_melds_c
             counts[idx] += 1;
         }
     }
-    py.allow_threads(|| calculate_shanten_from_counts(&counts, open_melds_count)).into()
+    py.allow_threads(|| calculate_shanten_from_counts(&counts, open_melds_count))
+        .into()
 }
 
 // ==========================================
@@ -1205,7 +1210,8 @@ pub fn py_evaluate_hand_discards(
         None
     };
 
-    let evs = py.allow_threads(|| crate::expectation::evaluate_hand_discards(&hand, visible_opt, &ctx));
+    let evs =
+        py.allow_threads(|| crate::expectation::evaluate_hand_discards(&hand, visible_opt, &ctx));
     evs.into_iter().map(|e| e.into()).collect()
 }
 
@@ -1377,6 +1383,7 @@ impl PyCallAdvice {
 #[pyfunction]
 #[pyo3(signature = (tiles, target_tile, is_kamicha=true, dora_indicators=None))]
 pub fn py_advise_call(
+    py: Python<'_>,
     tiles: Vec<PyTileName>,
     target_tile: PyTileName,
     is_kamicha: bool,
@@ -1403,8 +1410,9 @@ pub fn py_advise_call(
         ..Default::default()
     };
 
-    let advice =
-        crate::call_advisor::CallAdvisor::advise_call(&hand, target_tile.into(), is_kamicha, &ctx)?;
+    let advice = py.allow_threads(|| {
+        crate::call_advisor::CallAdvisor::advise_call(&hand, target_tile.into(), is_kamicha, &ctx)
+    })?;
 
     let choices = advice
         .choices
@@ -1451,8 +1459,8 @@ impl PyDrillProblem {
         let dict = PyDict::new(py);
         let tiles_str = PyList::new(py, self.tiles.iter().map(|t| t.as_str()))?;
         let tiles_mpsz = PyList::new(py, self.tiles.iter().map(|t| t.mpsz()))?;
-        dict.set_item("tiles", &tiles_str)?;
-        dict.set_item("mpsz", &tiles_mpsz)?;
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
         dict.set_item("dora_indicator", self.dora_indicator.as_str())?;
         dict.set_item("dora_mpsz", self.dora_indicator.mpsz())?;
         dict.set_item("turn_number", self.turn_number)?;
@@ -1987,8 +1995,8 @@ impl PyTableState {
 
         let dora_str = PyList::new(py, self.dora_indicators.iter().map(|t| t.as_str()))?;
         let dora_mpsz = PyList::new(py, self.dora_indicators.iter().map(|t| t.mpsz()))?;
-        dict.set_item("dora_indicators", &dora_str)?;
-        dict.set_item("dora_indicators_mpsz", &dora_mpsz)?;
+        dict.set_item("dora_indicators", dora_str)?;
+        dict.set_item("dora_indicators_mpsz", dora_mpsz)?;
         dict.set_item("remaining_wall_tiles", self.remaining_wall_tiles)?;
 
         let players_list = PyList::empty(py);
@@ -2161,8 +2169,9 @@ pub fn py_evaluate_placement_discards(
     };
 
     let rs_match: MatchContext = match_context.into();
-    let evs = py.allow_threads(||
-        evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx));
+    let evs = py.allow_threads(|| {
+        evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx)
+    });
     Ok(evs.into_iter().map(|e| e.into()).collect())
 }
 
