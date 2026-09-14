@@ -1,9 +1,9 @@
 use crate::acceptance::calculate_acceptance;
 use crate::dora::count_dora;
 use crate::hand::Hand;
-use crate::score::calculate_score;
+use crate::score::{calculate_hand_fu, calculate_score};
 use crate::tile::TileName;
-use crate::yaku::{judge_yaku, WinContext, ALL_YAKU};
+use crate::yaku::{judge_yaku, WinContext, YakuId, ALL_YAKU};
 
 /// 速度指標
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +58,11 @@ pub struct AnalysisContext<'a> {
     pub round_wind: Option<TileName>,    // 場風
     pub dora_indicators: &'a [TileName], // ドラ表示牌
     pub is_dealer: bool,                 // 親かどうか
+    // --- 状況・他家コンテキスト（高度化用） ---
+    pub riichi_status: [bool; 4], // 各プレイヤーのリーチ状態 (0:自家, 1:下家, 2:対面, 3:上家)
+    pub player_rivers: &'a [&'a [TileName]], // 各プレイヤーの捨て牌 (長さ4、空なら参照なし)
+    pub player_melds: &'a [&'a [crate::hand::Meld]], // 各プレイヤーの副露 (長さ4)
+    pub player_is_dealer: [bool; 4], // 各プレイヤーが親かどうか
 }
 
 impl Default for AnalysisContext<'static> {
@@ -69,6 +74,10 @@ impl Default for AnalysisContext<'static> {
             round_wind: Some(TileName::East),
             dora_indicators: &[],
             is_dealer: true,
+            riichi_status: [false; 4],
+            player_rivers: &[],
+            player_melds: &[],
+            player_is_dealer: [true, false, false, false],
         }
     }
 }
@@ -107,23 +116,25 @@ pub fn evaluate_hand_discards(
         // 打牌した牌を含む base_visible を可視牌として渡す
         let acceptance = calculate_acceptance(&working, open_melds_count, Some(&base_visible));
         let shanten_after = acceptance.current_shanten;
+        let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
 
-        // 1. 速度評価（和了確率）
+        // 1. 速度評価（和了確率） - 待ち形・巡目・脅威度を反映
         let win_probability = estimate_win_probability(
             shanten_after,
             acceptance.total_remaining,
+            accepted_tiles.len(),
             remaining_turns,
             wall_remaining,
+            ctx,
         );
 
-        let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
         let speed = SpeedMetric {
             accepted_tiles: accepted_tiles.clone(),
             remaining_count: acceptance.total_remaining,
             win_probability,
         };
 
-        // 2. 打点評価（テンパイ・1向聴・2向聴以上の遷移を正しくモデル化）
+        // 2. 打点評価（テンパイ・1向聴・2向聴以上の正確な符計算とダマテン想定）
         let value = estimate_hand_value(
             &working,
             shanten_after,
@@ -132,12 +143,37 @@ pub fn evaluate_hand_discards(
             ctx,
         );
 
-        // 3. 安全度評価
-        let safety = evaluate_tile_safety(discard_tile);
+        // 3. 安全度評価（現物・スジ・生牌・カベ・リーチ状況を反映）
+        let safety = evaluate_tile_safety(discard_tile, ctx, &base_visible);
 
         // 4. 総合期待値 (EV)
-        // 基本式: EV = 和了確率 * 想定打点 - 放銃リスク
-        let ev = win_probability * value.expected_score - safety.risk_score * 800.0;
+        // 相手にリーチ者がいる場合は放銃失点ペナルティを重くし（ベタオリの優位性）、
+        // リーチ者がいない平時は手作りを阻害しないようペナルティを抑制
+        let has_riichi_threat = ctx
+            .riichi_status
+            .iter()
+            .enumerate()
+            .skip(1)
+            .any(|(_, &r)| r);
+
+        let deal_loss_penalty = if has_riichi_threat {
+            let dealer_riichi = ctx
+                .riichi_status
+                .iter()
+                .enumerate()
+                .skip(1)
+                .any(|(p, &r)| r && ctx.player_is_dealer[p]);
+            if dealer_riichi {
+                6500.0 // 親リーチに対する失点期待値ペナルティ
+            } else {
+                5000.0 // 子リーチに対する失点期待値ペナルティ
+            }
+        } else {
+            let turn_factor = (ctx.turn_number as f64 / 18.0).clamp(0.25, 1.0);
+            turn_factor * 600.0 // 平時序盤〜中盤の緩やかな失点リスク
+        };
+
+        let ev = win_probability * value.expected_score - safety.risk_score * deal_loss_penalty;
 
         evaluations.push(CandidateEvaluation {
             discard_tile,
@@ -183,15 +219,17 @@ pub fn evaluate_standing_hand(
 
     let acceptance = calculate_acceptance(&hand.counts, open_melds_count, Some(&base_visible));
     let shanten = acceptance.current_shanten;
+    let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
 
     let win_probability = estimate_win_probability(
         shanten,
         acceptance.total_remaining,
+        accepted_tiles.len(),
         remaining_turns,
         wall_remaining,
+        ctx,
     );
 
-    let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
     let speed = SpeedMetric {
         accepted_tiles: accepted_tiles.clone(),
         remaining_count: acceptance.total_remaining,
@@ -216,12 +254,14 @@ pub fn evaluate_standing_hand(
     }
 }
 
-/// シャンテン数と受け入れ枚数から和了確率をモデル化
+/// シャンテン数、受け入れ枚数、待ち牌種数、巡目・他家脅威度から和了確率をモデル化 (Issue #76)
 fn estimate_win_probability(
     shanten: i8,
     acceptance_remaining: usize,
+    wait_tiles_count: usize,
     remaining_turns: f64,
     wall_remaining: f64,
+    ctx: &AnalysisContext<'_>,
 ) -> f64 {
     if shanten < 0 {
         return 1.0; // 既に和了
@@ -234,15 +274,73 @@ fn estimate_win_probability(
     // 残り巡目でのツモ確率: 1 - (1 - p)^R
     let p_advance = 1.0 - (1.0 - p_draw_per_turn).powf(remaining_turns);
 
+    // 1. 待ち形による補正（テンパイ時: 好形待ち vs 愚形待ち）
+    let shape_factor = if shanten == 0 {
+        if wait_tiles_count >= 2 && acceptance_remaining >= 5 {
+            1.0 // 両面・多面張
+        } else {
+            0.65 // 愚形（カンチャン・ペンチャン・単騎）
+        }
+    } else if shanten == 1 {
+        // 一向聴: 受入種数が豊富なら好形一向聴
+        if wait_tiles_count >= 4 && acceptance_remaining >= 10 {
+            0.45
+        } else {
+            0.32
+        }
+    } else if shanten == 2 {
+        0.16
+    } else {
+        0.04
+    };
+
+    // 2. 巡目による減衰（終盤に向かうにつれて他家の守備・ツモ流出により和了率低下）
+    let turn = ctx.turn_number.clamp(1, 18);
+    let turn_decay = if turn <= 6 {
+        1.0
+    } else if turn <= 12 {
+        1.0 - (turn - 6) as f64 * 0.025 // 0.975〜0.85
+    } else {
+        0.85 - (turn - 12) as f64 * 0.06 // 0.79〜0.49
+    };
+
+    // 3. 他家脅威度による減衰（リーチ・多副露による和了阻止・降ろされ率）
+    let riichi_count = ctx
+        .riichi_status
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, &r)| r)
+        .count();
+    let riichi_factor = match riichi_count {
+        0 => 1.0,
+        1 => 0.75,
+        2 => 0.50,
+        _ => 0.30,
+    };
+
+    let high_meld_count = ctx
+        .player_melds
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, m)| m.len() >= 2)
+        .count();
+    let meld_factor = (1.0 - high_meld_count as f64 * 0.10).max(0.7);
+
+    let threat_factor = (riichi_factor * meld_factor).clamp(0.25, 1.0);
+
+    let raw_p = p_advance * shape_factor * turn_decay * threat_factor;
+
     match shanten {
-        0 => p_advance.clamp(0.05, 0.95),           // テンパイ -> 和了
-        1 => (p_advance * 0.45).clamp(0.02, 0.70),  // 一向聴 -> テンパイ -> 和了
-        2 => (p_advance * 0.18).clamp(0.01, 0.40),  // 二向聴
-        _ => (p_advance * 0.05).clamp(0.001, 0.15), // 三向聴以上
+        0 => raw_p.clamp(0.02, 0.95),  // テンパイ
+        1 => raw_p.clamp(0.01, 0.65),  // 一向聴
+        2 => raw_p.clamp(0.005, 0.35), // 二向聴
+        _ => raw_p.clamp(0.001, 0.12), // 三向聴以上
     }
 }
 
-/// シャンテン数・有効牌・副露情報から想定和了打点を評価
+/// シャンテン数・有効牌・副露情報から想定和了打点を評価 (Issue #77)
 fn estimate_hand_value(
     counts: &[u8; 35],
     shanten: i8,
@@ -253,7 +351,6 @@ fn estimate_hand_value(
     let is_closed = open_melds.is_empty();
 
     // --- ケース 1: テンパイ (shanten == 0) ---
-    // accepted_tiles はまさに「和了牌（待ち牌）」。各牌を足すことで和了形になり、即座に厳密な得点計算が可能。
     if shanten == 0 {
         if accepted_tiles.is_empty() {
             return ValueMetric {
@@ -267,7 +364,7 @@ fn estimate_hand_value(
         let mut total_score = 0.0;
         let mut total_han = 0.0;
         let mut yaku_names = Vec::new();
-        let sample_count = accepted_tiles.len().min(4);
+        let sample_count = accepted_tiles.len().min(6);
 
         let mut working = *counts;
 
@@ -275,20 +372,20 @@ fn estimate_hand_value(
             let idx = tile as usize;
             working[idx] += 1;
 
-            let win_ctx = WinContext {
+            // まず役判定（門前・役あり判定のためダマテン状態で判定）
+            let base_win_ctx = WinContext {
                 is_closed,
                 is_tsumo: true,
                 seat_wind: ctx.seat_wind,
                 round_wind: ctx.round_wind,
-                riichi: is_closed, // 門前ならリーチ想定
+                riichi: false, // 一旦ダマテン想定で役判定
                 win_tile: Some(tile),
                 ..Default::default()
             };
 
-            // 実際の副露 (open_melds) を渡して役判定を行う
-            let yaku_set = judge_yaku(&working, open_melds, win_ctx);
+            let yaku_set = judge_yaku(&working, open_melds, base_win_ctx);
 
-            let mut han: usize = 0;
+            let mut base_han: usize = 0;
             let mut is_yakuman = false;
 
             for y_info in ALL_YAKU {
@@ -301,29 +398,50 @@ fn estimate_hand_value(
                     } else {
                         y_info.han_open
                     };
-                    han += h.max(0) as usize;
+                    base_han += h.max(0) as usize;
                     if !yaku_names.contains(&y_info.name_ja) {
                         yaku_names.push(y_info.name_ja);
                     }
                 }
             }
 
-            // ドラ加算
             let dora_count = count_dora(&working, ctx.dora_indicators);
-            han += dora_count;
+            let total_base_han = base_han + dora_count;
 
-            if han == 0 && is_closed {
-                han = 1;
-                if !yaku_names.contains(&"立直") {
+            // 門前で役なしの場合、リーチ必須
+            let needs_riichi = is_closed && base_han == 0;
+            let will_riichi = is_closed && (needs_riichi || total_base_han <= 3);
+
+            let effective_han = if is_yakuman {
+                13
+            } else if will_riichi {
+                if needs_riichi && !yaku_names.contains(&"立直") {
                     yaku_names.push("立直");
                 }
-            } else if han == 0 {
-                han = 1;
-            }
+                // リーチ時は裏ドラ・一発の期待値として約0.3〜0.5翻を加算
+                (total_base_han + 1).max(1)
+            } else {
+                total_base_han.max(1)
+            };
 
-            let score_res = calculate_score(han, 30, ctx.is_dealer, true, is_yakuman);
+            let is_pinfu = yaku_set.contains(&YakuId::Pinfu);
+            let is_chitoitsu = yaku_set.contains(&YakuId::Chitoitsu);
+
+            // 正確な符計算
+            let fu = calculate_hand_fu(
+                &working,
+                open_melds,
+                tile,
+                true, // ツモ想定
+                is_pinfu,
+                is_chitoitsu,
+                ctx.seat_wind,
+                ctx.round_wind,
+            );
+
+            let score_res = calculate_score(effective_han, fu, ctx.is_dealer, true, is_yakuman);
             total_score += score_res.total_points as f64;
-            total_han += han as f64;
+            total_han += effective_han as f64;
 
             working[idx] -= 1;
         }
@@ -341,12 +459,12 @@ fn estimate_hand_value(
     }
 
     // --- ケース 2: 一向聴 (shanten == 1) ---
-    // 有効牌を1枚ツモってテンパイになった先の和了形をシミュレート
+    // 有効牌を1枚ツモってテンパイになった先の和了形をシミュレート（最大8種まで拡張）
     if shanten == 1 && !accepted_tiles.is_empty() {
         let mut total_score = 0.0;
         let mut total_han = 0.0;
         let mut yaku_names = Vec::new();
-        let sample_count = accepted_tiles.len().min(3);
+        let sample_count = accepted_tiles.len().min(8);
 
         let mut working = *counts;
 
@@ -371,7 +489,7 @@ fn estimate_hand_value(
 
             if let Some((discard_idx, win_tile)) = best_move {
                 working[discard_idx] -= 1; // テンパイ打牌で余剰牌を除去
-                working[win_tile as usize] += 1; // 和了牌を追加（これで正規の和了枚数）
+                working[win_tile as usize] += 1; // 和了牌を追加
 
                 let win_ctx = WinContext {
                     is_closed,
@@ -414,7 +532,20 @@ fn estimate_hand_value(
                     han = 1;
                 }
 
-                let score_res = calculate_score(han, 30, ctx.is_dealer, true, is_yakuman);
+                let is_pinfu = yaku_set.contains(&YakuId::Pinfu);
+                let is_chitoitsu = yaku_set.contains(&YakuId::Chitoitsu);
+                let fu = calculate_hand_fu(
+                    &working,
+                    open_melds,
+                    win_tile,
+                    true,
+                    is_pinfu,
+                    is_chitoitsu,
+                    ctx.seat_wind,
+                    ctx.round_wind,
+                );
+
+                let score_res = calculate_score(han, fu, ctx.is_dealer, true, is_yakuman);
                 total_score += score_res.total_points as f64;
                 total_han += han as f64;
 
@@ -441,7 +572,6 @@ fn estimate_hand_value(
     }
 
     // --- ケース 3: 二向聴以上 (shanten >= 2) ---
-    // 手牌内の役要素（ドラ、役牌、タンヤオ適合、染め手）からベース打点を推定
     let dora_count = count_dora(counts, ctx.dora_indicators);
     let mut estimated_han = if is_closed { 2.0 } else { 1.0 } + dora_count as f64;
     let mut yaku_names = Vec::new();
@@ -451,7 +581,6 @@ fn estimate_hand_value(
         yaku_names.push("門前清自摸和");
     }
 
-    // 役牌の対子・暗刻
     let honor_tiles = [
         TileName::White,
         TileName::Green,
@@ -480,34 +609,189 @@ fn estimate_hand_value(
     }
 }
 
-/// 牌の安全度（孤立度・危険度）を評価
-fn evaluate_tile_safety(tile: TileName) -> SafetyMetric {
+/// 牌の安全度（現物・スジ・生牌・カベ・リーチ状況）を動的に評価 (Issue #78)
+pub fn evaluate_tile_safety(
+    tile: TileName,
+    ctx: &AnalysisContext<'_>,
+    visible_counts: &[u8; 35],
+) -> SafetyMetric {
     let idx = tile as usize;
-    // 字牌 (28..=34)
-    if idx >= 28 {
-        return SafetyMetric {
-            risk_score: 0.1,
-            is_safe: true,
-        };
-    }
 
-    let rank = (idx - 1) % 9 + 1;
-    // 1, 9 牌
-    if rank == 1 || rank == 9 {
-        SafetyMetric {
-            risk_score: 0.2,
-            is_safe: true,
+    // 他家にリーチ者がいるか？
+    let riichi_opponents: Vec<usize> = ctx
+        .riichi_status
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter_map(|(p, &r)| if r { Some(p) } else { None })
+        .collect();
+
+    if !riichi_opponents.is_empty() {
+        // --- リーチ者がいる状況での安全度評価 ---
+
+        // 1. 現物判定: 全リーチ者の河にこの牌が含まれているか
+        let mut is_genbutsu_all = true;
+        let mut is_genbutsu_any = false;
+
+        for &p in &riichi_opponents {
+            if let Some(river) = ctx.player_rivers.get(p) {
+                if river.contains(&tile) {
+                    is_genbutsu_any = true;
+                } else {
+                    is_genbutsu_all = false;
+                }
+            } else {
+                is_genbutsu_all = false;
+            }
         }
-    } else if rank == 2 || rank == 8 {
-        SafetyMetric {
-            risk_score: 0.4,
-            is_safe: false,
+
+        // 全リーチ者に対して現物であれば完全安全
+        if is_genbutsu_all && is_genbutsu_any {
+            return SafetyMetric {
+                risk_score: 0.0,
+                is_safe: true,
+            };
+        } else if is_genbutsu_any {
+            // 複数リーチ者のうち一部の現物
+            return SafetyMetric {
+                risk_score: 0.20,
+                is_safe: false,
+            };
+        }
+
+        // 2. 字牌判定 (idx >= 28)
+        if idx >= 28 {
+            let vis = visible_counts[idx];
+            return match vis {
+                4 => SafetyMetric {
+                    risk_score: 0.0,
+                    is_safe: true,
+                }, // 4枚見え（完全安牌）
+                3 => SafetyMetric {
+                    risk_score: 0.05,
+                    is_safe: true,
+                }, // 3枚見え（地獄単騎以外通る）
+                2 => SafetyMetric {
+                    risk_score: 0.12,
+                    is_safe: true,
+                }, // 2枚見え
+                _ => SafetyMetric {
+                    risk_score: 0.35,
+                    is_safe: false,
+                }, // 生牌（役牌・単騎の危険大）
+            };
+        }
+
+        // 3. 数牌判定（スジ・カベ判定）
+        let (suit, rank) = if idx <= 9 {
+            (0, idx)
+        } else if idx <= 18 {
+            (1, idx - 9)
+        } else {
+            (2, idx - 18)
+        };
+
+        // リーチ者の河にある同色の数字を収集
+        let mut riichi_river_ranks = Vec::new();
+        for &p in &riichi_opponents {
+            if let Some(river) = ctx.player_rivers.get(p) {
+                for &r_tile in *river {
+                    let r_idx = r_tile as usize;
+                    let (r_suit, r_rank) = if (1..=9).contains(&r_idx) {
+                        (0, r_idx)
+                    } else if (10..=18).contains(&r_idx) {
+                        (1, r_idx - 9)
+                    } else if (19..=27).contains(&r_idx) {
+                        (2, r_idx - 18)
+                    } else {
+                        (99, 99)
+                    };
+                    if r_suit == suit {
+                        riichi_river_ranks.push(r_rank);
+                    }
+                }
+            }
+        }
+
+        // スジ判定
+        let is_suji = match rank {
+            1 => riichi_river_ranks.contains(&4),
+            2 => riichi_river_ranks.contains(&5),
+            3 => riichi_river_ranks.contains(&6),
+            4 => riichi_river_ranks.contains(&1) && riichi_river_ranks.contains(&7),
+            5 => riichi_river_ranks.contains(&2) && riichi_river_ranks.contains(&8),
+            6 => riichi_river_ranks.contains(&3) && riichi_river_ranks.contains(&9),
+            7 => riichi_river_ranks.contains(&4),
+            8 => riichi_river_ranks.contains(&5),
+            9 => riichi_river_ranks.contains(&6),
+            _ => false,
+        };
+
+        let is_half_suji = match rank {
+            4 => riichi_river_ranks.contains(&1) || riichi_river_ranks.contains(&7),
+            5 => riichi_river_ranks.contains(&2) || riichi_river_ranks.contains(&8),
+            6 => riichi_river_ranks.contains(&3) || riichi_river_ranks.contains(&9),
+            _ => false,
+        };
+
+        if is_suji {
+            let risk = match rank {
+                1 | 9 => 0.08,
+                2 | 8 => 0.18,
+                4..=6 => 0.15, // 両スジ
+                _ => 0.28,
+            };
+            SafetyMetric {
+                risk_score: risk,
+                is_safe: risk < 0.20,
+            }
+        } else if is_half_suji {
+            SafetyMetric {
+                risk_score: 0.35,
+                is_safe: false,
+            }
+        } else {
+            // 無筋
+            let risk = match rank {
+                1 | 9 => 0.25,
+                2 | 8 => 0.45,
+                _ => 0.75, // 3〜7の無筋中張牌は超危険
+            };
+            SafetyMetric {
+                risk_score: risk,
+                is_safe: false,
+            }
         }
     } else {
-        // 3〜7 中張牌
-        SafetyMetric {
-            risk_score: 0.6,
-            is_safe: false,
+        // --- リーチ者がいない平時の安全度評価 ---
+        let turn = ctx.turn_number.clamp(1, 18);
+        if idx >= 28 {
+            let vis = visible_counts[idx];
+            let risk = if vis >= 2 { 0.05 } else { 0.12 };
+            SafetyMetric {
+                risk_score: risk,
+                is_safe: true,
+            }
+        } else {
+            let rank = (idx - 1) % 9 + 1;
+            let base_risk = match rank {
+                1 | 9 => 0.10,
+                2 | 8 => 0.20,
+                _ => 0.35,
+            };
+            // 序盤なら中張牌の切り出しリスクをさらに抑える
+            let turn_factor = if turn <= 6 {
+                0.5
+            } else if turn <= 12 {
+                0.8
+            } else {
+                1.0
+            };
+            let risk = base_risk * turn_factor;
+            SafetyMetric {
+                risk_score: risk,
+                is_safe: risk <= 0.15,
+            }
         }
     }
 }
@@ -657,5 +941,136 @@ mod tests {
         assert_eq!(eval.shanten, 0); // テンパイ
         assert!(eval.speed.remaining_count > 0);
         assert!(eval.ev > 1000.0);
+    }
+
+    #[test]
+    fn test_win_probability_favorable_vs_unfavorable_and_threat_decay() {
+        // Issue #76 検証: 好形待ち vs 愚形待ち、他家リーチによる減衰
+        let ctx_normal = AnalysisContext::default();
+
+        // テンパイ 好形（両面8枚待ち）
+        let p_good = estimate_win_probability(0, 8, 2, 12.0, 50.0, &ctx_normal);
+        // テンパイ 愚形（カンチャン4枚待ち）
+        let p_bad = estimate_win_probability(0, 4, 1, 12.0, 50.0, &ctx_normal);
+
+        assert!(
+            p_good > p_bad,
+            "Good wait win probability ({}) must be strictly higher than bad wait ({})",
+            p_good,
+            p_bad
+        );
+
+        // 他家リーチ時の減衰
+        let mut ctx_riichi = AnalysisContext::default();
+        ctx_riichi.riichi_status[1] = true; // 下家リーチ
+        let p_under_riichi = estimate_win_probability(0, 8, 2, 12.0, 50.0, &ctx_riichi);
+
+        assert!(
+            p_under_riichi < p_good,
+            "Win probability under opponent riichi ({}) must be lower than normal ({})",
+            p_under_riichi,
+            p_good
+        );
+    }
+
+    #[test]
+    fn test_hand_value_accurate_fu_and_chitoitsu() {
+        // Issue #77 検証: 七対子（25符）の想定打点が計算されること
+        // 13枚のテンパイ手牌 (4s単騎待ち)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::OneM,
+            TileName::ThreeM,
+            TileName::ThreeM,
+            TileName::FiveM,
+            TileName::FiveM,
+            TileName::SevenP,
+            TileName::SevenP,
+            TileName::NineP,
+            TileName::NineP,
+            TileName::TwoS,
+            TileName::TwoS,
+            TileName::FourS, // 13枚目 (4s待ち)
+        ] {
+            hand.push(t);
+        }
+
+        let ctx = AnalysisContext {
+            is_dealer: false,
+            ..Default::default()
+        };
+        let ev = estimate_hand_value(&hand.counts, 0, &[TileName::FourS], &hand.open_melds, &ctx);
+
+        // 七対子 (2翻25符) -> 1600点 (リーチ想定なら3翻25符 -> 3200点)
+        assert!(ev.primary_yaku.contains(&"七対子"));
+        assert!(ev.expected_score >= 1600.0);
+    }
+
+    #[test]
+    fn test_tile_safety_genbutsu_and_suji_defense() {
+        // Issue #78 検証: 現物判定（0.0）、スジ判定（低危険度）、無筋（高危険度）
+        let river_opp = vec![TileName::FourM, TileName::East]; // 下家河: 4m, 東
+        let rivers: [&[TileName]; 4] = [&[], &river_opp, &[], &[]];
+
+        let mut ctx = AnalysisContext::default();
+        ctx.riichi_status[1] = true; // 下家リーチ
+        ctx.player_rivers = &rivers;
+
+        let visible = [0u8; 35];
+
+        // 1. 現物: 4m
+        let s_genbutsu = evaluate_tile_safety(TileName::FourM, &ctx, &visible);
+        assert_eq!(s_genbutsu.risk_score, 0.0);
+        assert!(s_genbutsu.is_safe);
+
+        // 2. スジ: 1m (4mが河にあるのでスジ)
+        let s_suji = evaluate_tile_safety(TileName::OneM, &ctx, &visible);
+        assert!(s_suji.risk_score < 0.20);
+        assert!(s_suji.is_safe);
+
+        // 3. 無筋中張牌: 5m (無筋中張牌は高危険度)
+        let s_danger = evaluate_tile_safety(TileName::FiveM, &ctx, &visible);
+        assert!(s_danger.risk_score >= 0.70);
+        assert!(!s_danger.is_safe);
+
+        // 4. ベタオリ局面でのEV比較
+        // 手牌に 現物(4m) と 無筋(5m) がある時、放銃ペナルティにより現物切りのEVが高くなること
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::FourM, // 現物
+            TileName::FiveM, // 無筋危険牌
+            TileName::NineP,
+            TileName::NineP,
+            TileName::OneS,
+            TileName::TwoS,
+            TileName::ThreeS,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::West,
+            TileName::West,
+            TileName::North,
+            TileName::North,
+        ] {
+            hand.push(t);
+        }
+
+        let evs = evaluate_hand_discards(&hand, None, &ctx);
+        let ev_4m = evs
+            .iter()
+            .find(|e| e.discard_tile == TileName::FourM)
+            .unwrap();
+        let ev_5m = evs
+            .iter()
+            .find(|e| e.discard_tile == TileName::FiveM)
+            .unwrap();
+
+        assert!(
+            ev_4m.ev > ev_5m.ev,
+            "Genbutsu 4m EV ({}) must be strictly higher than dangerous 5m EV ({}) under riichi",
+            ev_4m.ev,
+            ev_5m.ev
+        );
     }
 }

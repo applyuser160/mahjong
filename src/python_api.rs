@@ -1136,6 +1136,7 @@ pub fn py_evaluate_hand_discards(
         round_wind: round_wind.map(|w| w.into()).or(Some(TileName::East)),
         dora_indicators: &dora_vec,
         is_dealer,
+        ..Default::default()
     };
 
     let mut visible_counts = [0u8; 35];
@@ -1346,6 +1347,7 @@ pub fn py_advise_call(
         round_wind: Some(TileName::East),
         dora_indicators: &dora_vec,
         is_dealer: true,
+        ..Default::default()
     };
 
     let advice =
@@ -2044,6 +2046,7 @@ pub fn py_evaluate_placement_discards(
         round_wind: Some(match_context.round_wind.into()),
         dora_indicators: &dora_vec,
         is_dealer: dealer,
+        ..Default::default()
     };
 
     let mut visible_counts = [0u8; 35];

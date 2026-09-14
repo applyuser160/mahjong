@@ -281,6 +281,146 @@ pub fn calculate_fu(
     ceil10_fu(fu).max(30)
 }
 
+/// 手牌の面子・雀頭・待ち形から符を総合計算します。
+#[allow(clippy::too_many_arguments, clippy::needless_range_loop)]
+pub fn calculate_hand_fu(
+    counts: &[u8; 35],
+    open_melds: &[crate::hand::Meld],
+    win_tile: TileName,
+    is_tsumo: bool,
+    is_pinfu: bool,
+    is_chitoitsu: bool,
+    seat_wind: Option<TileName>,
+    round_wind: Option<TileName>,
+) -> usize {
+    if is_chitoitsu {
+        return 25;
+    }
+    let is_closed = open_melds.is_empty();
+    if is_pinfu && is_closed && is_tsumo {
+        return 20;
+    }
+
+    // 副底: 20符
+    let mut fu = 20;
+
+    // 門前ロン加符: 10符
+    if is_closed && !is_tsumo {
+        fu += 10;
+    }
+
+    // ツモ符: 2符 (ピンフツモ以外)
+    if is_tsumo && !is_pinfu {
+        fu += 2;
+    }
+
+    // 副露からの面子符
+    let mut meld_fu = 0;
+    for m in open_melds {
+        match m {
+            crate::hand::Meld::Chii { .. } => {}
+            crate::hand::Meld::Pon(t) => {
+                let idx = *t as usize;
+                let is_yaojiu = matches!(
+                    t,
+                    TileName::OneM
+                        | TileName::NineM
+                        | TileName::OneP
+                        | TileName::NineP
+                        | TileName::OneS
+                        | TileName::NineS
+                ) || idx >= 28;
+                meld_fu += if is_yaojiu { 4 } else { 2 };
+            }
+            crate::hand::Meld::Daiminkan(t) | crate::hand::Meld::Kakan(t) => {
+                let idx = *t as usize;
+                let is_yaojiu = matches!(
+                    t,
+                    TileName::OneM
+                        | TileName::NineM
+                        | TileName::OneP
+                        | TileName::NineP
+                        | TileName::OneS
+                        | TileName::NineS
+                ) || idx >= 28;
+                meld_fu += if is_yaojiu { 16 } else { 8 };
+            }
+            crate::hand::Meld::Ankan(t) => {
+                let idx = *t as usize;
+                let is_yaojiu = matches!(
+                    t,
+                    TileName::OneM
+                        | TileName::NineM
+                        | TileName::OneP
+                        | TileName::NineP
+                        | TileName::OneS
+                        | TileName::NineS
+                ) || idx >= 28;
+                meld_fu += if is_yaojiu { 32 } else { 16 };
+            }
+        }
+    }
+
+    // 門前手牌中の刻子 (counts >= 3)
+    let mut pair_tile = None;
+    for i in 1..=34 {
+        let c = counts[i];
+        let t = TileName::from_usize(i);
+        let is_yaojiu = matches!(
+            t,
+            TileName::OneM
+                | TileName::NineM
+                | TileName::OneP
+                | TileName::NineP
+                | TileName::OneS
+                | TileName::NineS
+        ) || i >= 28;
+        if c >= 3 {
+            let is_ron_agari_tile = !is_tsumo && t == win_tile;
+            let val = if is_ron_agari_tile {
+                if is_yaojiu {
+                    4
+                } else {
+                    2
+                }
+            } else if is_yaojiu {
+                8
+            } else {
+                4
+            };
+            meld_fu += val;
+        } else if c == 2 && pair_tile.is_none() {
+            pair_tile = Some(t);
+        }
+    }
+
+    // 雀頭符
+    if let Some(p) = pair_tile {
+        let p_idx = p as usize;
+        // 三元牌
+        if (32..=34).contains(&p_idx) {
+            fu += 2;
+        }
+        // 自風
+        if Some(p) == seat_wind {
+            fu += 2;
+        }
+        // 場風
+        if Some(p) == round_wind {
+            fu += 2;
+        }
+    }
+
+    // 待ち形符（単騎待ちなど、和了牌が雀頭と一致する場合は単騎待ちで2符）
+    if pair_tile == Some(win_tile) {
+        fu += 2;
+    }
+
+    fu += meld_fu;
+
+    ceil10_fu(fu).max(30)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,5 +478,53 @@ mod tests {
         // 基本点 25 * 2^4 = 400 -> 子ロン: 400 * 4 = 1600点
         let res = calculate_score(2, 25, false, false, false);
         assert_eq!(res.total_points, 1600);
+    }
+
+    #[test]
+    fn test_calculate_hand_fu_pinfu_and_chitoitsu_and_anko() {
+        let empty_melds = vec![];
+        let counts = [0u8; 35];
+
+        // 1. 七対子は25符
+        let fu_chitoi = calculate_hand_fu(
+            &counts,
+            &empty_melds,
+            TileName::East,
+            false,
+            false,
+            true, // is_chitoitsu
+            None,
+            None,
+        );
+        assert_eq!(fu_chitoi, 25);
+
+        // 2. 門前ピンフツモは20符
+        let fu_pinfu_tsumo = calculate_hand_fu(
+            &counts,
+            &empty_melds,
+            TileName::TwoM,
+            true, // is_tsumo
+            true, // is_pinfu
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_pinfu_tsumo, 20);
+
+        // 3. 役牌暗刻（白暗刻 8符）+ 門前ロン（10符）+ 副底（20符） = 38符 -> 40符
+        let mut counts_anko = [0u8; 35];
+        counts_anko[TileName::White as usize] = 3;
+        counts_anko[TileName::TwoM as usize] = 2; // 雀頭
+        let fu_anko = calculate_hand_fu(
+            &counts_anko,
+            &empty_melds,
+            TileName::FiveS,
+            false, // is_tsumo
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(fu_anko, 40);
     }
 }

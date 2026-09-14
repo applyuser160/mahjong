@@ -72,6 +72,7 @@ impl DrillEngine {
                 round_wind: Some(TileName::East),
                 dora_indicators: &[dora_indicator],
                 is_dealer: true,
+                ..Default::default()
             };
 
             let candidates = evaluate_hand_discards(&hand, None, &ctx);

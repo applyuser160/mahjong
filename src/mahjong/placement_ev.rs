@@ -300,6 +300,9 @@ pub fn evaluate_hand_discards_with_placement(
     let current_rank = ranks[player_idx];
     let is_orasu = match_ctx.is_orasu();
 
+    // 放銃シナリオにおける想定失点額を動的に推定 (Issue #79: 親12000点 vs 子8000点、本場・ドラ補正)
+    let deal_loss = estimate_expected_deal_loss(match_ctx, analysis_ctx, player_idx);
+
     let mut placement_evals = Vec::new();
 
     for ev in raw_evaluations {
@@ -309,7 +312,7 @@ pub fn evaluate_hand_discards_with_placement(
 
         // 各シナリオにおける局後スコアの予測
         let score_on_win = match_ctx.scores[player_idx] + ev.value.expected_score as i32;
-        let score_on_deal = match_ctx.scores[player_idx] - 8000; // 満貫放銃想定
+        let score_on_deal = match_ctx.scores[player_idx] - deal_loss;
         let score_on_other = match_ctx.scores[player_idx];
 
         // 各シナリオでの着順確率分布をシミュレーション
@@ -418,5 +421,82 @@ fn generate_situational_note(
         "【ラス目挽回】点差が開いているため、満貫以上の高打点ルートを強く意識します。".to_string()
     } else {
         "【通常進行】素点効率とスピードのバランスを保ちつつ手を進めます。".to_string()
+    }
+}
+
+/// 放銃シナリオにおける想定失点額を計算 (Issue #79)
+pub fn estimate_expected_deal_loss(
+    match_ctx: &MatchContext,
+    analysis_ctx: &AnalysisContext,
+    player_idx: usize,
+) -> i32 {
+    // 1. 他家のリーチ者を探索
+    let riichi_opponent = (0..4)
+        .filter(|&p| p != player_idx)
+        .find(|&p| analysis_ctx.riichi_status[p]);
+
+    let target_is_dealer = if let Some(p) = riichi_opponent {
+        p == match_ctx.dealer_idx || analysis_ctx.player_is_dealer[p]
+    } else {
+        // リーチ者がいない場合、親が自家でなければ親番への警戒を考慮
+        match_ctx.dealer_idx != player_idx
+    };
+
+    let has_riichi = riichi_opponent.is_some();
+
+    // 2. ドラ見え枚数による補正
+    let dora_seen = analysis_ctx.dora_indicators.len();
+    let dora_factor = if dora_seen >= 3 { 0.85 } else { 1.0 };
+
+    let honba_pts = (match_ctx.honba as i32) * 300;
+
+    let base_points = if target_is_dealer {
+        if has_riichi {
+            12000 // 親リーチ: 12000点 (親満貫〜跳満想定)
+        } else {
+            9600 // 親の平時・副露
+        }
+    } else if has_riichi {
+        8000 // 子リーチ: 8000点 (子満貫想定)
+    } else {
+        5200 // 子の平時・副露
+    };
+
+    ((base_points as f64 * dora_factor) as i32) + honba_pts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimate_expected_deal_loss_dealer_vs_child() {
+        // Issue #79 検証: 親リーチへの放銃想定失点 vs 子リーチへの放銃想定失点
+        let match_ctx = MatchContext {
+            dealer_idx: 1, // 下家が親
+            honba: 1,      // 1本場 (+300点)
+            ..Default::default()
+        };
+
+        // 1. 親リーチに対する放銃
+        let mut ctx_dealer_riichi = AnalysisContext::default();
+        ctx_dealer_riichi.riichi_status[1] = true;
+        let loss_dealer = estimate_expected_deal_loss(&match_ctx, &ctx_dealer_riichi, 0);
+        // 12000 + 300 = 12300点
+        assert_eq!(loss_dealer, 12300);
+
+        // 2. 子リーチに対する放銃
+        let mut ctx_child_riichi = AnalysisContext::default();
+        ctx_child_riichi.riichi_status[2] = true; // 対面（子）がリーチ
+        let loss_child = estimate_expected_deal_loss(&match_ctx, &ctx_child_riichi, 0);
+        // 8000 + 300 = 8300点
+        assert_eq!(loss_child, 8300);
+
+        assert!(
+            loss_dealer > loss_child,
+            "Dealer deal loss ({}) must be significantly larger than child ({})",
+            loss_dealer,
+            loss_child
+        );
     }
 }

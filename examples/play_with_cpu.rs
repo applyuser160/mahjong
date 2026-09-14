@@ -359,6 +359,7 @@ fn main() {
                     round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
                     is_dealer: player_is_dealer,
+                    ..Default::default()
                 };
 
                 let mut placement_evals =
@@ -581,6 +582,7 @@ fn main() {
                     round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
                     is_dealer: cpu_is_dealer,
+                    ..Default::default()
                 };
 
                 // CPUの和了チェック（ツモ和了）
@@ -788,6 +790,7 @@ fn main() {
                     round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
                     is_dealer: player_is_dealer,
+                    ..Default::default()
                 };
 
                 if let Some(advice) =
@@ -893,6 +896,7 @@ fn main() {
                     round_wind: Some(match_ctx.round_wind),
                     dora_indicators: &[dora_indicator],
                     is_dealer: cpu_is_dealer,
+                    ..Default::default()
                 };
 
                 if let Some(advice) =

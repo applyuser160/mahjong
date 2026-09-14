@@ -90,6 +90,7 @@ fn main() {
             round_wind: Some(TileName::East),
             dora_indicators: &[dora_indicator],
             is_dealer: true,
+            ..Default::default()
         };
 
         let evaluations = evaluate_hand_discards(&user_hand, None, &ctx);
