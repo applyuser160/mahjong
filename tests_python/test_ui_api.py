@@ -234,3 +234,87 @@ def test_review_tracker_to_dict():
 
     blunders = tracker.get_blunders_dict()
     assert isinstance(blunders, list)
+
+
+def test_invalid_player_and_dealer_indices():
+    tiles = [TileName.OneM] * 14
+    ctx = MatchContext(dealer_idx=0)
+
+    # 1. Reject out-of-range player_idx in public evaluation functions
+    with pytest.raises(ValueError, match="player_idx"):
+        evaluate_placement_discards(tiles, ctx, player_idx=4)
+    with pytest.raises(ValueError, match="player_idx"):
+        calculate_orasu_conditions(ctx, player_idx=4)
+    with pytest.raises(ValueError, match="player_idx"):
+        get_ai_hud_data(tiles, ctx, player_idx=4)
+
+    # 2. Reject out-of-range dealer_idx in MatchContext construction and mutation
+    with pytest.raises(ValueError, match="dealer_idx"):
+        MatchContext(dealer_idx=4)
+    with pytest.raises(ValueError, match="dealer_idx"):
+        ctx.dealer_idx = 4
+
+    # 3. Reject out-of-range player index in score_diff
+    with pytest.raises(ValueError, match="player index"):
+        ctx.score_diff(4, 0)
+    with pytest.raises(ValueError, match="player index"):
+        ctx.score_diff(0, 4)
+
+    # 4. Reject out-of-range dealer_idx and current_turn in TableState
+    hands = [[TileName.OneM]] * 4
+    melds = [[]] * 4
+    rivers = [[]] * 4
+    with pytest.raises(ValueError, match="dealer_idx"):
+        TableState(
+            round_wind=TileName.East,
+            round_number=1,
+            honba=0,
+            riichi_sticks=0,
+            dealer_idx=4,
+            current_turn=0,
+            dora_indicators=[TileName.FiveM],
+            remaining_wall_tiles=70,
+            scores=[25000] * 4,
+            is_riichi=[False] * 4,
+            hands=hands,
+            melds=melds,
+            rivers=rivers,
+        )
+
+    with pytest.raises(ValueError, match="current_turn"):
+        TableState(
+            round_wind=TileName.East,
+            round_number=1,
+            honba=0,
+            riichi_sticks=0,
+            dealer_idx=0,
+            current_turn=4,
+            dora_indicators=[TileName.FiveM],
+            remaining_wall_tiles=70,
+            scores=[25000] * 4,
+            is_riichi=[False] * 4,
+            hands=hands,
+            melds=melds,
+            rivers=rivers,
+        )
+
+    table = TableState(
+        round_wind=TileName.East,
+        round_number=1,
+        honba=0,
+        riichi_sticks=0,
+        dealer_idx=0,
+        current_turn=0,
+        dora_indicators=[TileName.FiveM],
+        remaining_wall_tiles=70,
+        scores=[25000] * 4,
+        is_riichi=[False] * 4,
+        hands=hands,
+        melds=melds,
+        rivers=rivers,
+    )
+    with pytest.raises(ValueError, match="dealer_idx"):
+        table.dealer_idx = 10
+    with pytest.raises(ValueError, match="current_turn"):
+        table.current_turn = 5
+

@@ -1520,7 +1520,6 @@ pub struct PyMatchContext {
     pub honba: u8,
     #[pyo3(get, set)]
     pub riichi_sticks: u8,
-    #[pyo3(get, set)]
     pub dealer_idx: usize,
     #[pyo3(get, set)]
     pub rule: PyRuleConfig,
@@ -1538,8 +1537,11 @@ impl PyMatchContext {
         riichi_sticks: u8,
         dealer_idx: usize,
         rule: Option<PyRuleConfig>,
-    ) -> Self {
-        Self {
+    ) -> PyResult<Self> {
+        if dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        Ok(Self {
             scores: scores.unwrap_or([25000, 25000, 25000, 25000]),
             round_wind: round_wind.unwrap_or(PyTileName::East),
             round_number,
@@ -1547,7 +1549,21 @@ impl PyMatchContext {
             riichi_sticks,
             dealer_idx,
             rule: rule.unwrap_or_else(PyRuleConfig::mleague),
+        })
+    }
+
+    #[getter]
+    pub fn dealer_idx(&self) -> usize {
+        self.dealer_idx
+    }
+
+    #[setter]
+    pub fn set_dealer_idx(&mut self, idx: usize) -> PyResult<()> {
+        if idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
         }
+        self.dealer_idx = idx;
+        Ok(())
     }
 
     pub fn current_ranks(&self) -> [usize; 4] {
@@ -1555,9 +1571,12 @@ impl PyMatchContext {
         rs_ctx.current_ranks()
     }
 
-    pub fn score_diff(&self, p: usize, target: usize) -> i32 {
+    pub fn score_diff(&self, p: usize, target: usize) -> PyResult<i32> {
+        if p >= 4 || target >= 4 {
+            return Err(PyValueError::new_err("player index must be in range 0..4"));
+        }
         let rs_ctx: MatchContext = self.clone().into();
-        rs_ctx.score_diff(p, target)
+        Ok(rs_ctx.score_diff(p, target))
     }
 
     pub fn is_orasu(&self) -> bool {
@@ -1571,6 +1590,9 @@ impl PyMatchContext {
     }
 
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        if self.dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
         let dict = PyDict::new(py);
         dict.set_item("scores", self.scores.to_vec())?;
         dict.set_item("round_wind", self.round_wind.as_str())?;
@@ -1765,9 +1787,7 @@ pub struct PyTableState {
     pub honba: u8,
     #[pyo3(get, set)]
     pub riichi_sticks: u8,
-    #[pyo3(get, set)]
     pub dealer_idx: usize,
-    #[pyo3(get, set)]
     pub current_turn: usize,
     #[pyo3(get, set)]
     pub dora_indicators: Vec<PyTileName>,
@@ -1803,8 +1823,14 @@ impl PyTableState {
         hands: Vec<Vec<PyTileName>>,
         melds: Vec<Vec<PyMeld>>,
         rivers: Vec<Vec<PyTileName>>,
-    ) -> Self {
-        Self {
+    ) -> PyResult<Self> {
+        if dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        if current_turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
+        Ok(Self {
             round_wind,
             round_number,
             honba,
@@ -1818,11 +1844,45 @@ impl PyTableState {
             hands,
             melds,
             rivers,
+        })
+    }
+
+    #[getter]
+    pub fn dealer_idx(&self) -> usize {
+        self.dealer_idx
+    }
+
+    #[setter]
+    pub fn set_dealer_idx(&mut self, idx: usize) -> PyResult<()> {
+        if idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
         }
+        self.dealer_idx = idx;
+        Ok(())
+    }
+
+    #[getter]
+    pub fn current_turn(&self) -> usize {
+        self.current_turn
+    }
+
+    #[setter]
+    pub fn set_current_turn(&mut self, turn: usize) -> PyResult<()> {
+        if turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
+        self.current_turn = turn;
+        Ok(())
     }
 
     #[pyo3(signature = (reveal_all=false))]
     pub fn to_dict(&self, py: Python<'_>, reveal_all: bool) -> PyResult<Py<PyDict>> {
+        if self.dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        if self.current_turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
         let dict = PyDict::new(py);
         dict.set_item("round_wind", self.round_wind.as_str())?;
         dict.set_item("round_wind_mpsz", self.round_wind.mpsz())?;
@@ -1906,7 +1966,13 @@ pub fn py_evaluate_placement_discards(
     player_idx: usize,
     is_dealer: Option<bool>,
     dora_indicators: Option<Vec<PyTileName>>,
-) -> Vec<PyPlacementEvaluation> {
+) -> PyResult<Vec<PyPlacementEvaluation>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
     let mut hand = Hand::new();
     for t in tiles {
         hand.push(t.into());
@@ -1930,7 +1996,7 @@ pub fn py_evaluate_placement_discards(
 
     let rs_match: MatchContext = match_context.clone().into();
     let evs = evaluate_hand_discards_with_placement(&hand, None, &ctx, &rs_match, player_idx);
-    evs.into_iter().map(|e| e.into()).collect()
+    Ok(evs.into_iter().map(|e| e.into()).collect())
 }
 
 #[pyfunction]
@@ -1938,10 +2004,16 @@ pub fn py_evaluate_placement_discards(
 pub fn py_calculate_orasu_conditions(
     match_context: &PyMatchContext,
     player_idx: usize,
-) -> Vec<PyWinCondition> {
+) -> PyResult<Vec<PyWinCondition>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
     let rs_match: MatchContext = match_context.clone().into();
     let conds = calculate_orasu_conditions(&rs_match, player_idx);
-    conds.into_iter().map(|c| c.into()).collect()
+    Ok(conds.into_iter().map(|c| c.into()).collect())
 }
 
 #[pyfunction]
@@ -1954,13 +2026,19 @@ pub fn py_get_ai_hud_data(
     is_dealer: Option<bool>,
     dora_indicators: Option<Vec<PyTileName>>,
 ) -> PyResult<Py<PyDict>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
     let evs = py_evaluate_placement_discards(
         tiles,
         match_context,
         player_idx,
         is_dealer,
         dora_indicators,
-    );
+    )?;
     let dict = PyDict::new(py);
 
     let ranks = match_context.current_ranks();
@@ -1983,7 +2061,7 @@ pub fn py_get_ai_hud_data(
     }
 
     if match_context.is_orasu() {
-        let conds = py_calculate_orasu_conditions(match_context, player_idx);
+        let conds = py_calculate_orasu_conditions(match_context, player_idx)?;
         let cond_list = PyList::empty(py);
         for c in conds {
             cond_list.append(c.to_dict(py)?)?;
