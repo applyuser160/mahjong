@@ -377,8 +377,8 @@ fn estimate_rank_probabilities(
     // 点差に応じた他家との勝率 (ロジスティック関数)
     // 10,000点差で約88%勝率、0点差で50%
     let win_vs = |s_my: i32, s_other: i32| -> f64 {
-        let x = (s_my - s_other) as f64 / 5000.0;
-        0.5 * (x / (1.0 + x.abs())) + 0.5
+        let diff = (s_my - s_other) as f64;
+        1.0 / (1.0 + (-diff / 5000.0).exp())
     };
 
     let p_vs_0 = win_vs(my_predicted_score, other_scores[0]);
@@ -538,6 +538,51 @@ mod tests {
         assert_eq!(
             loss, 12000,
             "ドラ表示牌が3枚以上あっても減衰されず親満貫12,000点であるべき"
+        );
+    }
+
+    #[test]
+    fn test_estimate_rank_probabilities_sigmoid_regression() {
+        // 0点差 (全員25,000点)
+        let ctx_even = MatchContext {
+            scores: [25000, 25000, 25000, 25000],
+            ..Default::default()
+        };
+        let p_even = estimate_rank_probabilities(&ctx_even, 0, 25000);
+        assert!(
+            (p_even[0] - 0.125).abs() < 1e-3,
+            "0点差での1位率は 0.5^3 = 12.5%"
+        );
+        assert!(
+            (p_even[3] - 0.125).abs() < 1e-3,
+            "0点差での4位率は 0.5^3 = 12.5%"
+        );
+
+        // +10,000点差 (自分35,000点、他家25,000点)
+        let ctx_10k = MatchContext {
+            scores: [35000, 25000, 25000, 25000],
+            ..Default::default()
+        };
+        let p_10k = estimate_rank_probabilities(&ctx_10k, 0, 35000);
+        // exp(2) / (1 + exp(2)) ≈ 0.8808, 0.8808^3 ≈ 0.683
+        assert!(
+            (p_10k[0] - 0.683).abs() < 5e-3,
+            "10,000点差での1位率は約68.3% (実測: {:.4})",
+            p_10k[0]
+        );
+        assert_eq!(p_10k[3], 0.01, "10,000点差での4位率は下限クランプの 0.01");
+
+        // +20,000点差 (自分45,000点、他家25,000点)
+        let ctx_20k = MatchContext {
+            scores: [45000, 25000, 25000, 25000],
+            ..Default::default()
+        };
+        let p_20k = estimate_rank_probabilities(&ctx_20k, 0, 45000);
+        // exp(4) / (1 + exp(4)) ≈ 0.9820, 0.9820^3 ≈ 0.947
+        assert!(
+            (p_20k[0] - 0.947).abs() < 5e-3,
+            "20,000点差での1位率は約94.7% (実測: {:.4})",
+            p_20k[0]
         );
     }
 }
