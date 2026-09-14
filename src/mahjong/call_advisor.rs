@@ -1,6 +1,5 @@
-use crate::expectation::{evaluate_hand_discards, AnalysisContext};
+use crate::expectation::{evaluate_hand_discards, evaluate_standing_hand, AnalysisContext};
 use crate::hand::{Hand, Meld};
-use crate::shanten::calculate_shanten;
 use crate::tile::TileName;
 
 /// 鳴きのアクション種別
@@ -86,26 +85,16 @@ impl CallAdvisor {
     ) -> Option<CallAdvice> {
         let mut choices = Vec::new();
 
-        // 1. スルー（門前維持）の評価
-        // 現在の手牌（13枚）の向聴数と、ツモ時の基本EV
-        let current_shanten = calculate_shanten(hand).min_shanten;
-        let pass_ev = {
-            // 仮想的に1枚引いて打牌した場合の平均EV
-            let test_evals = evaluate_hand_discards(hand, None, ctx);
-            if !test_evals.is_empty() {
-                test_evals[0].ev * 0.85 // 鳴かない場合の期待値
-            } else {
-                1000.0
-            }
-        };
+        // 1. スルー（門前維持）の評価（13枚手牌の受け入れ・打点・和了期待値を直接算出）
+        let standing_eval = evaluate_standing_hand(hand, None, ctx);
 
         choices.push(CallChoice {
             action: CallAction::Pass,
             meld: None,
-            post_shanten: current_shanten,
-            post_acceptance: 12,
-            estimated_score: 3000.0,
-            ev: pass_ev,
+            post_shanten: standing_eval.shanten,
+            post_acceptance: standing_eval.speed.remaining_count,
+            estimated_score: standing_eval.value.expected_score,
+            ev: standing_eval.ev,
         });
 
         // 2. ポン判定（同種牌が2枚以上手牌にあるか）
@@ -121,7 +110,12 @@ impl CallAdvisor {
             let post_evals = evaluate_hand_discards(&post_hand, None, ctx);
             if !post_evals.is_empty() {
                 let best_post = &post_evals[0];
-                let is_yakuhai = target_idx >= 28; // 字牌（役牌になりやすい）
+                // 三元牌、または自風・場風に一致する牌のみ役牌としてボーナスを付与
+                let is_yakuhai = matches!(
+                    target_tile,
+                    TileName::Red | TileName::Green | TileName::White
+                ) || ctx.seat_wind == Some(target_tile)
+                    || ctx.round_wind == Some(target_tile);
                 let bonus = if is_yakuhai { 600.0 } else { 0.0 };
 
                 choices.push(CallChoice {
@@ -289,22 +283,23 @@ mod tests {
 
     #[test]
     fn test_call_advisor_pon_yakuhai() {
-        // 白対子持ちの手牌
+        // 白対子持ちの一向聴手牌 (123m 456p 789s 白白 2s 8m)
+        // 門前では一向聴だが、白ポンによって役牌確定テンパイへ前進する
         let mut hand = Hand::new();
         for &t in &[
-            TileName::OneM,
             TileName::TwoM,
             TileName::ThreeM,
-            TileName::FourP,
+            TileName::FourM,
             TileName::FiveP,
             TileName::SixP,
-            TileName::SevenS,
-            TileName::EightS,
-            TileName::NineS,
-            TileName::White,
-            TileName::White, // 白対子
+            TileName::SevenP,
             TileName::TwoS,
             TileName::ThreeS,
+            TileName::FourS,
+            TileName::FiveS,
+            TileName::White,
+            TileName::White,
+            TileName::NineM,
         ] {
             hand.push(t);
         }
@@ -353,5 +348,43 @@ mod tests {
             .choices
             .iter()
             .any(|c| matches!(c.action, CallAction::Chii(..))));
+    }
+
+    #[test]
+    fn test_call_advisor_otakaze_pon_rejected() {
+        // 東場・東家で南（オタ風・役なし）の対子を持っている手牌
+        // 123m 456p 789s 23s 南南 (13枚)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::TwoS,
+            TileName::ThreeS,
+            TileName::South, // オタ風対子
+            TileName::South,
+        ] {
+            hand.push(t);
+        }
+
+        let ctx = AnalysisContext {
+            seat_wind: Some(TileName::East),
+            round_wind: Some(TileName::East),
+            ..Default::default()
+        };
+
+        let advice = CallAdvisor::advise_call(&hand, TileName::South, false, &ctx);
+        assert!(advice.is_some());
+
+        let adv = advice.unwrap();
+        // 南ポンは候補には挙がるが、役なしになるためスルー（Pass）が推奨される
+        assert!(adv.choices.iter().any(|c| c.action == CallAction::Pon));
+        assert_eq!(adv.best_action, CallAction::Pass);
     }
 }

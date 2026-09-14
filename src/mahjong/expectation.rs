@@ -40,6 +40,15 @@ pub struct CandidateEvaluation {
     pub safety: SafetyMetric,
 }
 
+/// 13枚手牌（自摸前・他家打牌時）の評価結果
+#[derive(Debug, Clone, PartialEq)]
+pub struct StandingHandEvaluation {
+    pub shanten: i8,
+    pub speed: SpeedMetric,
+    pub value: ValueMetric,
+    pub ev: f64,
+}
+
 /// 局の分析コンテキスト
 #[derive(Debug, Clone, Copy)]
 pub struct AnalysisContext<'a> {
@@ -151,6 +160,60 @@ pub fn evaluate_hand_discards(
     });
 
     evaluations
+}
+
+/// 手牌（13枚相当、自摸前・他家打牌時）の受入・打点・和了期待値を評価します。
+pub fn evaluate_standing_hand(
+    hand: &Hand,
+    visible_counts: Option<&[u8; 35]>,
+    ctx: &AnalysisContext<'_>,
+) -> StandingHandEvaluation {
+    let open_melds_count = hand.open_melds.len();
+    let mut base_visible = [0u8; 35];
+    if let Some(v) = visible_counts {
+        for i in 1..=34 {
+            base_visible[i] = v[i].max(hand.counts[i]);
+        }
+    } else {
+        base_visible = hand.counts;
+    }
+
+    let remaining_turns = (18usize.saturating_sub(ctx.turn_number)).max(1) as f64;
+    let wall_remaining = (ctx.remaining_wall_tiles).max(1) as f64;
+
+    let acceptance = calculate_acceptance(&hand.counts, open_melds_count, Some(&base_visible));
+    let shanten = acceptance.current_shanten;
+
+    let win_probability = estimate_win_probability(
+        shanten,
+        acceptance.total_remaining,
+        remaining_turns,
+        wall_remaining,
+    );
+
+    let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
+    let speed = SpeedMetric {
+        accepted_tiles: accepted_tiles.clone(),
+        remaining_count: acceptance.total_remaining,
+        win_probability,
+    };
+
+    let value = estimate_hand_value(
+        &hand.counts,
+        shanten,
+        &accepted_tiles,
+        &hand.open_melds,
+        ctx,
+    );
+
+    let ev = win_probability * value.expected_score;
+
+    StandingHandEvaluation {
+        shanten,
+        speed,
+        value,
+        ev,
+    }
 }
 
 /// シャンテン数と受け入れ枚数から和了確率をモデル化
@@ -564,5 +627,35 @@ mod tests {
         // 想定打点・翻が正しく算出されていること
         assert!(cand_9m.value.expected_score >= 1000.0);
         assert!(cand_9m.value.expected_han >= 1.0);
+    }
+
+    #[test]
+    fn test_evaluate_standing_hand() {
+        // 13枚のテンパイ手牌: 123m 456p 789s EE 2s (3s単騎待ち)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::East,
+            TileName::East,
+            TileName::TwoS,
+            TileName::ThreeS,
+        ] {
+            hand.push(t);
+        }
+
+        let ctx = AnalysisContext::default();
+        let eval = evaluate_standing_hand(&hand, None, &ctx);
+        // 13枚手牌が正しく評価されること
+        assert_eq!(eval.shanten, 0); // テンパイ
+        assert!(eval.speed.remaining_count > 0);
+        assert!(eval.ev > 1000.0);
     }
 }
