@@ -109,7 +109,8 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
     for i in 1..=34 {
         if working[i] >= 2 {
             working[i] -= 2;
-            let shanten = search_normal(&mut working, 1, true, 0, 0, target_melds, &mut best_shanten);
+            let shanten =
+                search_normal(&mut working, 1, true, 0, 0, target_melds, &mut best_shanten);
             best_shanten = best_shanten.min(shanten);
             working[i] += 2;
 
@@ -120,7 +121,15 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
     }
 
     // 2. 雀頭なしのケースを探索（搭子・面子のみで構成）
-    let shanten = search_normal(&mut working, 1, false, 0, 0, target_melds, &mut best_shanten);
+    let shanten = search_normal(
+        &mut working,
+        1,
+        false,
+        0,
+        0,
+        target_melds,
+        &mut best_shanten,
+    );
     best_shanten = best_shanten.min(shanten);
 
     best_shanten
@@ -165,7 +174,15 @@ fn search_normal(
     if i >= 28 {
         if counts[i] >= 3 {
             counts[i] -= 3;
-            let s = search_normal(counts, i, has_head, melds + 1, taatsu, target_melds, current_best);
+            let s = search_normal(
+                counts,
+                i,
+                has_head,
+                melds + 1,
+                taatsu,
+                target_melds,
+                current_best,
+            );
             min_shanten = min_shanten.min(s);
             counts[i] += 3;
             if min_shanten == -1 {
@@ -173,7 +190,15 @@ fn search_normal(
             }
         }
         // 刻子にしない場合はスキップして次へ
-        let s = search_normal(counts, i + 1, has_head, melds, taatsu, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i + 1,
+            has_head,
+            melds,
+            taatsu,
+            target_melds,
+            current_best,
+        );
         return min_shanten.min(s);
     }
 
@@ -183,7 +208,15 @@ fn search_normal(
     // 1. 刻子 (AAA)
     if counts[i] >= 3 {
         counts[i] -= 3;
-        let s = search_normal(counts, i, has_head, melds + 1, taatsu, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i,
+            has_head,
+            melds + 1,
+            taatsu,
+            target_melds,
+            current_best,
+        );
         min_shanten = min_shanten.min(s);
         counts[i] += 3;
         if min_shanten == -1 {
@@ -196,7 +229,15 @@ fn search_normal(
         counts[i] -= 1;
         counts[i + 1] -= 1;
         counts[i + 2] -= 1;
-        let s = search_normal(counts, i, has_head, melds + 1, taatsu, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i,
+            has_head,
+            melds + 1,
+            taatsu,
+            target_melds,
+            current_best,
+        );
         min_shanten = min_shanten.min(s);
         counts[i] += 1;
         counts[i + 1] += 1;
@@ -209,7 +250,15 @@ fn search_normal(
     // 3. 対子 (AA) - 雀頭が既に決まっている場合の搭子候補
     if counts[i] >= 2 {
         counts[i] -= 2;
-        let s = search_normal(counts, i, has_head, melds, taatsu + 1, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i,
+            has_head,
+            melds,
+            taatsu + 1,
+            target_melds,
+            current_best,
+        );
         min_shanten = min_shanten.min(s);
         counts[i] += 2;
         if min_shanten == -1 {
@@ -221,7 +270,15 @@ fn search_normal(
     if rank <= 8 && counts[i + 1] > 0 {
         counts[i] -= 1;
         counts[i + 1] -= 1;
-        let s = search_normal(counts, i, has_head, melds, taatsu + 1, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i,
+            has_head,
+            melds,
+            taatsu + 1,
+            target_melds,
+            current_best,
+        );
         min_shanten = min_shanten.min(s);
         counts[i] += 1;
         counts[i + 1] += 1;
@@ -234,7 +291,15 @@ fn search_normal(
     if rank <= 7 && counts[i + 2] > 0 {
         counts[i] -= 1;
         counts[i + 2] -= 1;
-        let s = search_normal(counts, i, has_head, melds, taatsu + 1, target_melds, current_best);
+        let s = search_normal(
+            counts,
+            i,
+            has_head,
+            melds,
+            taatsu + 1,
+            target_melds,
+            current_best,
+        );
         min_shanten = min_shanten.min(s);
         counts[i] += 1;
         counts[i + 2] += 1;
@@ -244,7 +309,15 @@ fn search_normal(
     }
 
     // 6. この牌を孤立牌として残し、次の牌の走査へ進む
-    let s = search_normal(counts, i + 1, has_head, melds, taatsu, target_melds, current_best);
+    let s = search_normal(
+        counts,
+        i + 1,
+        has_head,
+        melds,
+        taatsu,
+        target_melds,
+        current_best,
+    );
     min_shanten.min(s)
 }
 
