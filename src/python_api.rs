@@ -1,7 +1,12 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 
 use crate::hand::{Hand, Meld};
+use crate::placement_ev::{
+    calculate_orasu_conditions, evaluate_hand_discards_with_placement, MatchContext,
+    PlacementCandidateEvaluation, RuleConfig, WinCondition,
+};
 use crate::river::River;
 use crate::round::Round;
 use crate::shanten::{calculate_shanten, calculate_shanten_from_counts, ShantenResult};
@@ -209,6 +214,46 @@ impl PyTileName {
         t.as_str()
     }
 
+    pub fn mpsz(&self) -> &'static str {
+        match self {
+            PyTileName::None => "",
+            PyTileName::OneM => "1m",
+            PyTileName::TwoM => "2m",
+            PyTileName::ThreeM => "3m",
+            PyTileName::FourM => "4m",
+            PyTileName::FiveM => "5m",
+            PyTileName::SixM => "6m",
+            PyTileName::SevenM => "7m",
+            PyTileName::EightM => "8m",
+            PyTileName::NineM => "9m",
+            PyTileName::OneP => "1p",
+            PyTileName::TwoP => "2p",
+            PyTileName::ThreeP => "3p",
+            PyTileName::FourP => "4p",
+            PyTileName::FiveP => "5p",
+            PyTileName::SixP => "6p",
+            PyTileName::SevenP => "7p",
+            PyTileName::EightP => "8p",
+            PyTileName::NineP => "9p",
+            PyTileName::OneS => "1s",
+            PyTileName::TwoS => "2s",
+            PyTileName::ThreeS => "3s",
+            PyTileName::FourS => "4s",
+            PyTileName::FiveS => "5s",
+            PyTileName::SixS => "6s",
+            PyTileName::SevenS => "7s",
+            PyTileName::EightS => "8s",
+            PyTileName::NineS => "9s",
+            PyTileName::East => "1z",
+            PyTileName::South => "2z",
+            PyTileName::West => "3z",
+            PyTileName::North => "4z",
+            PyTileName::White => "5z",
+            PyTileName::Green => "6z",
+            PyTileName::Red => "7z",
+        }
+    }
+
     pub fn tile_type(&self) -> PyTileType {
         let t: TileName = (*self).into();
         t.tile_type().into()
@@ -217,6 +262,14 @@ impl PyTileName {
     pub fn category(&self) -> PyTileCategory {
         let t: TileName = (*self).into();
         t.category().into()
+    }
+
+    fn __str__(&self) -> &'static str {
+        self.as_str()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("TileName({}: {})", self.mpsz(), self.as_str())
     }
 }
 
@@ -249,6 +302,31 @@ impl PyTile {
     #[getter]
     pub fn category(&self) -> PyTileCategory {
         self.tile.category().into()
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        self.name().as_str()
+    }
+
+    pub fn mpsz(&self) -> &'static str {
+        self.name().mpsz()
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("name", self.name().as_str())?;
+        dict.set_item("mpsz", self.name().mpsz())?;
+        dict.set_item("type", format!("{:?}", self.tile_type()))?;
+        dict.set_item("category", format!("{:?}", self.category()))?;
+        Ok(dict.unbind())
+    }
+
+    fn __str__(&self) -> &'static str {
+        self.as_str()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Tile({}: {})", self.mpsz(), self.as_str())
     }
 }
 
@@ -344,6 +422,21 @@ impl PyMeld {
             Meld::Kakan(t) => vec![t.into(), t.into(), t.into(), t.into()],
         }
     }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("kind", self.kind())?;
+        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
+        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        let mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        format!("Meld({}: {:?})", self.kind(), mpsz)
+    }
 }
 
 #[pyclass]
@@ -391,6 +484,27 @@ impl PyHand {
     pub fn shanten(&self) -> PyShantenResult {
         calculate_shanten(&self.hand).into()
     }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
+        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
+
+        let melds_list = PyList::empty(py);
+        for m in self.open_melds() {
+            melds_list.append(m.to_dict(py)?)?;
+        }
+        dict.set_item("open_melds", melds_list)?;
+        dict.set_item("shanten", self.shanten().min_shanten)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        let mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        format!("Hand(tiles={:?}, melds={})", mpsz, self.open_melds().len())
+    }
 }
 
 // ==========================================
@@ -416,6 +530,20 @@ impl PyRiver {
     #[getter]
     pub fn tiles(&self) -> Vec<PyTileName> {
         self.river.tiles().iter().map(|&t| t.into()).collect()
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        let tiles_str: Vec<&'static str> = self.tiles().iter().map(|t| t.as_str()).collect();
+        let tiles_mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        let mpsz: Vec<&'static str> = self.tiles().iter().map(|t| t.mpsz()).collect();
+        format!("River({:?})", mpsz)
     }
 }
 
@@ -900,6 +1028,21 @@ pub struct PyCandidateEvaluation {
 
 #[pymethods]
 impl PyCandidateEvaluation {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("discard_tile", self.discard_tile.as_str())?;
+        dict.set_item("mpsz", self.discard_tile.mpsz())?;
+        dict.set_item("shanten_after", self.shanten_after)?;
+        dict.set_item("ev", self.ev)?;
+        dict.set_item("remaining_count", self.remaining_count)?;
+        dict.set_item("expected_score", self.expected_score)?;
+        dict.set_item("expected_han", self.expected_han)?;
+        dict.set_item("risk_score", self.risk_score)?;
+        dict.set_item("is_safe", self.is_safe)?;
+        dict.set_item("primary_yaku", self.primary_yaku.clone())?;
+        Ok(dict.unbind())
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "CandidateEvaluation(discard={:?}, shanten={}, ev={:.0}, rem={}, score={:.0})",
@@ -1023,6 +1166,62 @@ impl PyReviewTracker {
         let report = self.inner.generate_report();
         self.inner.format_report(&report)
     }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let report = self.inner.generate_report();
+        let dict = PyDict::new(py);
+        dict.set_item("total_turns", report.total_turns)?;
+        dict.set_item("optimal_picks_count", report.optimal_picks_count)?;
+        dict.set_item("accuracy_rate", report.accuracy_rate)?;
+        dict.set_item("total_ev_loss", report.total_ev_loss)?;
+        dict.set_item("average_ev_loss", report.average_ev_loss)?;
+
+        let blunders_list = PyList::empty(py);
+        for b in report.blunders {
+            let b_dict = PyDict::new(py);
+            b_dict.set_item("turn", b.turn)?;
+            b_dict.set_item("chosen_tile", b.chosen_tile.as_str())?;
+            b_dict.set_item("chosen_mpsz", PyTileName::from(b.chosen_tile).mpsz())?;
+            b_dict.set_item("chosen_ev", b.chosen_ev)?;
+            b_dict.set_item("best_tile", b.best_tile.as_str())?;
+            b_dict.set_item("best_mpsz", PyTileName::from(b.best_tile).mpsz())?;
+            b_dict.set_item("best_ev", b.best_ev)?;
+            b_dict.set_item("ev_loss", b.ev_loss)?;
+            b_dict.set_item("severity", b.severity.label_ja())?;
+            b_dict.set_item("explanation", b.explanation)?;
+            blunders_list.append(b_dict)?;
+        }
+        dict.set_item("blunders", blunders_list)?;
+        Ok(dict.unbind())
+    }
+
+    #[pyo3(signature = (threshold=None))]
+    pub fn get_blunders_dict(
+        &self,
+        py: Python<'_>,
+        threshold: Option<f64>,
+    ) -> PyResult<Py<PyList>> {
+        let report = self.inner.generate_report();
+        let min_loss = threshold.unwrap_or(0.0);
+        let list = PyList::empty(py);
+        for b in report.blunders {
+            if b.ev_loss >= min_loss {
+                let b_dict = PyDict::new(py);
+                b_dict.set_item("turn", b.turn)?;
+                b_dict.set_item("chosen_tile", b.chosen_tile.as_str())?;
+                b_dict.set_item("chosen_mpsz", PyTileName::from(b.chosen_tile).mpsz())?;
+                b_dict.set_item("chosen_ev", b.chosen_ev)?;
+                b_dict.set_item("best_tile", b.best_tile.as_str())?;
+                b_dict.set_item("best_mpsz", PyTileName::from(b.best_tile).mpsz())?;
+                b_dict.set_item("best_ev", b.best_ev)?;
+                b_dict.set_item("ev_loss", b.ev_loss)?;
+                b_dict.set_item("severity", b.severity.label_ja())?;
+                b_dict.set_item("explanation", b.explanation)?;
+                list.append(b_dict)?;
+            }
+        }
+        Ok(list.unbind())
+    }
 }
 
 // ==========================================
@@ -1044,6 +1243,19 @@ pub struct PyCallChoice {
     pub ev: f64,
 }
 
+#[pymethods]
+impl PyCallChoice {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("action", &self.action)?;
+        dict.set_item("post_shanten", self.post_shanten)?;
+        dict.set_item("post_acceptance", self.post_acceptance)?;
+        dict.set_item("estimated_score", self.estimated_score)?;
+        dict.set_item("ev", self.ev)?;
+        Ok(dict.unbind())
+    }
+}
+
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct PyCallAdvice {
@@ -1059,6 +1271,25 @@ pub struct PyCallAdvice {
     pub rationale: String,
     #[pyo3(get)]
     pub choices: Vec<PyCallChoice>,
+}
+
+#[pymethods]
+impl PyCallAdvice {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("target_tile", self.target_tile.as_str())?;
+        dict.set_item("target_mpsz", self.target_tile.mpsz())?;
+        dict.set_item("is_kamicha", self.is_kamicha)?;
+        dict.set_item("best_action", &self.best_action)?;
+        dict.set_item("recommendation", &self.recommendation)?;
+        dict.set_item("rationale", &self.rationale)?;
+        let choices_list = PyList::empty(py);
+        for c in &self.choices {
+            choices_list.append(c.to_dict(py)?)?;
+        }
+        dict.set_item("choices", choices_list)?;
+        Ok(dict.unbind())
+    }
 }
 
 #[pyfunction]
@@ -1131,6 +1362,29 @@ pub struct PyDrillProblem {
     pub candidates: Vec<PyCandidateEvaluation>,
 }
 
+#[pymethods]
+impl PyDrillProblem {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        let tiles_str: Vec<&'static str> = self.tiles.iter().map(|t| t.as_str()).collect();
+        let tiles_mpsz: Vec<&'static str> = self.tiles.iter().map(|t| t.mpsz()).collect();
+        dict.set_item("tiles", tiles_str)?;
+        dict.set_item("mpsz", tiles_mpsz)?;
+        dict.set_item("dora_indicator", self.dora_indicator.as_str())?;
+        dict.set_item("dora_mpsz", self.dora_indicator.mpsz())?;
+        dict.set_item("turn_number", self.turn_number)?;
+        dict.set_item("best_tile", self.best_tile.as_str())?;
+        dict.set_item("best_mpsz", self.best_tile.mpsz())?;
+        dict.set_item("rationale", &self.rationale)?;
+        let cand_list = PyList::empty(py);
+        for c in &self.candidates {
+            cand_list.append(c.to_dict(py)?)?;
+        }
+        dict.set_item("candidates", cand_list)?;
+        Ok(dict.unbind())
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature = (target_shanten=None))]
 pub fn py_generate_drill_problem(target_shanten: Option<i8>) -> Option<PyDrillProblem> {
@@ -1148,4 +1402,672 @@ pub fn py_generate_drill_problem(target_shanten: Option<i8>) -> Option<PyDrillPr
         rationale: problem.rationale,
         candidates,
     })
+}
+
+// ==========================================
+// 9. Placement EV, MatchContext & TableState wrappers
+// ==========================================
+
+#[pyclass]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PyRuleConfig {
+    #[pyo3(get, set)]
+    pub origin_score: i32,
+    #[pyo3(get, set)]
+    pub return_score: i32,
+    #[pyo3(get, set)]
+    pub uma: [i32; 4],
+    #[pyo3(get, set)]
+    pub oka: i32,
+}
+
+#[pymethods]
+impl PyRuleConfig {
+    #[new]
+    #[pyo3(signature = (origin_score=25000, return_score=30000, uma=None, oka=0))]
+    pub fn new(origin_score: i32, return_score: i32, uma: Option<[i32; 4]>, oka: i32) -> Self {
+        let uma = uma.unwrap_or([50, 10, -10, -30]);
+        Self {
+            origin_score,
+            return_score,
+            uma,
+            oka,
+        }
+    }
+
+    #[staticmethod]
+    pub fn mleague() -> Self {
+        let r = RuleConfig::mleague();
+        Self {
+            origin_score: r.origin_score,
+            return_score: r.return_score,
+            uma: r.uma,
+            oka: r.oka,
+        }
+    }
+
+    #[staticmethod]
+    pub fn general() -> Self {
+        let r = RuleConfig::general();
+        Self {
+            origin_score: r.origin_score,
+            return_score: r.return_score,
+            uma: r.uma,
+            oka: r.oka,
+        }
+    }
+
+    #[staticmethod]
+    pub fn tenhou_dan() -> Self {
+        let r = RuleConfig::tenhou_dan();
+        Self {
+            origin_score: r.origin_score,
+            return_score: r.return_score,
+            uma: r.uma,
+            oka: r.oka,
+        }
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("origin_score", self.origin_score)?;
+        dict.set_item("return_score", self.return_score)?;
+        dict.set_item("uma", self.uma.to_vec())?;
+        dict.set_item("oka", self.oka)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "RuleConfig(origin={}, return={}, uma={:?}, oka={})",
+            self.origin_score, self.return_score, self.uma, self.oka
+        )
+    }
+}
+
+impl From<PyRuleConfig> for RuleConfig {
+    fn from(r: PyRuleConfig) -> Self {
+        RuleConfig {
+            origin_score: r.origin_score,
+            return_score: r.return_score,
+            uma: r.uma,
+            oka: r.oka,
+        }
+    }
+}
+
+impl From<RuleConfig> for PyRuleConfig {
+    fn from(r: RuleConfig) -> Self {
+        PyRuleConfig {
+            origin_score: r.origin_score,
+            return_score: r.return_score,
+            uma: r.uma,
+            oka: r.oka,
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyMatchContext {
+    #[pyo3(get, set)]
+    pub scores: [i32; 4],
+    #[pyo3(get, set)]
+    pub round_wind: PyTileName,
+    #[pyo3(get, set)]
+    pub round_number: u8,
+    #[pyo3(get, set)]
+    pub honba: u8,
+    #[pyo3(get, set)]
+    pub riichi_sticks: u8,
+    pub dealer_idx: usize,
+    #[pyo3(get, set)]
+    pub rule: PyRuleConfig,
+}
+
+#[pymethods]
+impl PyMatchContext {
+    #[new]
+    #[pyo3(signature = (scores=None, round_wind=None, round_number=1, honba=0, riichi_sticks=0, dealer_idx=0, rule=None))]
+    pub fn new(
+        scores: Option<[i32; 4]>,
+        round_wind: Option<PyTileName>,
+        round_number: u8,
+        honba: u8,
+        riichi_sticks: u8,
+        dealer_idx: usize,
+        rule: Option<PyRuleConfig>,
+    ) -> PyResult<Self> {
+        if dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        Ok(Self {
+            scores: scores.unwrap_or([25000, 25000, 25000, 25000]),
+            round_wind: round_wind.unwrap_or(PyTileName::East),
+            round_number,
+            honba,
+            riichi_sticks,
+            dealer_idx,
+            rule: rule.unwrap_or_else(PyRuleConfig::mleague),
+        })
+    }
+
+    #[getter]
+    pub fn dealer_idx(&self) -> usize {
+        self.dealer_idx
+    }
+
+    #[setter]
+    pub fn set_dealer_idx(&mut self, idx: usize) -> PyResult<()> {
+        if idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        self.dealer_idx = idx;
+        Ok(())
+    }
+
+    pub fn current_ranks(&self) -> [usize; 4] {
+        let rs_ctx: MatchContext = self.clone().into();
+        rs_ctx.current_ranks()
+    }
+
+    pub fn score_diff(&self, p: usize, target: usize) -> PyResult<i32> {
+        if p >= 4 || target >= 4 {
+            return Err(PyValueError::new_err("player index must be in range 0..4"));
+        }
+        let rs_ctx: MatchContext = self.clone().into();
+        Ok(rs_ctx.score_diff(p, target))
+    }
+
+    pub fn is_orasu(&self) -> bool {
+        let rs_ctx: MatchContext = self.clone().into();
+        rs_ctx.is_orasu()
+    }
+
+    pub fn remaining_rounds(&self) -> usize {
+        let rs_ctx: MatchContext = self.clone().into();
+        rs_ctx.remaining_rounds()
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        if self.dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        let dict = PyDict::new(py);
+        dict.set_item("scores", self.scores.to_vec())?;
+        dict.set_item("round_wind", self.round_wind.as_str())?;
+        dict.set_item("round_wind_mpsz", self.round_wind.mpsz())?;
+        dict.set_item("round_number", self.round_number)?;
+        dict.set_item("honba", self.honba)?;
+        dict.set_item("riichi_sticks", self.riichi_sticks)?;
+        dict.set_item("dealer_idx", self.dealer_idx)?;
+        dict.set_item("ranks", self.current_ranks().to_vec())?;
+        dict.set_item("is_orasu", self.is_orasu())?;
+        dict.set_item("remaining_rounds", self.remaining_rounds())?;
+        dict.set_item("rule", self.rule.to_dict(py)?)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "MatchContext({}{}局 {}本場, 供託:{}, 親:{}, 点数:{:?})",
+            self.round_wind.as_str(),
+            self.round_number,
+            self.honba,
+            self.riichi_sticks,
+            self.dealer_idx,
+            self.scores
+        )
+    }
+}
+
+impl From<PyMatchContext> for MatchContext {
+    fn from(c: PyMatchContext) -> Self {
+        Self {
+            scores: c.scores,
+            round_wind: c.round_wind.into(),
+            round_number: c.round_number,
+            honba: c.honba,
+            riichi_sticks: c.riichi_sticks,
+            dealer_idx: c.dealer_idx,
+            rule: c.rule.into(),
+        }
+    }
+}
+
+impl From<MatchContext> for PyMatchContext {
+    fn from(c: MatchContext) -> Self {
+        Self {
+            scores: c.scores,
+            round_wind: c.round_wind.into(),
+            round_number: c.round_number,
+            honba: c.honba,
+            riichi_sticks: c.riichi_sticks,
+            dealer_idx: c.dealer_idx,
+            rule: c.rule.into(),
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyWinCondition {
+    #[pyo3(get)]
+    pub target_rank: usize,
+    #[pyo3(get)]
+    pub target_player: usize,
+    #[pyo3(get)]
+    pub diff: i32,
+    #[pyo3(get)]
+    pub ron_direct_req: Option<i32>,
+    #[pyo3(get)]
+    pub tsumo_req: Option<i32>,
+    #[pyo3(get)]
+    pub ron_other_req: Option<i32>,
+    #[pyo3(get)]
+    pub summary: String,
+}
+
+#[pymethods]
+impl PyWinCondition {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("target_rank", self.target_rank)?;
+        dict.set_item("target_player", self.target_player)?;
+        dict.set_item("diff", self.diff)?;
+        dict.set_item("ron_direct_req", self.ron_direct_req)?;
+        dict.set_item("tsumo_req", self.tsumo_req)?;
+        dict.set_item("ron_other_req", self.ron_other_req)?;
+        dict.set_item("summary", &self.summary)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("WinCondition({}: {})", self.target_rank, self.summary)
+    }
+}
+
+impl From<WinCondition> for PyWinCondition {
+    fn from(w: WinCondition) -> Self {
+        Self {
+            target_rank: w.target_rank,
+            target_player: w.target_player,
+            diff: w.diff,
+            ron_direct_req: w.ron_direct_req,
+            tsumo_req: w.tsumo_req,
+            ron_other_req: w.ron_other_req,
+            summary: w.summary,
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyPlacementEvaluation {
+    #[pyo3(get)]
+    pub discard_tile: PyTileName,
+    #[pyo3(get)]
+    pub raw_ev: f64,
+    #[pyo3(get)]
+    pub placement_ev: f64,
+    #[pyo3(get)]
+    pub expected_rank: f64,
+    #[pyo3(get)]
+    pub rank_probabilities: [f64; 4],
+    #[pyo3(get)]
+    pub situational_note: String,
+    #[pyo3(get)]
+    pub shanten_after: i8,
+    #[pyo3(get)]
+    pub remaining_count: usize,
+    #[pyo3(get)]
+    pub expected_score: f64,
+    #[pyo3(get)]
+    pub risk_score: f64,
+    #[pyo3(get)]
+    pub is_safe: bool,
+}
+
+#[pymethods]
+impl PyPlacementEvaluation {
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("discard_tile", self.discard_tile.as_str())?;
+        dict.set_item("mpsz", self.discard_tile.mpsz())?;
+        dict.set_item("raw_ev", self.raw_ev)?;
+        dict.set_item("placement_ev", self.placement_ev)?;
+        dict.set_item("expected_rank", self.expected_rank)?;
+        dict.set_item("rank_probabilities", self.rank_probabilities.to_vec())?;
+        dict.set_item("situational_note", &self.situational_note)?;
+        dict.set_item("shanten_after", self.shanten_after)?;
+        dict.set_item("remaining_count", self.remaining_count)?;
+        dict.set_item("expected_score", self.expected_score)?;
+        dict.set_item("risk_score", self.risk_score)?;
+        dict.set_item("is_safe", self.is_safe)?;
+        Ok(dict.unbind())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PlacementEvaluation(discard={}, pt_ev={:.2}, exp_rank={:.2}, note={})",
+            self.discard_tile.as_str(),
+            self.placement_ev,
+            self.expected_rank,
+            self.situational_note
+        )
+    }
+}
+
+impl From<PlacementCandidateEvaluation> for PyPlacementEvaluation {
+    fn from(p: PlacementCandidateEvaluation) -> Self {
+        Self {
+            discard_tile: p.base.discard_tile.into(),
+            raw_ev: p.base.ev,
+            placement_ev: p.placement_ev,
+            expected_rank: p.expected_rank,
+            rank_probabilities: p.rank_probabilities,
+            situational_note: p.situational_note,
+            shanten_after: p.base.shanten_after,
+            remaining_count: p.base.speed.remaining_count,
+            expected_score: p.base.value.expected_score,
+            risk_score: p.base.safety.risk_score,
+            is_safe: p.base.safety.is_safe,
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyTableState {
+    #[pyo3(get, set)]
+    pub round_wind: PyTileName,
+    #[pyo3(get, set)]
+    pub round_number: u8,
+    #[pyo3(get, set)]
+    pub honba: u8,
+    #[pyo3(get, set)]
+    pub riichi_sticks: u8,
+    pub dealer_idx: usize,
+    pub current_turn: usize,
+    #[pyo3(get, set)]
+    pub dora_indicators: Vec<PyTileName>,
+    #[pyo3(get, set)]
+    pub remaining_wall_tiles: usize,
+    #[pyo3(get, set)]
+    pub scores: [i32; 4],
+    #[pyo3(get, set)]
+    pub is_riichi: [bool; 4],
+    #[pyo3(get, set)]
+    pub hands: Vec<Vec<PyTileName>>,
+    #[pyo3(get, set)]
+    pub melds: Vec<Vec<PyMeld>>,
+    #[pyo3(get, set)]
+    pub rivers: Vec<Vec<PyTileName>>,
+}
+
+#[pymethods]
+impl PyTableState {
+    #[new]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        round_wind: PyTileName,
+        round_number: u8,
+        honba: u8,
+        riichi_sticks: u8,
+        dealer_idx: usize,
+        current_turn: usize,
+        dora_indicators: Vec<PyTileName>,
+        remaining_wall_tiles: usize,
+        scores: [i32; 4],
+        is_riichi: [bool; 4],
+        hands: Vec<Vec<PyTileName>>,
+        melds: Vec<Vec<PyMeld>>,
+        rivers: Vec<Vec<PyTileName>>,
+    ) -> PyResult<Self> {
+        if dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        if current_turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
+        Ok(Self {
+            round_wind,
+            round_number,
+            honba,
+            riichi_sticks,
+            dealer_idx,
+            current_turn,
+            dora_indicators,
+            remaining_wall_tiles,
+            scores,
+            is_riichi,
+            hands,
+            melds,
+            rivers,
+        })
+    }
+
+    #[getter]
+    pub fn dealer_idx(&self) -> usize {
+        self.dealer_idx
+    }
+
+    #[setter]
+    pub fn set_dealer_idx(&mut self, idx: usize) -> PyResult<()> {
+        if idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        self.dealer_idx = idx;
+        Ok(())
+    }
+
+    #[getter]
+    pub fn current_turn(&self) -> usize {
+        self.current_turn
+    }
+
+    #[setter]
+    pub fn set_current_turn(&mut self, turn: usize) -> PyResult<()> {
+        if turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
+        self.current_turn = turn;
+        Ok(())
+    }
+
+    #[pyo3(signature = (reveal_all=false))]
+    pub fn to_dict(&self, py: Python<'_>, reveal_all: bool) -> PyResult<Py<PyDict>> {
+        if self.dealer_idx >= 4 {
+            return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+        }
+        if self.current_turn >= 4 {
+            return Err(PyValueError::new_err("current_turn must be in range 0..4"));
+        }
+        let dict = PyDict::new(py);
+        dict.set_item("round_wind", self.round_wind.as_str())?;
+        dict.set_item("round_wind_mpsz", self.round_wind.mpsz())?;
+        dict.set_item("round_number", self.round_number)?;
+        dict.set_item("honba", self.honba)?;
+        dict.set_item("riichi_sticks", self.riichi_sticks)?;
+        dict.set_item("dealer_idx", self.dealer_idx)?;
+        dict.set_item("current_turn", self.current_turn)?;
+
+        let dora_str: Vec<&'static str> = self.dora_indicators.iter().map(|t| t.as_str()).collect();
+        let dora_mpsz: Vec<&'static str> = self.dora_indicators.iter().map(|t| t.mpsz()).collect();
+        dict.set_item("dora_indicators", dora_str)?;
+        dict.set_item("dora_indicators_mpsz", dora_mpsz)?;
+        dict.set_item("remaining_wall_tiles", self.remaining_wall_tiles)?;
+
+        let players_list = PyList::empty(py);
+        let winds = ["East", "South", "West", "North"];
+        let winds_ja = ["東", "南", "西", "北"];
+        for i in 0..4 {
+            let p_dict = PyDict::new(py);
+            p_dict.set_item("seat", i)?;
+            let rel_wind = (i + 4 - self.dealer_idx) % 4;
+            p_dict.set_item("seat_wind", winds[rel_wind])?;
+            p_dict.set_item("seat_wind_ja", winds_ja[rel_wind])?;
+            p_dict.set_item("score", self.scores[i])?;
+            p_dict.set_item("is_riichi", self.is_riichi[i])?;
+            p_dict.set_item("is_dealer", i == self.dealer_idx)?;
+
+            // Hand tiles (seat 0 visible by default; others hidden unless reveal_all)
+            let hand_list = PyList::empty(py);
+            let mpsz_list = PyList::empty(py);
+            if i == 0 || reveal_all {
+                if let Some(h) = self.hands.get(i) {
+                    for t in h {
+                        hand_list.append(t.as_str())?;
+                        mpsz_list.append(t.mpsz())?;
+                    }
+                }
+            } else if let Some(h) = self.hands.get(i) {
+                for _ in 0..h.len() {
+                    hand_list.append("?")?;
+                    mpsz_list.append("?")?;
+                }
+            }
+            p_dict.set_item("hand", hand_list)?;
+            p_dict.set_item("hand_mpsz", mpsz_list)?;
+
+            // Melds
+            let melds_list = PyList::empty(py);
+            if let Some(m_vec) = self.melds.get(i) {
+                for m in m_vec {
+                    melds_list.append(m.to_dict(py)?)?;
+                }
+            }
+            p_dict.set_item("melds", melds_list)?;
+
+            // River
+            let river_list = PyList::empty(py);
+            let river_mpsz_list = PyList::empty(py);
+            if let Some(r_vec) = self.rivers.get(i) {
+                for t in r_vec {
+                    river_list.append(t.as_str())?;
+                    river_mpsz_list.append(t.mpsz())?;
+                }
+            }
+            p_dict.set_item("river", river_list)?;
+            p_dict.set_item("river_mpsz", river_mpsz_list)?;
+
+            players_list.append(p_dict)?;
+        }
+        dict.set_item("players", players_list)?;
+        Ok(dict.unbind())
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (tiles, match_context, player_idx=0, is_dealer=None, dora_indicators=None))]
+pub fn py_evaluate_placement_discards(
+    tiles: Vec<PyTileName>,
+    match_context: &PyMatchContext,
+    player_idx: usize,
+    is_dealer: Option<bool>,
+    dora_indicators: Option<Vec<PyTileName>>,
+) -> PyResult<Vec<PyPlacementEvaluation>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
+    let mut hand = Hand::new();
+    for t in tiles {
+        hand.push(t.into());
+    }
+
+    let dora_vec: Vec<TileName> = dora_indicators
+        .unwrap_or_else(|| vec![PyTileName::OneM])
+        .into_iter()
+        .map(|t| t.into())
+        .collect();
+
+    let dealer = is_dealer.unwrap_or(player_idx == match_context.dealer_idx);
+    let ctx = crate::expectation::AnalysisContext {
+        turn_number: 6,
+        remaining_wall_tiles: 50,
+        seat_wind: Some(TileName::East),
+        round_wind: Some(match_context.round_wind.into()),
+        dora_indicators: &dora_vec,
+        is_dealer: dealer,
+    };
+
+    let rs_match: MatchContext = match_context.clone().into();
+    let evs = evaluate_hand_discards_with_placement(&hand, None, &ctx, &rs_match, player_idx);
+    Ok(evs.into_iter().map(|e| e.into()).collect())
+}
+
+#[pyfunction]
+#[pyo3(signature = (match_context, player_idx=0))]
+pub fn py_calculate_orasu_conditions(
+    match_context: &PyMatchContext,
+    player_idx: usize,
+) -> PyResult<Vec<PyWinCondition>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
+    let rs_match: MatchContext = match_context.clone().into();
+    let conds = calculate_orasu_conditions(&rs_match, player_idx);
+    Ok(conds.into_iter().map(|c| c.into()).collect())
+}
+
+#[pyfunction]
+#[pyo3(signature = (tiles, match_context, player_idx=0, is_dealer=None, dora_indicators=None))]
+pub fn py_get_ai_hud_data(
+    py: Python<'_>,
+    tiles: Vec<PyTileName>,
+    match_context: &PyMatchContext,
+    player_idx: usize,
+    is_dealer: Option<bool>,
+    dora_indicators: Option<Vec<PyTileName>>,
+) -> PyResult<Py<PyDict>> {
+    if player_idx >= 4 {
+        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
+    }
+    if match_context.dealer_idx >= 4 {
+        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
+    }
+    let evs = py_evaluate_placement_discards(
+        tiles,
+        match_context,
+        player_idx,
+        is_dealer,
+        dora_indicators,
+    )?;
+    let dict = PyDict::new(py);
+
+    let ranks = match_context.current_ranks();
+    dict.set_item("current_rank", ranks[player_idx])?;
+    dict.set_item("current_score", match_context.scores[player_idx])?;
+    dict.set_item("is_orasu", match_context.is_orasu())?;
+
+    let cand_list = PyList::empty(py);
+    for e in &evs {
+        cand_list.append(e.to_dict(py)?)?;
+    }
+    dict.set_item("candidates", cand_list)?;
+
+    if let Some(best) = evs.first() {
+        dict.set_item("best_tile", best.discard_tile.as_str())?;
+        dict.set_item("best_mpsz", best.discard_tile.mpsz())?;
+        dict.set_item("best_placement_ev", best.placement_ev)?;
+        dict.set_item("best_raw_ev", best.raw_ev)?;
+        dict.set_item("best_note", &best.situational_note)?;
+    }
+
+    if match_context.is_orasu() {
+        let conds = py_calculate_orasu_conditions(match_context, player_idx)?;
+        let cond_list = PyList::empty(py);
+        for c in conds {
+            cond_list.append(c.to_dict(py)?)?;
+        }
+        dict.set_item("orasu_conditions", cond_list)?;
+    }
+
+    Ok(dict.unbind())
 }
