@@ -59,7 +59,8 @@ pub struct AnalysisContext<'a> {
     pub dora_indicators: &'a [TileName], // ドラ表示牌
     pub is_dealer: bool,                 // 親かどうか
     // --- 状況・他家コンテキスト（高度化用） ---
-    pub riichi_status: [bool; 4], // 各プレイヤーのリーチ状態 (0:自家, 1:下家, 2:対面, 3:上家)
+    pub target_player: usize, // 分析対象のプレイヤー座席番号 (0..4, デフォルト: 0)
+    pub riichi_status: [bool; 4], // 各プレイヤーのリーチ状態
     pub player_rivers: &'a [&'a [TileName]], // 各プレイヤーの捨て牌 (長さ4、空なら参照なし)
     pub player_melds: &'a [&'a [crate::hand::Meld]], // 各プレイヤーの副露 (長さ4)
     pub player_is_dealer: [bool; 4], // 各プレイヤーが親かどうか
@@ -74,6 +75,7 @@ impl Default for AnalysisContext<'static> {
             round_wind: Some(TileName::East),
             dora_indicators: &[],
             is_dealer: true,
+            target_player: 0,
             riichi_status: [false; 4],
             player_rivers: &[],
             player_melds: &[],
@@ -305,12 +307,8 @@ fn estimate_win_probability(
     };
 
     // 3. 他家脅威度による減衰（リーチ・多副露による和了阻止・降ろされ率）
-    let riichi_count = ctx
-        .riichi_status
-        .iter()
-        .enumerate()
-        .skip(1)
-        .filter(|(_, &r)| r)
+    let riichi_count = (0..4)
+        .filter(|&p| p != ctx.target_player && ctx.riichi_status[p])
         .count();
     let riichi_factor = match riichi_count {
         0 => 1.0,
@@ -319,12 +317,13 @@ fn estimate_win_probability(
         _ => 0.30,
     };
 
-    let high_meld_count = ctx
-        .player_melds
-        .iter()
-        .enumerate()
-        .skip(1)
-        .filter(|(_, m)| m.len() >= 2)
+    let high_meld_count = (0..4)
+        .filter(|&p| {
+            p != ctx.target_player
+                && p < ctx.player_melds.len()
+                && crate::hand::has_open_meld(ctx.player_melds[p])
+                && ctx.player_melds[p].len() >= 2
+        })
         .count();
     let meld_factor = (1.0 - high_meld_count as f64 * 0.10).max(0.7);
 
@@ -348,7 +347,7 @@ fn estimate_hand_value(
     open_melds: &[crate::hand::Meld],
     ctx: &AnalysisContext<'_>,
 ) -> ValueMetric {
-    let is_closed = open_melds.is_empty();
+    let is_closed = crate::hand::is_menzen(open_melds);
 
     // --- ケース 1: テンパイ (shanten == 0) ---
     if shanten == 0 {
@@ -618,12 +617,8 @@ pub fn evaluate_tile_safety(
     let idx = tile as usize;
 
     // 他家にリーチ者がいるか？
-    let riichi_opponents: Vec<usize> = ctx
-        .riichi_status
-        .iter()
-        .enumerate()
-        .skip(1)
-        .filter_map(|(p, &r)| if r { Some(p) } else { None })
+    let riichi_opponents: Vec<usize> = (0..4)
+        .filter(|&p| p != ctx.target_player && ctx.riichi_status[p])
         .collect();
 
     if !riichi_opponents.is_empty() {
@@ -1071,6 +1066,99 @@ mod tests {
             "Genbutsu 4m EV ({}) must be strictly higher than dangerous 5m EV ({}) under riichi",
             ev_4m.ev,
             ev_5m.ev
+        );
+    }
+
+    #[test]
+    fn test_analysis_context_target_player_non_zero() {
+        // Issue #78 レビュー対応: target_player = 2（CPU対面）の分析時
+        // 1. 自身のリーチ（player 2）は他家脅威として扱われないこと
+        // 2. プレイヤー0（あなた）のリーチ・河が正しく他家脅威・現物として判定されること
+        let river_p0 = vec![TileName::FourM, TileName::West];
+        let river_p2 = vec![TileName::OneS];
+        let all_rivers = vec![river_p0.as_slice(), &[], river_p2.as_slice(), &[]];
+
+        let mut riichi_status = [false; 4];
+        riichi_status[0] = true; // プレイヤー0（他家）がリーチ
+        riichi_status[2] = true; // プレイヤー2（分析対象の自身）がリーチ
+
+        let ctx = AnalysisContext {
+            target_player: 2, // 分析対象はプレイヤー2
+            riichi_status,
+            player_rivers: &all_rivers,
+            ..Default::default()
+        };
+
+        // プレイヤー0の河にある 4m は現物（0.0）
+        let s_4m = evaluate_tile_safety(TileName::FourM, &ctx, &[0u8; 35]);
+        assert_eq!(
+            s_4m.risk_score, 0.0,
+            "プレイヤー0の河にある4mは他家現物として0.0であるべき"
+        );
+        assert!(s_4m.is_safe);
+
+        // プレイヤー2自身の河にある 1s は他家現物ではない（無筋端牌 0.25）
+        let s_1s = evaluate_tile_safety(TileName::OneS, &ctx, &[0u8; 35]);
+        assert!(
+            s_1s.risk_score > 0.0,
+            "自身の河にある1sは他家リーチに対する現物とはみなされないべき"
+        );
+
+        // 和了確率において、他家リーチは player 0 の「1件」のみとして減衰（0.75倍）されること
+        // （自身のリーチを入れて2件減衰 0.50倍 になったり、0件 1.0倍 になったりしない）
+        let p_with_p0_riichi = estimate_win_probability(0, 8, 2, 10.0, 50.0, &ctx);
+
+        let ctx_no_riichi = AnalysisContext {
+            target_player: 2,
+            riichi_status: [false, false, true, false], // 自身のみリーチ（他家ノーリーチ）
+            player_rivers: &all_rivers,
+            ..Default::default()
+        };
+        let p_self_only = estimate_win_probability(0, 8, 2, 10.0, 50.0, &ctx_no_riichi);
+
+        assert!(
+            p_self_only > p_with_p0_riichi,
+            "プレイヤー0のリーチにより和了確率は減衰するべき (self_only: {}, with_p0: {})",
+            p_self_only,
+            p_with_p0_riichi
+        );
+    }
+
+    #[test]
+    fn test_estimate_hand_value_ankan_preserves_menzen() {
+        // Issue #77 レビュー対応: 暗槓（Meld::Ankan）のみを持つ手牌は門前清として打点評価されること
+        // 手牌: 234p 456p 78s 55m (10枚門前牌) + 1m暗槓 (Meld::Ankan(1m))
+        // 待ち: 6s, 9s (両面テンパイ)
+        let mut counts = [0u8; 35];
+        counts[TileName::TwoP as usize] = 1;
+        counts[TileName::ThreeP as usize] = 1;
+        counts[TileName::FourP as usize] = 2;
+        counts[TileName::FiveP as usize] = 1;
+        counts[TileName::SixP as usize] = 1;
+        counts[TileName::SevenS as usize] = 1;
+        counts[TileName::EightS as usize] = 1;
+        counts[TileName::FiveM as usize] = 2; // 雀頭
+
+        let open_melds = vec![crate::hand::Meld::Ankan(TileName::OneM)];
+        let accepted = vec![TileName::SixS, TileName::NineS];
+
+        let ctx = AnalysisContext {
+            is_dealer: false,
+            seat_wind: Some(TileName::South),
+            round_wind: Some(TileName::East),
+            ..Default::default()
+        };
+
+        let val = estimate_hand_value(&counts, 0, &accepted, &open_melds, &ctx);
+        // 暗槓は門前清であるため立直・ツモ・ピンフ等が評価され、副露手（1000点）ではなく高打点となる
+        assert!(
+            val.expected_score >= 3000.0,
+            "暗槓のみのテンパイは門前清として立直込みで高打点評価されるべき (actual: {})",
+            val.expected_score
+        );
+        assert!(
+            val.primary_yaku.contains(&"立直") || val.expected_han >= 2.0,
+            "門前役（立直等）が評価に含まれるべき"
         );
     }
 }

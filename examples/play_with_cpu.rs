@@ -365,6 +365,7 @@ fn main() {
 
                     // 期待値計算 & リアルタイムヒント（順位EV統合、他家リーチ・河・副露コンテキストを完全バインド）
                     let ctx = AnalysisContext {
+                        target_player: 0,
                         turn_number: turn_count,
                         remaining_wall_tiles: remaining_wall,
                         seat_wind: Some(player_seat),
@@ -623,6 +624,7 @@ fn main() {
                         match_ctx.dealer_idx == 3,
                     ];
                     let ctx = AnalysisContext {
+                        target_player: current_turn,
                         turn_number: turn_count,
                         remaining_wall_tiles: wall.remaining(),
                         seat_wind: Some(cpu_seat),
@@ -787,6 +789,7 @@ fn main() {
                         match_ctx.dealer_idx == 3,
                     ];
                     let call_ctx = AnalysisContext {
+                        target_player: 0,
                         turn_number: turn_count,
                         remaining_wall_tiles: wall.remaining(),
                         seat_wind: Some(player_seat),
@@ -907,6 +910,7 @@ fn main() {
                         match_ctx.dealer_idx == 3,
                     ];
                     let cpu_call_ctx = AnalysisContext {
+                        target_player: p,
                         turn_number: turn_count,
                         remaining_wall_tiles: wall.remaining(),
                         seat_wind: Some(cpu_seat),

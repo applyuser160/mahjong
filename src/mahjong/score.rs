@@ -429,7 +429,7 @@ pub fn calculate_hand_fu(
     if is_chitoitsu {
         return 25;
     }
-    let is_closed = open_melds.is_empty();
+    let is_closed = crate::hand::is_menzen(open_melds);
     if is_pinfu && is_closed && is_tsumo {
         return 20;
     }
@@ -701,5 +701,46 @@ mod tests {
             None,
         );
         assert_eq!(fu_kanchan, 40, "3s嵌張ツモは32符切り上げで40符になるべき");
+    }
+
+    #[test]
+    fn test_score_ankan_closed_ron_10_fu() {
+        // 暗槓（Meld::Ankan）のみを持つ手牌でのロン和了（出和了）
+        // 手牌: 234p 456p 789s 55m (11枚門前牌) + 1m暗槓 (Meld::Ankan(1m))
+        // 和了牌: 9s (ロン和了)
+        // 門前清であるため:
+        // - 副底: 20符
+        // - 門前ロン加符: 10符 (暗槓は副露扱いされず門前ロン加符が付くこと！)
+        // - 1m 暗槓 (ヤオ九牌): 32符
+        // - 待ち 789s (両面): 0符
+        // - 雀頭 5m: 0符
+        // 計: 20 + 10 + 32 = 62符 -> 切り上げで 70符
+        let mut counts = [0u8; 35];
+        counts[TileName::TwoP as usize] = 1;
+        counts[TileName::ThreeP as usize] = 1;
+        counts[TileName::FourP as usize] = 2;
+        counts[TileName::FiveP as usize] = 1;
+        counts[TileName::SixP as usize] = 1;
+        counts[TileName::SevenS as usize] = 1;
+        counts[TileName::EightS as usize] = 1;
+        counts[TileName::NineS as usize] = 1; // 和了牌 9s (ロン)
+        counts[TileName::FiveM as usize] = 2; // 雀頭
+
+        let open_melds = vec![crate::hand::Meld::Ankan(TileName::OneM)];
+
+        let fu = calculate_hand_fu(
+            &counts,
+            &open_melds,
+            TileName::NineS,
+            false, // ロン和了
+            false,
+            false,
+            None,
+            None,
+        );
+        assert_eq!(
+            fu, 70,
+            "暗槓のみの手牌の出和了は門前ロン加符10符が付き70符になるべき"
+        );
     }
 }
