@@ -37,6 +37,12 @@ pub mod explanation;
 #[path = "mahjong/review.rs"]
 pub mod review;
 
+#[path = "mahjong/drill.rs"]
+pub mod drill;
+
+#[path = "mahjong/call_advisor.rs"]
+pub mod call_advisor;
+
 use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -44,7 +50,9 @@ use rand::SeedableRng;
 pub use acceptance::{
     analyze_all_discards, calculate_acceptance, AcceptanceResult, DiscardAnalysis, WaitTile,
 };
+pub use call_advisor::{CallAction, CallAdvice, CallAdvisor, CallChoice, CallRecommendation};
 pub use dora::{count_dora, indicator_to_dora};
+pub use drill::{DrillAnswerResult, DrillEngine, DrillProblem, DrillSession, DrillSessionReport};
 pub use expectation::{
     evaluate_hand_discards, AnalysisContext, CandidateEvaluation, SafetyMetric, SpeedMetric,
     ValueMetric,
@@ -102,9 +110,14 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_api::PyShantenResult>()?;
     m.add_class::<python_api::PyCandidateEvaluation>()?;
     m.add_class::<python_api::PyReviewTracker>()?;
+    m.add_class::<python_api::PyCallChoice>()?;
+    m.add_class::<python_api::PyCallAdvice>()?;
+    m.add_class::<python_api::PyDrillProblem>()?;
     m.add_function(wrap_pyfunction!(python_api::get_all_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_judge_yaku, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_calculate_shanten, m)?)?;
     m.add_function(wrap_pyfunction!(python_api::py_evaluate_hand_discards, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_advise_call, m)?)?;
+    m.add_function(wrap_pyfunction!(python_api::py_generate_drill_problem, m)?)?;
     Ok(())
 }

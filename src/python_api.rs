@@ -1024,3 +1024,128 @@ impl PyReviewTracker {
         self.inner.format_report(&report)
     }
 }
+
+// ==========================================
+// 8. Drill & Call Advisor wrappers
+// ==========================================
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyCallChoice {
+    #[pyo3(get)]
+    pub action: String,
+    #[pyo3(get)]
+    pub post_shanten: i8,
+    #[pyo3(get)]
+    pub post_acceptance: usize,
+    #[pyo3(get)]
+    pub estimated_score: f64,
+    #[pyo3(get)]
+    pub ev: f64,
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyCallAdvice {
+    #[pyo3(get)]
+    pub target_tile: PyTileName,
+    #[pyo3(get)]
+    pub is_kamicha: bool,
+    #[pyo3(get)]
+    pub best_action: String,
+    #[pyo3(get)]
+    pub recommendation: String,
+    #[pyo3(get)]
+    pub rationale: String,
+    #[pyo3(get)]
+    pub choices: Vec<PyCallChoice>,
+}
+
+#[pyfunction]
+#[pyo3(signature = (tiles, target_tile, is_kamicha=true, dora_indicators=None))]
+pub fn py_advise_call(
+    tiles: Vec<PyTileName>,
+    target_tile: PyTileName,
+    is_kamicha: bool,
+    dora_indicators: Option<Vec<PyTileName>>,
+) -> Option<PyCallAdvice> {
+    let mut hand = Hand::new();
+    for t in tiles {
+        hand.push(t.into());
+    }
+
+    let dora_vec: Vec<TileName> = dora_indicators
+        .unwrap_or_else(|| vec![PyTileName::OneM])
+        .into_iter()
+        .map(|t| t.into())
+        .collect();
+
+    let ctx = crate::expectation::AnalysisContext {
+        turn_number: 6,
+        remaining_wall_tiles: 50,
+        seat_wind: Some(TileName::East),
+        round_wind: Some(TileName::East),
+        dora_indicators: &dora_vec,
+        is_dealer: true,
+    };
+
+    let advice =
+        crate::call_advisor::CallAdvisor::advise_call(&hand, target_tile.into(), is_kamicha, &ctx)?;
+
+    let choices = advice
+        .choices
+        .into_iter()
+        .map(|c| PyCallChoice {
+            action: c.action.label_ja(),
+            post_shanten: c.post_shanten,
+            post_acceptance: c.post_acceptance,
+            estimated_score: c.estimated_score,
+            ev: c.ev,
+        })
+        .collect();
+
+    Some(PyCallAdvice {
+        target_tile,
+        is_kamicha,
+        best_action: advice.best_action.label_ja(),
+        recommendation: advice.recommendation.label_ja().to_string(),
+        rationale: advice.rationale,
+        choices,
+    })
+}
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyDrillProblem {
+    #[pyo3(get)]
+    pub tiles: Vec<PyTileName>,
+    #[pyo3(get)]
+    pub dora_indicator: PyTileName,
+    #[pyo3(get)]
+    pub turn_number: usize,
+    #[pyo3(get)]
+    pub best_tile: PyTileName,
+    #[pyo3(get)]
+    pub rationale: String,
+    #[pyo3(get)]
+    pub candidates: Vec<PyCandidateEvaluation>,
+}
+
+#[pyfunction]
+#[pyo3(signature = (target_shanten=None))]
+pub fn py_generate_drill_problem(target_shanten: Option<i8>) -> Option<PyDrillProblem> {
+    let mut rng = rand::thread_rng();
+    let problem = crate::drill::DrillEngine::generate_problem(target_shanten, 100, &mut rng)?;
+
+    let tiles = problem.hand.tiles().iter().map(|&t| t.into()).collect();
+    let candidates = problem.candidates.into_iter().map(|c| c.into()).collect();
+
+    Some(PyDrillProblem {
+        tiles,
+        dora_indicator: problem.dora_indicator.into(),
+        turn_number: problem.turn_number,
+        best_tile: problem.best_tile.into(),
+        rationale: problem.rationale,
+        candidates,
+    })
+}
