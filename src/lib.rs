@@ -16,6 +16,9 @@ pub mod yaku;
 #[path = "mahjong/river.rs"]
 pub mod river;
 
+#[path = "mahjong/suit_table.rs"]
+pub mod suit_table;
+
 #[path = "mahjong/shanten.rs"]
 pub mod shanten;
 
