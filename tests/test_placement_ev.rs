@@ -9,9 +9,9 @@ use mahjong::tile::TileName;
 fn test_rule_config_points() {
     let rule = RuleConfig::mleague();
 
-    // 1位: 45,000点 -> (45-30) + 50(ウマ) + 20(オカ) = 85.0 pt
+    // 1位: 45,000点 -> (45-30) + 50(ウマ・オカ内包) = 65.0 pt
     let pt1 = rule.calculate_point(1, 45000);
-    assert!((pt1 - 85.0).abs() < 1e-6);
+    assert!((pt1 - 65.0).abs() < 1e-6);
 
     // 2位: 28,000点 -> (28-30) + 10(ウマ) = 8.0 pt
     let pt2 = rule.calculate_point(2, 28000);
@@ -24,6 +24,14 @@ fn test_rule_config_points() {
     // 4位: 10,000点 -> (10-30) - 30(ウマ) = -50.0 pt
     let pt4 = rule.calculate_point(4, 10000);
     assert!((pt4 - (-50.0)).abs() < 1e-6);
+
+    // 4名の合計ポイントが 0.0 pt になることの検証
+    let total_pt = pt1 + pt2 + pt3 + pt4;
+    assert!(
+        total_pt.abs() < 1e-6,
+        "4名のポイント合計は 0 になるべき: {}",
+        total_pt
+    );
 }
 
 #[test]

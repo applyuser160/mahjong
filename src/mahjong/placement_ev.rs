@@ -18,13 +18,13 @@ impl Default for RuleConfig {
 }
 
 impl RuleConfig {
-    /// Mリーグ基準 (+50 / +10 / -10 / -30, 25,000点持ち 30,000点返し, オカ +20)
+    /// Mリーグ基準 (+50 / +10 / -10 / -30, 25,000点持ち 30,000点返し, オカ20ptはウマ[+50]に内包)
     pub fn mleague() -> Self {
         Self {
             origin_score: 25000,
             return_score: 30000,
             uma: [50, 10, -10, -30],
-            oka: 20,
+            oka: 0,
         }
     }
 
