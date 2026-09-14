@@ -1097,11 +1097,26 @@ impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
 }
 
 #[pyfunction]
-#[pyo3(signature = (tiles, is_dealer=true, dora_indicators=None))]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
+#[pyo3(signature = (
+    tiles,
+    is_dealer=true,
+    dora_indicators=None,
+    turn_number=None,
+    remaining_wall_tiles=None,
+    seat_wind=None,
+    round_wind=None,
+    visible_tiles=None,
+))]
 pub fn py_evaluate_hand_discards(
     tiles: Vec<PyTileName>,
     is_dealer: bool,
     dora_indicators: Option<Vec<PyTileName>>,
+    turn_number: Option<usize>,
+    remaining_wall_tiles: Option<usize>,
+    seat_wind: Option<PyTileName>,
+    round_wind: Option<PyTileName>,
+    visible_tiles: Option<Vec<PyTileName>>,
 ) -> Vec<PyCandidateEvaluation> {
     let mut hand = Hand::new();
     for t in tiles {
@@ -1115,15 +1130,28 @@ pub fn py_evaluate_hand_discards(
         .collect();
 
     let ctx = crate::expectation::AnalysisContext {
-        turn_number: 6,
-        remaining_wall_tiles: 50,
-        seat_wind: Some(TileName::East),
-        round_wind: Some(TileName::East),
+        turn_number: turn_number.unwrap_or(6),
+        remaining_wall_tiles: remaining_wall_tiles.unwrap_or(50),
+        seat_wind: seat_wind.map(|w| w.into()).or(Some(TileName::East)),
+        round_wind: round_wind.map(|w| w.into()).or(Some(TileName::East)),
         dora_indicators: &dora_vec,
         is_dealer,
     };
 
-    let evs = crate::expectation::evaluate_hand_discards(&hand, None, &ctx);
+    let mut visible_counts = [0u8; 35];
+    let visible_opt = if let Some(v_tiles) = visible_tiles {
+        for t in v_tiles {
+            let idx = TileName::from(t) as usize;
+            if idx <= 34 {
+                visible_counts[idx] = visible_counts[idx].saturating_add(1);
+            }
+        }
+        Some(&visible_counts)
+    } else {
+        None
+    };
+
+    let evs = crate::expectation::evaluate_hand_discards(&hand, visible_opt, &ctx);
     evs.into_iter().map(|e| e.into()).collect()
 }
 
@@ -1959,13 +1987,28 @@ impl PyTableState {
 }
 
 #[pyfunction]
-#[pyo3(signature = (tiles, match_context, player_idx=0, is_dealer=None, dora_indicators=None))]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
+#[pyo3(signature = (
+    tiles,
+    match_context,
+    player_idx=0,
+    is_dealer=None,
+    dora_indicators=None,
+    turn_number=None,
+    remaining_wall_tiles=None,
+    seat_wind=None,
+    visible_tiles=None,
+))]
 pub fn py_evaluate_placement_discards(
     tiles: Vec<PyTileName>,
     match_context: &PyMatchContext,
     player_idx: usize,
     is_dealer: Option<bool>,
     dora_indicators: Option<Vec<PyTileName>>,
+    turn_number: Option<usize>,
+    remaining_wall_tiles: Option<usize>,
+    seat_wind: Option<PyTileName>,
+    visible_tiles: Option<Vec<PyTileName>>,
 ) -> PyResult<Vec<PyPlacementEvaluation>> {
     if player_idx >= 4 {
         return Err(PyValueError::new_err("player_idx must be in range 0..4"));
@@ -1985,17 +2028,40 @@ pub fn py_evaluate_placement_discards(
         .collect();
 
     let dealer = is_dealer.unwrap_or(player_idx == match_context.dealer_idx);
+
+    let calculated_seat_wind = match (player_idx + 4 - match_context.dealer_idx) % 4 {
+        0 => TileName::East,
+        1 => TileName::South,
+        2 => TileName::West,
+        _ => TileName::North,
+    };
+    let s_wind = seat_wind.map(|w| w.into()).unwrap_or(calculated_seat_wind);
+
     let ctx = crate::expectation::AnalysisContext {
-        turn_number: 6,
-        remaining_wall_tiles: 50,
-        seat_wind: Some(TileName::East),
+        turn_number: turn_number.unwrap_or(6),
+        remaining_wall_tiles: remaining_wall_tiles.unwrap_or(50),
+        seat_wind: Some(s_wind),
         round_wind: Some(match_context.round_wind.into()),
         dora_indicators: &dora_vec,
         is_dealer: dealer,
     };
 
+    let mut visible_counts = [0u8; 35];
+    let visible_opt = if let Some(v_tiles) = visible_tiles {
+        for t in v_tiles {
+            let idx = TileName::from(t) as usize;
+            if idx <= 34 {
+                visible_counts[idx] = visible_counts[idx].saturating_add(1);
+            }
+        }
+        Some(&visible_counts)
+    } else {
+        None
+    };
+
     let rs_match: MatchContext = match_context.clone().into();
-    let evs = evaluate_hand_discards_with_placement(&hand, None, &ctx, &rs_match, player_idx);
+    let evs =
+        evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx);
     Ok(evs.into_iter().map(|e| e.into()).collect())
 }
 
@@ -2017,7 +2083,18 @@ pub fn py_calculate_orasu_conditions(
 }
 
 #[pyfunction]
-#[pyo3(signature = (tiles, match_context, player_idx=0, is_dealer=None, dora_indicators=None))]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
+#[pyo3(signature = (
+    tiles,
+    match_context,
+    player_idx=0,
+    is_dealer=None,
+    dora_indicators=None,
+    turn_number=None,
+    remaining_wall_tiles=None,
+    seat_wind=None,
+    visible_tiles=None,
+))]
 pub fn py_get_ai_hud_data(
     py: Python<'_>,
     tiles: Vec<PyTileName>,
@@ -2025,6 +2102,10 @@ pub fn py_get_ai_hud_data(
     player_idx: usize,
     is_dealer: Option<bool>,
     dora_indicators: Option<Vec<PyTileName>>,
+    turn_number: Option<usize>,
+    remaining_wall_tiles: Option<usize>,
+    seat_wind: Option<PyTileName>,
+    visible_tiles: Option<Vec<PyTileName>>,
 ) -> PyResult<Py<PyDict>> {
     if player_idx >= 4 {
         return Err(PyValueError::new_err("player_idx must be in range 0..4"));
@@ -2038,6 +2119,10 @@ pub fn py_get_ai_hud_data(
         player_idx,
         is_dealer,
         dora_indicators,
+        turn_number,
+        remaining_wall_tiles,
+        seat_wind,
+        visible_tiles,
     )?;
     let dict = PyDict::new(py);
 
