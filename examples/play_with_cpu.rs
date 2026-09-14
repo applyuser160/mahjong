@@ -66,6 +66,12 @@ fn player_name_with_wind(player_idx: usize, dealer_idx: usize) -> String {
     )
 }
 
+#[derive(Debug, Clone, Copy)]
+enum RoundResult {
+    Win { _winner: usize, is_dealer: bool },
+    Exhaustion { dealer_tenpai: bool },
+}
+
 fn check_agari(
     hand: &Hand,
     win_tile: TileName,
@@ -201,7 +207,7 @@ fn main() {
         let mut current_turn = match_ctx.dealer_idx; // 親から手番スタート
         let mut skip_draw = false; // 副露直後の手番はツモをスキップ
 
-        let renchan: bool = 'game: loop {
+        let round_result: RoundResult = 'game: loop {
             let p_name = &player_names[current_turn];
 
             // 1. ツモ処理（副露直後でない場合のみ山から引く）
@@ -226,7 +232,9 @@ fn main() {
                                 }
                             }
                         }
-                        break 'game tenpai_status[match_ctx.dealer_idx];
+                        break 'game RoundResult::Exhaustion {
+                            dealer_tenpai: tenpai_status[match_ctx.dealer_idx],
+                        };
                     }
                 };
                 hands[current_turn].push(drawn);
@@ -464,28 +472,43 @@ fn main() {
                     }
 
                     if is_agari && (input.eq_ignore_ascii_case("tsumo") || input == "ツモ") {
-                        if match_ctx.dealer_idx == 0 {
+                        let is_dealer_win = match_ctx.dealer_idx == 0;
+                        let honba_bonus_total = match_ctx.honba as i32 * 300;
+                        let honba_pay_child = match_ctx.honba as i32 * 100;
+                        let riichi_pot = match_ctx.riichi_sticks as i32 * 1000;
+                        if is_dealer_win {
                             println!(
-                            "\n🎉 【ツモ和了！】見事なアガリです！親満貫 12,000点 (各子 4,000点オール)"
-                        );
-                            match_ctx.scores[0] += 12000;
-                            match_ctx.scores[1] -= 4000;
-                            match_ctx.scores[2] -= 4000;
-                            match_ctx.scores[3] -= 4000;
+                                "\n🎉 【ツモ和了！】見事なアガリです！親満貫 12,000点 (各子 {}点オール) [本場: +{}点, 供託: +{}点]",
+                                4000 + honba_pay_child,
+                                honba_bonus_total,
+                                riichi_pot
+                            );
+                            match_ctx.scores[0] += 12000 + honba_bonus_total + riichi_pot;
+                            match_ctx.scores[1] -= 4000 + honba_pay_child;
+                            match_ctx.scores[2] -= 4000 + honba_pay_child;
+                            match_ctx.scores[3] -= 4000 + honba_pay_child;
                         } else {
                             println!(
-                            "\n🎉 【ツモ和了！】見事なアガリです！子満貫 8,000点 (親 4,000点 / 子 2,000点)"
-                        );
-                            match_ctx.scores[0] += 8000;
+                                "\n🎉 【ツモ和了！】見事なアガリです！子満貫 8,000点 (親 {}点 / 子 {}点) [本場: +{}点, 供託: +{}点]",
+                                4000 + honba_pay_child,
+                                2000 + honba_pay_child,
+                                honba_bonus_total,
+                                riichi_pot
+                            );
+                            match_ctx.scores[0] += 8000 + honba_bonus_total + riichi_pot;
                             for p in 1..4 {
                                 if p == match_ctx.dealer_idx {
-                                    match_ctx.scores[p] -= 4000;
+                                    match_ctx.scores[p] -= 4000 + honba_pay_child;
                                 } else {
-                                    match_ctx.scores[p] -= 2000;
+                                    match_ctx.scores[p] -= 2000 + honba_pay_child;
                                 }
                             }
                         }
-                        break 'game match_ctx.dealer_idx == 0;
+                        match_ctx.riichi_sticks = 0;
+                        break 'game RoundResult::Win {
+                            _winner: 0,
+                            is_dealer: is_dealer_win,
+                        };
                     }
 
                     if input.is_empty() || input.eq_ignore_ascii_case("auto") {
@@ -524,6 +547,27 @@ fn main() {
                 };
                 println!(">> あなたが [{}] を打牌しました。", discarded_tile.as_str());
                 rivers[0].push(discarded_tile);
+
+                // 自家のリーチ宣言判定（門前かつテンパイで未宣言、持ち点1,000点以上）
+                if hands[0].open_melds.is_empty()
+                    && !riichi_declared[0]
+                    && match_ctx.scores[0] >= 1000
+                    && calculate_shanten(&hands[0]).min_shanten == 0
+                {
+                    print!("⚡ テンパイしました！リーチを宣言しますか？ (y/N): ");
+                    io::stdout().flush().unwrap();
+                    let mut r_in = String::new();
+                    let _ = io::stdin().read_line(&mut r_in);
+                    if r_in.trim().eq_ignore_ascii_case("y") {
+                        riichi_declared[0] = true;
+                        match_ctx.scores[0] -= 1000;
+                        match_ctx.riichi_sticks += 1;
+                        println!(
+                            "⚡ あなたが リーチ を宣言しました！(供託棒 +1, 残り供託: {}本)",
+                            match_ctx.riichi_sticks
+                        );
+                    }
+                }
                 tracker.record_decision(turn_count, discarded_tile, &raw_evals);
                 turn_count += 1;
             } else {
@@ -549,28 +593,50 @@ fn main() {
                         match_ctx.round_wind,
                         riichi_declared[current_turn],
                     ) {
-                        if current_turn == match_ctx.dealer_idx {
-                            println!("\n💥 【ツモ！】{} がツモアガリしました！親満貫 12,000点 (各子 4,000点オール)", p_name);
-                            match_ctx.scores[current_turn] += 12000;
+                        let is_dealer_win = current_turn == match_ctx.dealer_idx;
+                        let honba_bonus_total = match_ctx.honba as i32 * 300;
+                        let honba_pay_child = match_ctx.honba as i32 * 100;
+                        let riichi_pot = match_ctx.riichi_sticks as i32 * 1000;
+                        if is_dealer_win {
+                            println!(
+                                "\n💥 【ツモ！】{} がツモアガリしました！親満貫 12,000点 (各子 {}点オール) [本場: +{}点, 供託: +{}点]",
+                                p_name,
+                                4000 + honba_pay_child,
+                                honba_bonus_total,
+                                riichi_pot
+                            );
+                            match_ctx.scores[current_turn] +=
+                                12000 + honba_bonus_total + riichi_pot;
                             for p in 0..4 {
                                 if p != current_turn {
-                                    match_ctx.scores[p] -= 4000;
+                                    match_ctx.scores[p] -= 4000 + honba_pay_child;
                                 }
                             }
                         } else {
-                            println!("\n💥 【ツモ！】{} がツモアガリしました！子満貫 8,000点 (親 4,000点 / 子 2,000点)", p_name);
-                            match_ctx.scores[current_turn] += 8000;
+                            println!(
+                                "\n💥 【ツモ！】{} がツモアガリしました！子満貫 8,000点 (親 {}点 / 子 {}点) [本場: +{}点, 供託: +{}点]",
+                                p_name,
+                                4000 + honba_pay_child,
+                                2000 + honba_pay_child,
+                                honba_bonus_total,
+                                riichi_pot
+                            );
+                            match_ctx.scores[current_turn] += 8000 + honba_bonus_total + riichi_pot;
                             for p in 0..4 {
                                 if p != current_turn {
                                     if p == match_ctx.dealer_idx {
-                                        match_ctx.scores[p] -= 4000;
+                                        match_ctx.scores[p] -= 4000 + honba_pay_child;
                                     } else {
-                                        match_ctx.scores[p] -= 2000;
+                                        match_ctx.scores[p] -= 2000 + honba_pay_child;
                                     }
                                 }
                             }
                         }
-                        break 'game current_turn == match_ctx.dealer_idx;
+                        match_ctx.riichi_sticks = 0;
+                        break 'game RoundResult::Win {
+                            _winner: current_turn,
+                            is_dealer: is_dealer_win,
+                        };
                     }
                 }
 
@@ -591,16 +657,20 @@ fn main() {
                 discarded_tile = hands[current_turn].discard(idx).unwrap();
                 rivers[current_turn].push(discarded_tile);
 
-                // リーチ宣言判定（門前かつテンパイで未宣言ならリーチ）
+                // リーチ宣言判定（門前かつテンパイで未宣言、持ち点1,000点以上ならリーチ）
                 if hands[current_turn].open_melds.is_empty()
                     && !riichi_declared[current_turn]
+                    && match_ctx.scores[current_turn] >= 1000
                     && !cpu_evals.is_empty()
                     && cpu_evals[0].shanten_after == 0
                 {
                     riichi_declared[current_turn] = true;
+                    match_ctx.scores[current_turn] -= 1000;
+                    match_ctx.riichi_sticks += 1;
                     println!(
-                        "⚡ {} が リーチ を宣言しました！ 打牌: [{}]",
+                        "⚡ {} が リーチ を宣言しました！(供託棒 +1, 残り供託: {}本) 打牌: [{}]",
                         p_name,
+                        match_ctx.riichi_sticks,
                         discarded_tile.as_str()
                     );
                 } else {
@@ -640,19 +710,25 @@ fn main() {
                     let _ = io::stdin().read_line(&mut ron_in);
                     if !ron_in.trim().eq_ignore_ascii_case("n") {
                         let is_dealer_win = match_ctx.dealer_idx == 0;
-                        let score = if is_dealer_win { 12000 } else { 8000 };
+                        let base_score = if is_dealer_win { 12000 } else { 8000 };
+                        let honba_bonus = match_ctx.honba as i32 * 300;
+                        let riichi_pot = match_ctx.riichi_sticks as i32 * 1000;
                         let role = if is_dealer_win {
                             "親満貫 12,000点"
                         } else {
                             "子満貫 8,000点"
                         };
                         println!(
-                            "\n🎊 【ロン和了成立！】お見事です！{}（放銃: {}）",
-                            role, player_names[discarder]
+                            "\n🎊 【ロン和了成立！】お見事です！{}（放銃: {}）[本場: +{}点, 供託: +{}点]",
+                            role, player_names[discarder], honba_bonus, riichi_pot
                         );
-                        match_ctx.scores[0] += score;
-                        match_ctx.scores[discarder] -= score;
-                        break 'game is_dealer_win;
+                        match_ctx.scores[0] += base_score + honba_bonus + riichi_pot;
+                        match_ctx.scores[discarder] -= base_score + honba_bonus;
+                        match_ctx.riichi_sticks = 0;
+                        break 'game RoundResult::Win {
+                            _winner: 0,
+                            is_dealer: is_dealer_win,
+                        };
                     }
                 }
             }
@@ -672,22 +748,30 @@ fn main() {
                     riichi_declared[p],
                 ) {
                     let is_dealer_win = p == match_ctx.dealer_idx;
-                    let score = if is_dealer_win { 12000 } else { 8000 };
+                    let base_score = if is_dealer_win { 12000 } else { 8000 };
+                    let honba_bonus = match_ctx.honba as i32 * 300;
+                    let riichi_pot = match_ctx.riichi_sticks as i32 * 1000;
                     let role = if is_dealer_win {
                         "親満貫 12,000点"
                     } else {
                         "子満貫 8,000点"
                     };
                     println!(
-                        "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！{}",
+                        "\n💥 【ロン！】{} が {} の捨て牌 [{}] でロン和了しました！{} [本場: +{}点, 供託: +{}点]",
                         player_names[p],
                         player_names[discarder],
                         discarded_tile.as_str(),
-                        role
+                        role,
+                        honba_bonus,
+                        riichi_pot
                     );
-                    match_ctx.scores[p] += score;
-                    match_ctx.scores[discarder] -= score;
-                    break 'game is_dealer_win;
+                    match_ctx.scores[p] += base_score + honba_bonus + riichi_pot;
+                    match_ctx.scores[discarder] -= base_score + honba_bonus;
+                    match_ctx.riichi_sticks = 0;
+                    break 'game RoundResult::Win {
+                        _winner: p,
+                        is_dealer: is_dealer_win,
+                    };
                 }
             }
 
@@ -868,21 +952,47 @@ fn main() {
             break 'match_loop;
         }
 
+        let renchan = match round_result {
+            RoundResult::Win { is_dealer, .. } => is_dealer,
+            RoundResult::Exhaustion { dealer_tenpai } => dealer_tenpai,
+        };
+
         // オーラス終了判定
         if is_orasu && (!renchan || is_orasu_training) {
             println!("🏁 オーラス終了！全対局が完了しました。");
             break 'match_loop;
         }
 
-        // 連荘または親移動
-        if renchan {
-            println!("🔁 親が連荘しました（本場 +1）。");
-            match_ctx.honba += 1;
-        } else {
-            match_ctx.dealer_idx = (match_ctx.dealer_idx + 1) % 4;
-            match_ctx.round_number += 1;
-            match_ctx.honba = 0;
-            println!("➡️ 親が移動し、次局へ進みます。");
+        // 連荘または親移動、および本場管理
+        match round_result {
+            RoundResult::Win {
+                is_dealer: true, ..
+            } => {
+                println!("🔁 親が和了連荘しました（本場 +1）。");
+                match_ctx.honba += 1;
+            }
+            RoundResult::Win {
+                is_dealer: false, ..
+            } => {
+                match_ctx.dealer_idx = (match_ctx.dealer_idx + 1) % 4;
+                match_ctx.round_number += 1;
+                match_ctx.honba = 0;
+                println!("➡️ 子が和了し親が移動します（本場リセット）。");
+            }
+            RoundResult::Exhaustion {
+                dealer_tenpai: true,
+            } => {
+                println!("🔁 親がテンパイ連荘しました（本場 +1）。");
+                match_ctx.honba += 1;
+            }
+            RoundResult::Exhaustion {
+                dealer_tenpai: false,
+            } => {
+                match_ctx.dealer_idx = (match_ctx.dealer_idx + 1) % 4;
+                match_ctx.round_number += 1;
+                match_ctx.honba += 1;
+                println!("➡️ 親がノーテンのため親が移動します（流局により本場 +1）。");
+            }
         }
 
         print!("\nEnterキーで次局へ進みます (q:終了): ");
@@ -1063,5 +1173,50 @@ mod tests {
             !can_ron_as_east,
             "自風が東のときは西ポンはオタ風となり役なしで和了不可"
         );
+    }
+
+    #[test]
+    fn test_riichi_and_honba_score_conservation() {
+        let mut match_ctx = MatchContext {
+            scores: [25000, 25000, 25000, 25000],
+            round_wind: TileName::East,
+            round_number: 1,
+            honba: 2, // 2本場
+            riichi_sticks: 0,
+            dealer_idx: 0,
+            rule: RuleConfig::mleague(),
+        };
+
+        // 1. CPU1 (南家) がリーチ宣言 -> 1000点控除、供託+1
+        match_ctx.scores[1] -= 1000;
+        match_ctx.riichi_sticks += 1;
+        assert_eq!(
+            match_ctx.scores.iter().sum::<i32>() + match_ctx.riichi_sticks as i32 * 1000,
+            100000
+        );
+
+        // 2. あなた(親) が CPU2 (西家) から満貫ロン (親満 12000点 + 2本場 600点 + 供託 1000点)
+        let honba_bonus = match_ctx.honba as i32 * 300;
+        let riichi_pot = match_ctx.riichi_sticks as i32 * 1000;
+        match_ctx.scores[0] += 12000 + honba_bonus + riichi_pot;
+        match_ctx.scores[2] -= 12000 + honba_bonus;
+        match_ctx.riichi_sticks = 0;
+
+        // 点数授受後の確認
+        assert_eq!(match_ctx.scores[0], 25000 + 12000 + 600 + 1000); // 38,600点
+        assert_eq!(match_ctx.scores[1], 24000); // リーチ棒出したまま
+        assert_eq!(match_ctx.scores[2], 25000 - 12000 - 600); // 12,400点
+        assert_eq!(match_ctx.scores[3], 25000); // 変動なし
+        assert_eq!(match_ctx.scores.iter().sum::<i32>(), 100000); // 全員合計が10万点
+
+        // 3. 次局: 子(CPU1) がツモ和了 (子満貫 8000点, 1本場)
+        match_ctx.honba = 1;
+        let honba_bonus_total = match_ctx.honba as i32 * 300;
+        let honba_pay = match_ctx.honba as i32 * 100;
+        match_ctx.scores[1] += 8000 + honba_bonus_total;
+        match_ctx.scores[0] -= 4000 + honba_pay; // 親支払い
+        match_ctx.scores[2] -= 2000 + honba_pay; // 子支払い
+        match_ctx.scores[3] -= 2000 + honba_pay; // 子支払い
+        assert_eq!(match_ctx.scores.iter().sum::<i32>(), 100000);
     }
 }
