@@ -1107,6 +1107,10 @@ impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
     seat_wind=None,
     round_wind=None,
     visible_tiles=None,
+    riichi_status=None,
+    player_rivers=None,
+    player_melds=None,
+    player_is_dealer=None,
 ))]
 pub fn py_evaluate_hand_discards(
     tiles: Vec<PyTileName>,
@@ -1117,6 +1121,10 @@ pub fn py_evaluate_hand_discards(
     seat_wind: Option<PyTileName>,
     round_wind: Option<PyTileName>,
     visible_tiles: Option<Vec<PyTileName>>,
+    riichi_status: Option<[bool; 4]>,
+    player_rivers: Option<Vec<Vec<PyTileName>>>,
+    player_melds: Option<Vec<Vec<PyMeld>>>,
+    player_is_dealer: Option<[bool; 4]>,
 ) -> Vec<PyCandidateEvaluation> {
     let mut hand = Hand::new();
     for t in tiles {
@@ -1129,6 +1137,23 @@ pub fn py_evaluate_hand_discards(
         .map(|t| t.into())
         .collect();
 
+    let riichi_arr = riichi_status.unwrap_or([false; 4]);
+    let dealer_arr = player_is_dealer.unwrap_or([is_dealer, false, false, false]);
+
+    let converted_rivers: Vec<Vec<TileName>> = player_rivers
+        .unwrap_or_default()
+        .into_iter()
+        .map(|river| river.into_iter().map(|t| t.into()).collect())
+        .collect();
+    let river_slices: Vec<&[TileName]> = converted_rivers.iter().map(|r| r.as_slice()).collect();
+
+    let converted_melds: Vec<Vec<Meld>> = player_melds
+        .unwrap_or_default()
+        .into_iter()
+        .map(|melds| melds.into_iter().map(|m| m.into()).collect())
+        .collect();
+    let meld_slices: Vec<&[Meld]> = converted_melds.iter().map(|m| m.as_slice()).collect();
+
     let ctx = crate::expectation::AnalysisContext {
         turn_number: turn_number.unwrap_or(6),
         remaining_wall_tiles: remaining_wall_tiles.unwrap_or(50),
@@ -1136,7 +1161,10 @@ pub fn py_evaluate_hand_discards(
         round_wind: round_wind.map(|w| w.into()).or(Some(TileName::East)),
         dora_indicators: &dora_vec,
         is_dealer,
-        ..Default::default()
+        riichi_status: riichi_arr,
+        player_rivers: &river_slices,
+        player_melds: &meld_slices,
+        player_is_dealer: dealer_arr,
     };
 
     let mut visible_counts = [0u8; 35];
@@ -2000,6 +2028,10 @@ impl PyTableState {
     remaining_wall_tiles=None,
     seat_wind=None,
     visible_tiles=None,
+    riichi_status=None,
+    player_rivers=None,
+    player_melds=None,
+    player_is_dealer=None,
 ))]
 pub fn py_evaluate_placement_discards(
     tiles: Vec<PyTileName>,
@@ -2011,6 +2043,10 @@ pub fn py_evaluate_placement_discards(
     remaining_wall_tiles: Option<usize>,
     seat_wind: Option<PyTileName>,
     visible_tiles: Option<Vec<PyTileName>>,
+    riichi_status: Option<[bool; 4]>,
+    player_rivers: Option<Vec<Vec<PyTileName>>>,
+    player_melds: Option<Vec<Vec<PyMeld>>>,
+    player_is_dealer: Option<[bool; 4]>,
 ) -> PyResult<Vec<PyPlacementEvaluation>> {
     if player_idx >= 4 {
         return Err(PyValueError::new_err("player_idx must be in range 0..4"));
@@ -2039,6 +2075,28 @@ pub fn py_evaluate_placement_discards(
     };
     let s_wind = seat_wind.map(|w| w.into()).unwrap_or(calculated_seat_wind);
 
+    let riichi_arr = riichi_status.unwrap_or([false; 4]);
+    let dealer_arr = player_is_dealer.unwrap_or([
+        match_context.dealer_idx == 0,
+        match_context.dealer_idx == 1,
+        match_context.dealer_idx == 2,
+        match_context.dealer_idx == 3,
+    ]);
+
+    let converted_rivers: Vec<Vec<TileName>> = player_rivers
+        .unwrap_or_default()
+        .into_iter()
+        .map(|river| river.into_iter().map(|t| t.into()).collect())
+        .collect();
+    let river_slices: Vec<&[TileName]> = converted_rivers.iter().map(|r| r.as_slice()).collect();
+
+    let converted_melds: Vec<Vec<Meld>> = player_melds
+        .unwrap_or_default()
+        .into_iter()
+        .map(|melds| melds.into_iter().map(|m| m.into()).collect())
+        .collect();
+    let meld_slices: Vec<&[Meld]> = converted_melds.iter().map(|m| m.as_slice()).collect();
+
     let ctx = crate::expectation::AnalysisContext {
         turn_number: turn_number.unwrap_or(6),
         remaining_wall_tiles: remaining_wall_tiles.unwrap_or(50),
@@ -2046,7 +2104,10 @@ pub fn py_evaluate_placement_discards(
         round_wind: Some(match_context.round_wind.into()),
         dora_indicators: &dora_vec,
         is_dealer: dealer,
-        ..Default::default()
+        riichi_status: riichi_arr,
+        player_rivers: &river_slices,
+        player_melds: &meld_slices,
+        player_is_dealer: dealer_arr,
     };
 
     let mut visible_counts = [0u8; 35];
@@ -2097,6 +2158,10 @@ pub fn py_calculate_orasu_conditions(
     remaining_wall_tiles=None,
     seat_wind=None,
     visible_tiles=None,
+    riichi_status=None,
+    player_rivers=None,
+    player_melds=None,
+    player_is_dealer=None,
 ))]
 pub fn py_get_ai_hud_data(
     py: Python<'_>,
@@ -2109,6 +2174,10 @@ pub fn py_get_ai_hud_data(
     remaining_wall_tiles: Option<usize>,
     seat_wind: Option<PyTileName>,
     visible_tiles: Option<Vec<PyTileName>>,
+    riichi_status: Option<[bool; 4]>,
+    player_rivers: Option<Vec<Vec<PyTileName>>>,
+    player_melds: Option<Vec<Vec<PyMeld>>>,
+    player_is_dealer: Option<[bool; 4]>,
 ) -> PyResult<Py<PyDict>> {
     if player_idx >= 4 {
         return Err(PyValueError::new_err("player_idx must be in range 0..4"));
@@ -2126,6 +2195,10 @@ pub fn py_get_ai_hud_data(
         remaining_wall_tiles,
         seat_wind,
         visible_tiles,
+        riichi_status,
+        player_rivers,
+        player_melds,
+        player_is_dealer,
     )?;
     let dict = PyDict::new(py);
 

@@ -430,39 +430,29 @@ pub fn estimate_expected_deal_loss(
     analysis_ctx: &AnalysisContext,
     player_idx: usize,
 ) -> i32 {
-    // 1. 他家のリーチ者を探索
-    let riichi_opponent = (0..4)
-        .filter(|&p| p != player_idx)
-        .find(|&p| analysis_ctx.riichi_status[p]);
+    // 1. 全リーチ者を走査し、親リーチが含まれているかを判定（最大失点リスク優先）
+    let riichi_opponents: Vec<usize> = (0..4)
+        .filter(|&p| p != player_idx && analysis_ctx.riichi_status[p])
+        .collect();
 
-    let target_is_dealer = if let Some(p) = riichi_opponent {
-        p == match_ctx.dealer_idx || analysis_ctx.player_is_dealer[p]
-    } else {
-        // リーチ者がいない場合、親が自家でなければ親番への警戒を考慮
-        match_ctx.dealer_idx != player_idx
-    };
-
-    let has_riichi = riichi_opponent.is_some();
-
-    // 2. ドラ見え枚数による補正
-    let dora_seen = analysis_ctx.dora_indicators.len();
-    let dora_factor = if dora_seen >= 3 { 0.85 } else { 1.0 };
+    let has_any_riichi = !riichi_opponents.is_empty();
+    let has_dealer_riichi = riichi_opponents
+        .iter()
+        .any(|&p| p == match_ctx.dealer_idx || analysis_ctx.player_is_dealer[p]);
 
     let honba_pts = (match_ctx.honba as i32) * 300;
 
-    let base_points = if target_is_dealer {
-        if has_riichi {
-            12000 // 親リーチ: 12000点 (親満貫〜跳満想定)
-        } else {
-            9600 // 親の平時・副露
-        }
-    } else if has_riichi {
-        8000 // 子リーチ: 8000点 (子満貫想定)
+    let base_points = if has_dealer_riichi {
+        12000 // 親リーチ: 12000点最優先
+    } else if has_any_riichi {
+        8000 // 子リーチ: 8000点
+    } else if match_ctx.dealer_idx != player_idx {
+        9600 // ノーリーチ時: 自家が親でなければ親の平時・副露警戒
     } else {
-        5200 // 子の平時・副露
+        5200 // ノーリーチ時: 自家が親なら子の平時・副露警戒
     };
 
-    ((base_points as f64 * dora_factor) as i32) + honba_pts
+    base_points + honba_pts
 }
 
 #[cfg(test)]
@@ -497,6 +487,57 @@ mod tests {
             "Dealer deal loss ({}) must be significantly larger than child ({})",
             loss_dealer,
             loss_child
+        );
+    }
+
+    #[test]
+    fn test_estimate_expected_deal_loss_multiple_riichi_dealer_priority() {
+        // Issue #79 レビュー対応: 子（player 1）と親（player 2）の両方がリーチしている場合
+        // インデックス順（.find()）に引きずられず、親リーチ（12,000点）が最優先されること
+        let match_ctx = MatchContext {
+            dealer_idx: 2, // 対面が親
+            honba: 1,      // 1本場 (+300点)
+            ..Default::default()
+        };
+
+        let mut ctx_multi_riichi = AnalysisContext::default();
+        ctx_multi_riichi.riichi_status[1] = true; // 下家（子）リーチ
+        ctx_multi_riichi.riichi_status[2] = true; // 対面（親）リーチ
+
+        let loss = estimate_expected_deal_loss(&match_ctx, &ctx_multi_riichi, 0);
+        // 親リーチが優先されて 12000 + 300 = 12300点
+        assert_eq!(
+            loss, 12300,
+            "複数リーチ時は親リーチの失点リスク（12,000点+本場）が最優先されるべき"
+        );
+    }
+
+    #[test]
+    fn test_estimate_expected_deal_loss_dora_no_reduction() {
+        // Issue #79 レビュー対応: ドラ表示牌が3枚以上あっても失点が減衰されないこと
+        let match_ctx = MatchContext {
+            dealer_idx: 1,
+            honba: 0,
+            ..Default::default()
+        };
+
+        let doras = [
+            crate::tile::TileName::OneM,
+            crate::tile::TileName::TwoM,
+            crate::tile::TileName::ThreeM,
+        ];
+        let mut riichi_status = [false; 4];
+        riichi_status[1] = true; // 親リーチ
+        let ctx = AnalysisContext {
+            dora_indicators: &doras,
+            riichi_status,
+            ..Default::default()
+        };
+
+        let loss = estimate_expected_deal_loss(&match_ctx, &ctx, 0);
+        assert_eq!(
+            loss, 12000,
+            "ドラ表示牌が3枚以上あっても減衰されず親満貫12,000点であるべき"
         );
     }
 }

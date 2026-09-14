@@ -397,16 +397,16 @@ pub enum MeldKind {
     Quad(TileName),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// 手牌のパターン（雀頭と面子の組み合わせ）を表す構造体です。
-struct HandPattern {
-    pair: TileName,
-    melds: Vec<MeldKind>,
-    open_melds: Vec<MeldKind>,
+pub struct HandPattern {
+    pub pair: TileName,
+    pub melds: Vec<MeldKind>,
+    pub open_melds: Vec<MeldKind>,
 }
 
 impl HandPattern {
-    fn all_melds(&self) -> impl Iterator<Item = &MeldKind> {
+    pub fn all_melds(&self) -> impl Iterator<Item = &MeldKind> {
         self.melds.iter().chain(self.open_melds.iter())
     }
 }
@@ -455,6 +455,28 @@ impl Default for WinContext {
 
 /// 手牌と副露、および和了（アガリ）時の状況から、成立している役を判定します。
 /// 役満が成立している場合は、通常の役は除外されます。
+/// 手牌（門前牌）と副露から成立しうる面子分解パターン（HandPattern）をすべて取得します
+pub fn get_hand_patterns(
+    closed_counts: &[u8; 35],
+    open_melds_input: &[crate::hand::Meld],
+) -> Vec<HandPattern> {
+    let mut open_melds = Vec::new();
+    let mut closed_melds = Vec::new();
+
+    open_melds_input.iter().for_each(|meld| match meld {
+        crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
+        crate::hand::Meld::Pon(tile) => open_melds.push(MeldKind::Triplet(*tile)),
+        crate::hand::Meld::Daiminkan(tile) | crate::hand::Meld::Kakan(tile) => {
+            open_melds.push(MeldKind::Quad(*tile));
+        }
+        crate::hand::Meld::Ankan(tile) => {
+            closed_melds.push(MeldKind::Quad(*tile));
+        }
+    });
+
+    generate_patterns(closed_counts, &open_melds, &closed_melds)
+}
+
 pub fn judge_yaku(
     closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
