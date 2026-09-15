@@ -1,4 +1,5 @@
 use crate::tile::TileName;
+use arrayvec::ArrayVec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// 鳴き（副露）の種類を表す列挙型です。
@@ -39,7 +40,7 @@ pub fn is_menzen(melds: &[Meld]) -> bool {
 pub struct Hand {
     tiles: [TileName; 14],
     len: usize,
-    pub open_melds: Vec<Meld>,
+    pub open_melds: ArrayVec<Meld, 4>,
     pub counts: [u8; 35],
 }
 
@@ -68,7 +69,7 @@ impl Hand {
         Self {
             tiles: [TileName::None; 14],
             len: 0,
-            open_melds: Vec::new(),
+            open_melds: ArrayVec::new_const(),
             counts: [0; 35],
         }
     }
@@ -178,6 +179,9 @@ impl Hand {
                 self.open_melds[pos] = meld;
             }
         } else {
+            if self.open_melds.len() >= 4 {
+                return Err("Cannot have more than 4 melds");
+            }
             self.open_melds.push(meld);
         }
 

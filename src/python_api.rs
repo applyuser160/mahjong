@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -1112,14 +1113,14 @@ impl From<&PyCandidateEvaluation> for crate::expectation::CandidateEvaluation {
             shanten_after: c.shanten_after,
             ev: c.ev,
             speed: crate::expectation::SpeedMetric {
-                accepted_tiles: Vec::new(),
+                accepted_tiles: ArrayVec::new(),
                 remaining_count: c.remaining_count,
                 win_probability: 0.5,
             },
             value: crate::expectation::ValueMetric {
                 expected_score: c.expected_score,
                 expected_han: c.expected_han,
-                primary_yaku: Vec::new(),
+                primary_yaku: ArrayVec::new(),
                 has_high_value_potential: false,
             },
             safety: crate::expectation::SafetyMetric {

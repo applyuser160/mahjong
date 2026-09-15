@@ -349,6 +349,7 @@ impl ReviewTracker {
 mod tests {
     use super::*;
     use crate::expectation::{SafetyMetric, SpeedMetric, ValueMetric};
+    use arrayvec::ArrayVec;
 
     fn make_dummy_candidates() -> Vec<CandidateEvaluation> {
         vec![
@@ -357,14 +358,14 @@ mod tests {
                 shanten_after: 0,
                 ev: 3500.0,
                 speed: SpeedMetric {
-                    accepted_tiles: vec![TileName::TwoM, TileName::FiveM],
+                    accepted_tiles: ArrayVec::from_iter([TileName::TwoM, TileName::FiveM]),
                     remaining_count: 8,
                     win_probability: 0.7,
                 },
                 value: ValueMetric {
                     expected_score: 5000.0,
                     expected_han: 3.0,
-                    primary_yaku: vec!["立直", "ピンフ"],
+                    primary_yaku: ArrayVec::from_iter(["立直", "ピンフ"]),
                     has_high_value_potential: true,
                 },
                 safety: SafetyMetric {
@@ -377,14 +378,14 @@ mod tests {
                 shanten_after: 1,
                 ev: 2200.0,
                 speed: SpeedMetric {
-                    accepted_tiles: vec![TileName::ThreeM],
+                    accepted_tiles: ArrayVec::from_iter([TileName::ThreeM]),
                     remaining_count: 4,
                     win_probability: 0.4,
                 },
                 value: ValueMetric {
                     expected_score: 3000.0,
                     expected_han: 2.0,
-                    primary_yaku: vec!["立直"],
+                    primary_yaku: ArrayVec::from_iter(["立直"]),
                     has_high_value_potential: false,
                 },
                 safety: SafetyMetric {

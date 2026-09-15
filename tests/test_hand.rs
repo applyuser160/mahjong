@@ -174,4 +174,31 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(hand.open_melds.len(), 0);
     }
+
+    #[test]
+    fn test_call_meld_max_4_melds() {
+        let mut hand = Hand::new();
+        // 4つの刻子用の牌を手牌に用意
+        hand.push(OneM);
+        hand.push(OneM);
+        hand.push(TwoM);
+        hand.push(TwoM);
+        hand.push(ThreeM);
+        hand.push(ThreeM);
+        hand.push(FourM);
+        hand.push(FourM);
+        hand.push(FiveM);
+        hand.push(FiveM);
+
+        assert!(hand.call_meld(Meld::Pon(OneM)).is_ok());
+        assert!(hand.call_meld(Meld::Pon(TwoM)).is_ok());
+        assert!(hand.call_meld(Meld::Pon(ThreeM)).is_ok());
+        assert!(hand.call_meld(Meld::Pon(FourM)).is_ok());
+        assert_eq!(hand.open_melds.len(), 4);
+
+        // 5回目の副露は上限エラーになること
+        let result = hand.call_meld(Meld::Pon(FiveM));
+        assert!(result.is_err());
+        assert_eq!(hand.open_melds.len(), 4);
+    }
 }

@@ -87,6 +87,7 @@ mod tests {
     use super::*;
     use crate::expectation::{CandidateEvaluation, SafetyMetric, SpeedMetric, ValueMetric};
     use crate::tile::TileName;
+    use arrayvec::ArrayVec;
 
     #[test]
     fn test_generate_rationale_speed_dominant() {
@@ -96,14 +97,14 @@ mod tests {
                 shanten_after: 0,
                 ev: 3500.0,
                 speed: SpeedMetric {
-                    accepted_tiles: vec![TileName::OneS, TileName::FourS],
+                    accepted_tiles: ArrayVec::from_iter([TileName::OneS, TileName::FourS]),
                     remaining_count: 8,
                     win_probability: 0.6,
                 },
                 value: ValueMetric {
                     expected_score: 5800.0,
                     expected_han: 3.0,
-                    primary_yaku: vec!["立直", "平和"],
+                    primary_yaku: ArrayVec::from_iter(["立直", "平和"]),
                     has_high_value_potential: true,
                 },
                 safety: SafetyMetric {
@@ -116,14 +117,14 @@ mod tests {
                 shanten_after: 0,
                 ev: 2000.0,
                 speed: SpeedMetric {
-                    accepted_tiles: vec![TileName::OneS],
+                    accepted_tiles: ArrayVec::from_iter([TileName::OneS]),
                     remaining_count: 4,
                     win_probability: 0.35,
                 },
                 value: ValueMetric {
                     expected_score: 5800.0,
                     expected_han: 3.0,
-                    primary_yaku: vec!["立直", "平和"],
+                    primary_yaku: ArrayVec::from_iter(["立直", "平和"]),
                     has_high_value_potential: true,
                 },
                 safety: SafetyMetric {

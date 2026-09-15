@@ -8,6 +8,7 @@ name = "mahjong"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+arrayvec = "0.7"
 pyo3 = "0.25.0"
 rand = { version = "0.8", features = ["small_rng"] }
 rayon = "1.10"

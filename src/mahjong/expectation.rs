@@ -4,12 +4,13 @@ use crate::hand::Hand;
 use crate::score::{calculate_hand_fu, calculate_score};
 use crate::tile::TileName;
 use crate::yaku::{judge_yaku_set, WinContext, YakuId, ALL_YAKU};
+use arrayvec::ArrayVec;
 use rayon::prelude::*;
 
 /// 速度指標
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeedMetric {
-    pub accepted_tiles: Vec<TileName>,
+    pub accepted_tiles: ArrayVec<TileName, 34>,
     pub remaining_count: usize,
     pub win_probability: f64,
 }
@@ -19,7 +20,7 @@ pub struct SpeedMetric {
 pub struct ValueMetric {
     pub expected_score: f64,
     pub expected_han: f64,
-    pub primary_yaku: Vec<&'static str>,
+    pub primary_yaku: ArrayVec<&'static str, 10>,
     pub has_high_value_potential: bool,
 }
 
@@ -133,7 +134,8 @@ pub fn evaluate_hand_discards(
             // 打牌した牌を含む base_visible を可視牌として渡す
             let acceptance = calculate_acceptance(&working, open_melds_count, Some(&base_visible));
             let shanten_after = acceptance.current_shanten;
-            let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
+            let accepted_tiles: ArrayVec<TileName, 34> =
+                acceptance.waits.iter().map(|w| w.tile).collect();
 
             // 1. 速度評価（和了確率） - 待ち形・巡目・脅威度を反映
             let win_probability = estimate_win_probability(
@@ -210,7 +212,7 @@ pub fn evaluate_standing_hand(
 
     let acceptance = calculate_acceptance(&hand.counts, open_melds_count, Some(&base_visible));
     let shanten = acceptance.current_shanten;
-    let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
+    let accepted_tiles: ArrayVec<TileName, 34> = acceptance.waits.iter().map(|w| w.tile).collect();
 
     let win_probability = estimate_win_probability(
         shanten,
@@ -344,14 +346,14 @@ fn estimate_hand_value(
             return ValueMetric {
                 expected_score: 1000.0,
                 expected_han: 1.0,
-                primary_yaku: vec![],
+                primary_yaku: ArrayVec::new(),
                 has_high_value_potential: false,
             };
         }
 
         let mut total_score = 0.0;
         let mut total_han = 0.0;
-        let mut yaku_names = Vec::new();
+        let mut yaku_names = ArrayVec::<&'static str, 10>::new();
         let sample_count = accepted_tiles.len().min(6);
 
         let mut working = *counts;
@@ -387,7 +389,7 @@ fn estimate_hand_value(
                         y_info.han_open
                     };
                     base_han += h.max(0) as usize;
-                    if !yaku_names.contains(&y_info.name_ja) {
+                    if !yaku_names.contains(&y_info.name_ja) && yaku_names.len() < 10 {
                         yaku_names.push(y_info.name_ja);
                     }
                 }
@@ -403,7 +405,7 @@ fn estimate_hand_value(
             let effective_han = if is_yakuman {
                 13
             } else if will_riichi {
-                if needs_riichi && !yaku_names.contains(&"立直") {
+                if needs_riichi && !yaku_names.contains(&"立直") && yaku_names.len() < 10 {
                     yaku_names.push("立直");
                 }
                 // リーチ時は裏ドラ・一発の期待値として約0.3〜0.5翻を加算
@@ -451,7 +453,7 @@ fn estimate_hand_value(
     if shanten == 1 && !accepted_tiles.is_empty() {
         let mut total_score = 0.0;
         let mut total_han = 0.0;
-        let mut yaku_names = Vec::new();
+        let mut yaku_names = ArrayVec::<&'static str, 10>::new();
         let sample_count = accepted_tiles.len().min(8);
 
         let mut working = *counts;
@@ -504,7 +506,7 @@ fn estimate_hand_value(
                             y_info.han_open
                         };
                         han += h.max(0) as usize;
-                        if !yaku_names.contains(&y_info.name_ja) {
+                        if !yaku_names.contains(&y_info.name_ja) && yaku_names.len() < 10 {
                             yaku_names.push(y_info.name_ja);
                         }
                     }
@@ -513,7 +515,7 @@ fn estimate_hand_value(
                 han += count_dora(&working, ctx.dora_indicators);
                 if han == 0 && is_closed {
                     han = 1;
-                    if !yaku_names.contains(&"立直") {
+                    if !yaku_names.contains(&"立直") && yaku_names.len() < 10 {
                         yaku_names.push("立直");
                     }
                 } else if han == 0 {
@@ -562,7 +564,7 @@ fn estimate_hand_value(
     // --- ケース 3: 二向聴以上 (shanten >= 2) ---
     let dora_count = count_dora(counts, ctx.dora_indicators);
     let mut estimated_han = if is_closed { 2.0 } else { 1.0 } + dora_count as f64;
-    let mut yaku_names = Vec::new();
+    let mut yaku_names = ArrayVec::<&'static str, 10>::new();
 
     if is_closed {
         yaku_names.push("立直");
@@ -580,7 +582,7 @@ fn estimate_hand_value(
         let c = counts[h as usize];
         if c >= 2 {
             estimated_han += 1.0;
-            if !yaku_names.contains(&"役牌") {
+            if !yaku_names.contains(&"役牌") && yaku_names.len() < 10 {
                 yaku_names.push("役牌");
             }
         }
@@ -606,26 +608,26 @@ pub fn evaluate_tile_safety(
     let idx = tile as usize;
 
     // 他家にリーチ者がいるか？
-    let riichi_opponents: Vec<usize> = (0..4)
-        .filter(|&p| p != ctx.target_player && ctx.riichi_status[p])
-        .collect();
+    let has_riichi_opponents = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
 
-    if !riichi_opponents.is_empty() {
+    if has_riichi_opponents {
         // --- リーチ者がいる状況での安全度評価 ---
 
         // 1. 現物判定: 全リーチ者の河にこの牌が含まれているか
         let mut is_genbutsu_all = true;
         let mut is_genbutsu_any = false;
 
-        for &p in &riichi_opponents {
-            if let Some(river) = ctx.player_rivers.get(p) {
-                if river.contains(&tile) {
-                    is_genbutsu_any = true;
+        for p in 0..4 {
+            if p != ctx.target_player && ctx.riichi_status[p] {
+                if let Some(river) = ctx.player_rivers.get(p) {
+                    if river.contains(&tile) {
+                        is_genbutsu_any = true;
+                    } else {
+                        is_genbutsu_all = false;
+                    }
                 } else {
                     is_genbutsu_all = false;
                 }
-            } else {
-                is_genbutsu_all = false;
             }
         }
 
@@ -675,46 +677,50 @@ pub fn evaluate_tile_safety(
             (2, idx - 18)
         };
 
-        // リーチ者の河にある同色の数字を収集
-        let mut riichi_river_ranks = Vec::new();
-        for &p in &riichi_opponents {
-            if let Some(river) = ctx.player_rivers.get(p) {
-                for &r_tile in *river {
-                    let r_idx = r_tile as usize;
-                    let (r_suit, r_rank) = if (1..=9).contains(&r_idx) {
-                        (0, r_idx)
-                    } else if (10..=18).contains(&r_idx) {
-                        (1, r_idx - 9)
-                    } else if (19..=27).contains(&r_idx) {
-                        (2, r_idx - 18)
-                    } else {
-                        (99, 99)
-                    };
-                    if r_suit == suit {
-                        riichi_river_ranks.push(r_rank);
+        // リーチ者の河にある同色の数字を収集（rank 1-9 → bit 1-9 の u16 ビットマスク）
+        let mut riichi_river_ranks = 0u16;
+        for p in 0..4 {
+            if p != ctx.target_player && ctx.riichi_status[p] {
+                if let Some(river) = ctx.player_rivers.get(p) {
+                    for &r_tile in *river {
+                        let r_idx = r_tile as usize;
+                        let (r_suit, r_rank) = if (1..=9).contains(&r_idx) {
+                            (0, r_idx)
+                        } else if (10..=18).contains(&r_idx) {
+                            (1, r_idx - 9)
+                        } else if (19..=27).contains(&r_idx) {
+                            (2, r_idx - 18)
+                        } else {
+                            (99, 99)
+                        };
+                        if r_suit == suit {
+                            riichi_river_ranks |= 1 << r_rank;
+                        }
                     }
                 }
             }
         }
 
+        let has_rank = |r: usize| (riichi_river_ranks & (1 << r)) != 0;
+
         // スジ判定
         let is_suji = match rank {
-            1 => riichi_river_ranks.contains(&4),
-            2 => riichi_river_ranks.contains(&5),
-            3 => riichi_river_ranks.contains(&6),
-            4 => riichi_river_ranks.contains(&1) && riichi_river_ranks.contains(&7),
-            5 => riichi_river_ranks.contains(&2) && riichi_river_ranks.contains(&8),
-            6 => riichi_river_ranks.contains(&3) && riichi_river_ranks.contains(&9),
-            7 => riichi_river_ranks.contains(&4),
-            8 => riichi_river_ranks.contains(&5),
-            9 => riichi_river_ranks.contains(&6),
+            1 => has_rank(4),
+            2 => has_rank(5),
+            3 => has_rank(6),
+            4 => has_rank(1) && has_rank(7),
+            5 => has_rank(2) && has_rank(8),
+            6 => has_rank(3) && has_rank(9),
+            7 => has_rank(4),
+            8 => has_rank(5),
+            9 => has_rank(6),
             _ => false,
         };
 
         let is_half_suji = match rank {
-            4 => riichi_river_ranks.contains(&1) || riichi_river_ranks.contains(&7),
-            5 => riichi_river_ranks.contains(&2) || riichi_river_ranks.contains(&8),
-            6 => riichi_river_ranks.contains(&3) || riichi_river_ranks.contains(&9),
+            4 => has_rank(1) || has_rank(7),
+            5 => has_rank(2) || has_rank(8),
+            6 => has_rank(3) || has_rank(9),
             _ => false,
         };
 
