@@ -1,6 +1,7 @@
 use crate::hand::Hand;
 use crate::shanten::calculate_shanten_from_counts;
 use crate::tile::TileName;
+use arrayvec::ArrayVec;
 
 /// 1つの有効牌の情報
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,7 +16,7 @@ pub struct AcceptanceResult {
     /// 現在のシャンテン数
     pub current_shanten: i8,
     /// 有効牌のリスト
-    pub waits: Vec<WaitTile>,
+    pub waits: ArrayVec<WaitTile, 34>,
     /// 有効牌の総残り枚数
     pub total_remaining: usize,
     /// 有効牌の種類数
@@ -43,7 +44,7 @@ pub fn calculate_acceptance(
     let current_res = calculate_shanten_from_counts(counts, open_melds_count);
     let current_shanten = current_res.min_shanten;
 
-    let mut waits = Vec::new();
+    let mut waits = ArrayVec::<WaitTile, 34>::new();
     let mut total_remaining = 0;
 
     // 和了形（-1）の場合はこれ以上進まない
