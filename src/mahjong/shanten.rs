@@ -106,7 +106,6 @@ use crate::suit_table::{encode_suit_key, get_suit_table};
 /// 字牌の O(7) 簡易走査と雀頭候補の探索を行うことで O(1) で高速に算出します。
 pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
     let target_melds = 4 - open_melds_count;
-
     let table = get_suit_table();
     let m_entry = table[encode_suit_key(&counts[1..=9])];
     let p_entry = table[encode_suit_key(&counts[10..=18])];
@@ -190,6 +189,9 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
                         evaluate_normal_shanten(has_head, total_melds, total_taatsu, target_melds);
                     if shanten < best_shanten {
                         best_shanten = shanten;
+                        if best_shanten == -1 {
+                            return -1;
+                        }
                     }
                 }
             }
@@ -198,7 +200,6 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
 
     best_shanten
 }
-
 /// 面子数・搭子数・雀頭の有無からシャンテン数を評価
 #[inline(always)]
 fn evaluate_normal_shanten(has_head: bool, melds: usize, taatsu: usize, target_melds: usize) -> i8 {

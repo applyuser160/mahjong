@@ -50,7 +50,7 @@ pub mod call_advisor;
 pub mod placement_ev;
 
 use pyo3::prelude::*;
-use rand::rngs::StdRng;
+use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 pub use acceptance::{
@@ -85,7 +85,7 @@ pub mod python_api;
 #[pyfunction]
 pub fn play_once(seed: u64) -> PyResult<Vec<&'static str>> {
     let mut wall = Wall::new();
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = SmallRng::seed_from_u64(seed);
     wall.shuffle(&mut rng);
 
     let mut round = Round::new(wall);

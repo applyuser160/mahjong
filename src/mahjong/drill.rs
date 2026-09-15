@@ -406,12 +406,12 @@ impl DrillSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::StdRng;
+    use rand::rngs::SmallRng;
     use rand::SeedableRng;
 
     #[test]
     fn test_drill_problem_generation() {
-        let mut rng = StdRng::seed_from_u64(42);
+        let mut rng = SmallRng::seed_from_u64(42);
 
         // テンパイまたは1向聴の問題が生成できること
         let problem = DrillEngine::generate_problem(Some(0), 100, &mut rng);

@@ -16,17 +16,20 @@ pub enum Meld {
 impl Meld {
     /// この副露が門前を崩す公開副露（チー・ポン・大明槓・加槓）かどうかを判定します。
     /// 暗槓（Ankan）は手牌内で完結し門前を崩さないため false を返します。
+    #[inline]
     pub fn is_open(&self) -> bool {
         !matches!(self, Meld::Ankan(_))
     }
 }
 
 /// 指定された面子リストに門前を崩す副露が含まれているかを判定します。
+#[inline]
 pub fn has_open_meld(melds: &[Meld]) -> bool {
     melds.iter().any(|m| m.is_open())
 }
 
 /// 指定された面子リストが門前清（暗槓のみ、または副露なし）かどうかを判定します。
+#[inline]
 pub fn is_menzen(melds: &[Meld]) -> bool {
     !has_open_meld(melds)
 }
@@ -41,6 +44,7 @@ pub struct Hand {
 }
 
 impl Default for Hand {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -48,15 +52,18 @@ impl Default for Hand {
 
 impl Hand {
     /// 手牌が門前清（暗槓のみ、または副露なし）かどうかを判定します。
+    #[inline]
     pub fn is_menzen(&self) -> bool {
         is_menzen(&self.open_melds)
     }
 
     /// 手牌に門前を崩す副露（チー・ポン・大明槓・加槓）があるかを判定します。
+    #[inline]
     pub fn has_open_meld(&self) -> bool {
         has_open_meld(&self.open_melds)
     }
 
+    #[inline]
     pub const fn new() -> Self {
         Self {
             tiles: [TileName::None; 14],
@@ -66,16 +73,19 @@ impl Hand {
         }
     }
 
+    #[inline]
     pub fn tiles(&self) -> &[TileName] {
         &self.tiles[..self.len]
     }
 
+    #[inline]
     pub fn push(&mut self, tile: TileName) {
         self.tiles[self.len] = tile;
         self.len += 1;
         self.counts[tile as usize] += 1;
     }
 
+    #[inline]
     pub fn discard(&mut self, index: usize) -> Result<TileName, &'static str> {
         if index >= self.len {
             return Err("Index out of bounds");
@@ -87,6 +97,7 @@ impl Hand {
         Ok(removed)
     }
 
+    #[inline]
     pub fn call_meld(&mut self, meld: Meld) -> Result<(), &'static str> {
         let mut consumed_from_hand = [TileName::None; 4];
         let consumed_len;

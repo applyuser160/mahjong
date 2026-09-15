@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = "0.25.0"
-rand = "0.8"
+rand = { version = "0.8", features = ["small_rng"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -21,3 +21,14 @@ harness = false
 [[bench]]
 name = "mahjong_benchmark"
 harness = false
+
+[profile.release]
+lto = "fat"           # クロスクレートのインライン化・デッドコード除去を有効化
+codegen-units = 1     # 単一コード生成ユニットで最大最適化（コンパイル時間増加とトレード）
+opt-level = 3         # 最大最適化レベル（明示指定）
+strip = true          # デバッグシンボルの除去（バイナリサイズ削減）
+
+[profile.bench]
+lto = "fat"
+codegen-units = 1
+opt-level = 3

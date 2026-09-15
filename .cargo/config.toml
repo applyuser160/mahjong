@@ -1,0 +1,5 @@
+[build]
+# 注意: rustflags = ["-C", "target-cpu=native"] を設定すると、
+# CI環境でのクロスコンパイル（例: x86_64マシンでのaarch64ビルド）が失敗する原因となります。
+# ローカル環境でのみパフォーマンスを最大化したい場合は、以下のコメントアウトを外してください。
+# rustflags = ["-C", "target-cpu=native"]
