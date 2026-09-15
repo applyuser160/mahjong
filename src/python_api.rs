@@ -12,7 +12,7 @@ use crate::round::Round;
 use crate::shanten::{calculate_shanten, calculate_shanten_from_counts, ShantenResult};
 use crate::tile::{Tile, TileCategory, TileName, TileType};
 use crate::wall::Wall;
-use crate::yaku::{judge_yaku, WinContext, Yaku, YakuId, ALL_YAKU};
+use crate::yaku::{judge_yaku_set, WinContext, Yaku, YakuId, ALL_YAKU};
 
 // ==========================================
 // 1. Tile related wrappers
@@ -966,7 +966,7 @@ pub fn py_judge_yaku(
         unsafe { std::slice::from_raw_parts(melds.as_ptr() as *const Meld, melds.len()) };
     let rs_context: WinContext = context.into();
 
-    let result = judge_yaku(&closed_counts, rs_melds, rs_context);
+    let result = judge_yaku_set(&closed_counts, rs_melds, rs_context);
     result.into_iter().map(|y| y.into()).collect()
 }
 
