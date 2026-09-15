@@ -53,131 +53,53 @@ pub enum TileName {
 impl TileName {
     #[inline(always)]
     #[allow(dead_code)]
-    pub fn from_usize(n: usize) -> TileName {
-        match n {
-            0 => TileName::None,
-            1 => TileName::OneM,
-            2 => TileName::TwoM,
-            3 => TileName::ThreeM,
-            4 => TileName::FourM,
-            5 => TileName::FiveM,
-            6 => TileName::SixM,
-            7 => TileName::SevenM,
-            8 => TileName::EightM,
-            9 => TileName::NineM,
-            10 => TileName::OneP,
-            11 => TileName::TwoP,
-            12 => TileName::ThreeP,
-            13 => TileName::FourP,
-            14 => TileName::FiveP,
-            15 => TileName::SixP,
-            16 => TileName::SevenP,
-            17 => TileName::EightP,
-            18 => TileName::NineP,
-            19 => TileName::OneS,
-            20 => TileName::TwoS,
-            21 => TileName::ThreeS,
-            22 => TileName::FourS,
-            23 => TileName::FiveS,
-            24 => TileName::SixS,
-            25 => TileName::SevenS,
-            26 => TileName::EightS,
-            27 => TileName::NineS,
-            28 => TileName::East,
-            29 => TileName::South,
-            30 => TileName::West,
-            31 => TileName::North,
-            32 => TileName::Red,
-            33 => TileName::Green,
-            34 => TileName::White,
-            _ => TileName::None,
+    pub const fn from_usize(n: usize) -> TileName {
+        if n <= 34 {
+            // SAFETY: TileName は #[repr(u8)] で定義されており、
+            // 0 から 34 のすべての値に対して有効なバリアント (None=0, OneM..=White=1..=34) が
+            // 連続して定義されているため、transmute は健全です。
+            unsafe { std::mem::transmute::<u8, TileName>(n as u8) }
+        } else {
+            TileName::None
         }
     }
 
     #[inline]
     #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
-        match self {
-            TileName::None => " ",
-            TileName::OneM => "1m",
-            TileName::TwoM => "2m",
-            TileName::ThreeM => "3m",
-            TileName::FourM => "4m",
-            TileName::FiveM => "5m",
-            TileName::SixM => "6m",
-            TileName::SevenM => "7m",
-            TileName::EightM => "8m",
-            TileName::NineM => "9m",
-            TileName::OneP => "1p",
-            TileName::TwoP => "2p",
-            TileName::ThreeP => "3p",
-            TileName::FourP => "4p",
-            TileName::FiveP => "5p",
-            TileName::SixP => "6p",
-            TileName::SevenP => "7p",
-            TileName::EightP => "8p",
-            TileName::NineP => "9p",
-            TileName::OneS => "1s",
-            TileName::TwoS => "2s",
-            TileName::ThreeS => "3s",
-            TileName::FourS => "4s",
-            TileName::FiveS => "5s",
-            TileName::SixS => "6s",
-            TileName::SevenS => "7s",
-            TileName::EightS => "8s",
-            TileName::NineS => "9s",
-            TileName::East => "東",
-            TileName::South => "南",
-            TileName::West => "西",
-            TileName::North => "北",
-            TileName::Red => "中",
-            TileName::Green => "発",
-            TileName::White => "白",
+        const TILE_STRS: [&str; 35] = [
+            " ", "1m", "2m", "3m", "4m", "5m", "6m", "7m", "8m", "9m", "1p", "2p", "3p", "4p",
+            "5p", "6p", "7p", "8p", "9p", "1s", "2s", "3s", "4s", "5s", "6s", "7s", "8s", "9s",
+            "東", "南", "西", "北", "中", "発", "白",
+        ];
+        let idx = *self as usize;
+        if idx < TILE_STRS.len() {
+            TILE_STRS[idx]
+        } else {
+            " "
         }
     }
 
     #[inline]
     pub const fn tile_type(&self) -> TileType {
-        match self {
-            TileName::OneM
-            | TileName::TwoM
-            | TileName::ThreeM
-            | TileName::FourM
-            | TileName::FiveM
-            | TileName::SixM
-            | TileName::SevenM
-            | TileName::EightM
-            | TileName::NineM => TileType::Characters,
-            TileName::OneP
-            | TileName::TwoP
-            | TileName::ThreeP
-            | TileName::FourP
-            | TileName::FiveP
-            | TileName::SixP
-            | TileName::SevenP
-            | TileName::EightP
-            | TileName::NineP => TileType::Circles,
-            TileName::OneS
-            | TileName::TwoS
-            | TileName::ThreeS
-            | TileName::FourS
-            | TileName::FiveS
-            | TileName::SixS
-            | TileName::SevenS
-            | TileName::EightS
-            | TileName::NineS => TileType::Bamboos,
-            TileName::East | TileName::South | TileName::West | TileName::North => TileType::Winds,
-            TileName::Red | TileName::Green | TileName::White => TileType::Dragons,
-            TileName::None => TileType::None,
+        let idx = *self as u8;
+        match idx {
+            1..=9 => TileType::Characters,
+            10..=18 => TileType::Circles,
+            19..=27 => TileType::Bamboos,
+            28..=31 => TileType::Winds,
+            32..=34 => TileType::Dragons,
+            _ => TileType::None,
         }
     }
 
     #[inline]
     pub const fn category(&self) -> TileCategory {
-        match self.tile_type() {
-            TileType::Characters | TileType::Circles | TileType::Bamboos => TileCategory::Simples,
-            TileType::Winds | TileType::Dragons => TileCategory::Honors,
-            TileType::None => TileCategory::None,
+        let idx = *self as u8;
+        match idx {
+            1..=27 => TileCategory::Simples,
+            28..=34 => TileCategory::Honors,
+            _ => TileCategory::None,
         }
     }
 }
