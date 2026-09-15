@@ -115,8 +115,7 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
     // 字牌 (28..=34) の刻子・対子を集計
     let mut z_melds = 0;
     let mut z_pairs = 0;
-    for i in 28..=34 {
-        let c = counts[i];
+    for &c in &counts[28..=34] {
         if c >= 3 {
             z_melds += 1;
         } else if c == 2 {
@@ -152,15 +151,15 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
 
         let mut suit_taatsu = [[-1i8; 5]; 3];
         let mut possible = true;
-        for s in 0..3 {
+        for (s, taatsu) in suit_taatsu.iter_mut().enumerate() {
             if head_choice == s {
-                suit_taatsu[s] = suits[s].with_head;
-                if suit_taatsu[s].iter().all(|&t| t == -1) {
+                *taatsu = suits[s].with_head;
+                if taatsu.iter().all(|&t| t == -1) {
                     possible = false;
                     break;
                 }
             } else {
-                suit_taatsu[s] = suits[s].no_head;
+                *taatsu = suits[s].no_head;
             }
         }
         if !possible {
@@ -178,8 +177,8 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
                 if t1 == -1 {
                     continue;
                 }
-                for m2 in 0..=4 - m0 - m1 {
-                    let t2 = suit_taatsu[2][m2];
+                let max_m2 = 4 - m0 - m1;
+                for (m2, &t2) in suit_taatsu[2].iter().enumerate().take(max_m2 + 1) {
                     if t2 == -1 {
                         continue;
                     }
@@ -444,5 +443,15 @@ mod tests {
         // 向聴数 = 8 - 2*1 - 3 - 1 = 2 (向聴数 2)
         let res = calculate_shanten(&hand);
         assert_eq!(res.normal, 2);
+    }
+
+    #[test]
+    fn test_identical_tiles_overflow_does_not_panic() {
+        // 同一牌が5枚以上の異常入力（例: 9mが5枚）でもパニック（out of bounds）せず安全に処理されること
+        let mut counts = [0u8; 35];
+        counts[TileName::NineM as usize] = 5;
+        let res = calculate_shanten_from_counts(&counts, 0);
+        // パニックせず結果が返ること
+        assert!(res.min_shanten >= 0);
     }
 }

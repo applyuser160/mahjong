@@ -134,6 +134,12 @@ def test_shanten_bindings():
     assert hand_res.min_shanten == 0
     assert hand_res.normal == 0
 
+    # 5枚以上の同一牌で ValueError が発生することの検証
+    import pytest
+
+    with pytest.raises(ValueError):
+        mahjong.calculate_shanten([mahjong.TileName.NineM] * 5)
+
 
 def test_expectation_and_review_tracker():
     tiles = [
@@ -196,4 +202,3 @@ def test_drill_problem():
     assert len(problem.candidates) > 0
     assert problem.best_tile is not None
     assert len(problem.rationale) > 0
-
