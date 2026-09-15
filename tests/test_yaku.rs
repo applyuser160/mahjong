@@ -10,8 +10,10 @@ macro_rules! to_counts {
 }
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use mahjong::tile::TileName::*;
-    use mahjong::yaku::{judge_yaku, WinContext, YakuId, YakuSet};
+    use mahjong::yaku::{judge_yaku, judge_yaku_set, WinContext, YakuId, YakuSet};
 
     #[test]
     fn detect_pinfu_and_tanyao() {
@@ -29,9 +31,16 @@ mod tests {
             win_tile: Some(FourM),
             ..Default::default()
         };
-        let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
-        let expected = YakuSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
+        // 後方互換性テスト: judge_yaku は HashSet<YakuId> を返却
+        let result: HashSet<YakuId> = judge_yaku(&to_counts!(&tiles), &[], ctx);
+        let expected: HashSet<YakuId> =
+            HashSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
         assert!(expected.is_subset(&result));
+
+        // 新APIテスト: judge_yaku_set は YakuSet を返却
+        let set_result: YakuSet = judge_yaku_set(&to_counts!(&tiles), &[], ctx);
+        let set_expected = YakuSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
+        assert!(set_expected.is_subset(&set_result));
     }
 
     #[test]
@@ -580,5 +589,22 @@ mod tests_kan {
         assert_eq!(mixed.len(), 1);
         assert!(mixed.contains(&YakuId::Daisangen));
         assert!(!mixed.contains(&YakuId::Riichi));
+
+        // Out-of-bounds bitmask handling (PR #101 review [P2])
+        let out_of_bounds = YakuSet::from_raw(1u64 << 63);
+        assert!(out_of_bounds.is_empty());
+        assert_eq!(out_of_bounds.len(), 0);
+        assert_eq!(out_of_bounds.as_raw(), 0);
+        assert_eq!(out_of_bounds.iter().count(), 0);
+        assert_eq!(out_of_bounds.iter().len(), 0);
+
+        assert_eq!(YakuSet::from_raw_checked(1u64 << 63), Option::None);
+        assert_eq!(YakuSet::from_raw_checked(1u64 << 41), Option::None);
+        let max_valid = (1u64 << 41) - 1;
+        assert!(YakuSet::from_raw_checked(max_valid).is_some());
+        let full_set = YakuSet::from_raw_checked(max_valid).unwrap();
+        assert_eq!(full_set.len(), 41);
+        assert_eq!(full_set.iter().len(), 41);
+        assert_eq!(full_set.iter().count(), 41);
     }
 }

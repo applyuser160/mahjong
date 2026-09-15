@@ -3,7 +3,7 @@ use crate::dora::count_dora;
 use crate::hand::Hand;
 use crate::score::{calculate_hand_fu, calculate_score};
 use crate::tile::TileName;
-use crate::yaku::{judge_yaku, WinContext, YakuId, ALL_YAKU};
+use crate::yaku::{judge_yaku_set, WinContext, YakuId, ALL_YAKU};
 use rayon::prelude::*;
 
 /// 速度指標
@@ -371,7 +371,7 @@ fn estimate_hand_value(
                 ..Default::default()
             };
 
-            let yaku_set = judge_yaku(&working, open_melds, base_win_ctx);
+            let yaku_set = judge_yaku_set(&working, open_melds, base_win_ctx);
 
             let mut base_han: usize = 0;
             let mut is_yakuman = false;
@@ -489,7 +489,7 @@ fn estimate_hand_value(
                     ..Default::default()
                 };
 
-                let yaku_set = judge_yaku(&working, open_melds, win_ctx);
+                let yaku_set = judge_yaku_set(&working, open_melds, win_ctx);
                 let mut han = 0;
                 let mut is_yakuman = false;
 

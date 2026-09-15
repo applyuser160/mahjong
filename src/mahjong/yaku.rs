@@ -116,8 +116,10 @@ pub const YAKUMAN_MASK: u64 = (1u64 << (YakuId::Chinroutou as u8))
     | (1u64 << (YakuId::Tenhou as u8))
     | (1u64 << (YakuId::Chiihou as u8));
 
+pub const VALID_YAKU_MASK: u64 = (1u64 << 41) - 1;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct YakuSet(pub u64);
+pub struct YakuSet(u64);
 
 impl std::fmt::Debug for YakuSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -135,9 +137,20 @@ impl YakuSet {
         Self(0)
     }
 
+    /// 有効な41ビットの範囲外をマスクして構築します。
     #[inline]
     pub const fn from_raw(bits: u64) -> Self {
-        Self(bits)
+        Self(bits & VALID_YAKU_MASK)
+    }
+
+    /// 有効な41ビットの範囲外のビットが含まれる場合は None を返します。
+    #[inline]
+    pub const fn from_raw_checked(bits: u64) -> Option<Self> {
+        if (bits & !VALID_YAKU_MASK) == 0 {
+            Some(Self(bits))
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -746,7 +759,7 @@ pub fn get_hand_patterns(
     generate_patterns(closed_counts, &open_melds, &closed_melds)
 }
 
-pub fn judge_yaku(
+pub fn judge_yaku_set(
     closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
     mut ctx: WinContext,
@@ -934,6 +947,19 @@ pub fn judge_yaku(
     result.retain_yakuman_only();
 
     result
+}
+
+/// 既存の公開API互換ラッパー。成立役を `HashSet<YakuId>` で返却します。
+/// ホットパスでの高頻度呼び出し時はゼロアロケーションの `judge_yaku_set` の利用を推奨します。
+#[inline]
+pub fn judge_yaku(
+    closed_counts: &[u8; 35],
+    open_melds_input: &[crate::hand::Meld],
+    ctx: WinContext,
+) -> HashSet<YakuId> {
+    judge_yaku_set(closed_counts, open_melds_input, ctx)
+        .into_iter()
+        .collect()
 }
 
 pub fn is_number_tile(tile: TileName) -> Option<(usize, usize)> {
