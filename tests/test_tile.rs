@@ -78,4 +78,74 @@ mod tests {
         assert_eq!(tile.tile_type(), TileType::Characters);
         assert_eq!(tile.category(), TileCategory::Simples);
     }
+
+    #[test]
+    fn test_from_usize_out_of_bounds_exhaustion() {
+        for n in 35..=255 {
+            assert_eq!(TileName::from_usize(n), TileName::None);
+        }
+    }
+
+    #[test]
+    fn test_tile_type_and_category_exhaustive() {
+        for n in 1..=34 {
+            let t = TileName::from_usize(n);
+            match n {
+                1..=9 => {
+                    assert_eq!(t.tile_type(), TileType::Characters);
+                    assert_eq!(t.category(), TileCategory::Simples);
+                }
+                10..=18 => {
+                    assert_eq!(t.tile_type(), TileType::Circles);
+                    assert_eq!(t.category(), TileCategory::Simples);
+                }
+                19..=27 => {
+                    assert_eq!(t.tile_type(), TileType::Bamboos);
+                    assert_eq!(t.category(), TileCategory::Simples);
+                }
+                28..=31 => {
+                    assert_eq!(t.tile_type(), TileType::Winds);
+                    assert_eq!(t.category(), TileCategory::Honors);
+                }
+                32..=34 => {
+                    assert_eq!(t.tile_type(), TileType::Dragons);
+                    assert_eq!(t.category(), TileCategory::Honors);
+                }
+                _ => unreachable!(),
+            }
+        }
+        assert_eq!(TileName::None.tile_type(), TileType::None);
+        assert_eq!(TileName::None.category(), TileCategory::None);
+    }
+
+    #[test]
+    fn test_indicator_to_dora_exhaustive() {
+        use mahjong::dora::indicator_to_dora;
+
+        // 萬子 (1m->2m...9m->1m)
+        assert_eq!(indicator_to_dora(TileName::OneM), TileName::TwoM);
+        assert_eq!(indicator_to_dora(TileName::NineM), TileName::OneM);
+
+        // 筒子 (1p->2p...9p->1p)
+        assert_eq!(indicator_to_dora(TileName::OneP), TileName::TwoP);
+        assert_eq!(indicator_to_dora(TileName::NineP), TileName::OneP);
+
+        // 索子 (1s->2s...9s->1s)
+        assert_eq!(indicator_to_dora(TileName::OneS), TileName::TwoS);
+        assert_eq!(indicator_to_dora(TileName::NineS), TileName::OneS);
+
+        // 風牌 (東->南->西->北->東)
+        assert_eq!(indicator_to_dora(TileName::East), TileName::South);
+        assert_eq!(indicator_to_dora(TileName::South), TileName::West);
+        assert_eq!(indicator_to_dora(TileName::West), TileName::North);
+        assert_eq!(indicator_to_dora(TileName::North), TileName::East);
+
+        // 三元牌 (白->發->中->白)
+        assert_eq!(indicator_to_dora(TileName::White), TileName::Green);
+        assert_eq!(indicator_to_dora(TileName::Green), TileName::Red);
+        assert_eq!(indicator_to_dora(TileName::Red), TileName::White);
+
+        // None
+        assert_eq!(indicator_to_dora(TileName::None), TileName::None);
+    }
 }

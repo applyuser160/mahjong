@@ -607,4 +607,36 @@ mod tests_kan {
         assert_eq!(full_set.iter().len(), 41);
         assert_eq!(full_set.iter().count(), 41);
     }
+
+    #[test]
+    fn test_is_number_tile_exhaustive() {
+        use mahjong::tile::TileName;
+        use mahjong::yaku::is_number_tile;
+
+        assert_eq!(is_number_tile(TileName::None), Option::None);
+
+        // 萬子 (1m..=9m)
+        for rank in 1..=9 {
+            let tile = TileName::from_usize(rank);
+            assert_eq!(is_number_tile(tile), Some((0, rank)));
+        }
+
+        // 筒子 (1p..=9p)
+        for rank in 1..=9 {
+            let tile = TileName::from_usize(9 + rank);
+            assert_eq!(is_number_tile(tile), Some((1, rank)));
+        }
+
+        // 索子 (1s..=9s)
+        for rank in 1..=9 {
+            let tile = TileName::from_usize(18 + rank);
+            assert_eq!(is_number_tile(tile), Some((2, rank)));
+        }
+
+        // 字牌 (東..=白)
+        for idx in 28..=34 {
+            let tile = TileName::from_usize(idx);
+            assert_eq!(is_number_tile(tile), Option::None);
+        }
+    }
 }

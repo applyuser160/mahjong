@@ -962,93 +962,39 @@ pub fn judge_yaku(
         .collect()
 }
 
+#[inline]
 pub fn is_number_tile(tile: TileName) -> Option<(usize, usize)> {
-    match tile {
-        TileName::OneM => Some((0, 1)),
-        TileName::TwoM => Some((0, 2)),
-        TileName::ThreeM => Some((0, 3)),
-        TileName::FourM => Some((0, 4)),
-        TileName::FiveM => Some((0, 5)),
-        TileName::SixM => Some((0, 6)),
-        TileName::SevenM => Some((0, 7)),
-        TileName::EightM => Some((0, 8)),
-        TileName::NineM => Some((0, 9)),
-        TileName::OneP => Some((1, 1)),
-        TileName::TwoP => Some((1, 2)),
-        TileName::ThreeP => Some((1, 3)),
-        TileName::FourP => Some((1, 4)),
-        TileName::FiveP => Some((1, 5)),
-        TileName::SixP => Some((1, 6)),
-        TileName::SevenP => Some((1, 7)),
-        TileName::EightP => Some((1, 8)),
-        TileName::NineP => Some((1, 9)),
-        TileName::OneS => Some((2, 1)),
-        TileName::TwoS => Some((2, 2)),
-        TileName::ThreeS => Some((2, 3)),
-        TileName::FourS => Some((2, 4)),
-        TileName::FiveS => Some((2, 5)),
-        TileName::SixS => Some((2, 6)),
-        TileName::SevenS => Some((2, 7)),
-        TileName::EightS => Some((2, 8)),
-        TileName::NineS => Some((2, 9)),
-        _ => None,
+    let idx = tile as usize;
+    if (1..=27).contains(&idx) {
+        let zero_based = idx - 1;
+        Some((zero_based / 9, zero_based % 9 + 1))
+    } else {
+        None
     }
 }
 
+#[inline]
 fn is_terminal(tile: TileName) -> bool {
-    matches!(
-        tile,
-        TileName::OneM
-            | TileName::NineM
-            | TileName::OneP
-            | TileName::NineP
-            | TileName::OneS
-            | TileName::NineS
-    )
+    let idx = tile as u8;
+    matches!(idx, 1 | 9 | 10 | 18 | 19 | 27)
 }
 
+#[inline]
 fn is_honor(tile: TileName) -> bool {
-    matches!(
-        tile,
-        TileName::East
-            | TileName::South
-            | TileName::West
-            | TileName::North
-            | TileName::Red
-            | TileName::Green
-            | TileName::White
-    )
+    let idx = tile as u8;
+    (28..=34).contains(&idx)
 }
 
+#[inline]
 fn is_terminal_or_honor(tile: TileName) -> bool {
-    is_terminal(tile) || is_honor(tile)
+    let idx = tile as u8;
+    matches!(idx, 1 | 9 | 10 | 18 | 19 | 27 | 28..=34)
 }
 
+#[inline]
 fn is_simple(tile: TileName) -> bool {
-    matches!(
-        tile,
-        TileName::TwoM
-            | TileName::ThreeM
-            | TileName::FourM
-            | TileName::FiveM
-            | TileName::SixM
-            | TileName::SevenM
-            | TileName::EightM
-            | TileName::TwoP
-            | TileName::ThreeP
-            | TileName::FourP
-            | TileName::FiveP
-            | TileName::SixP
-            | TileName::SevenP
-            | TileName::EightP
-            | TileName::TwoS
-            | TileName::ThreeS
-            | TileName::FourS
-            | TileName::FiveS
-            | TileName::SixS
-            | TileName::SevenS
-            | TileName::EightS
-    )
+    let idx = tile as u8;
+    matches!(idx, 2..=8 | 11..=17 | 20..=26)
 }
 
 fn generate_patterns(
@@ -1115,7 +1061,7 @@ fn search_melds(
         counts[i] += 3;
     }
 
-    let Some((suit, rank)) = is_number_tile(tile) else {
+    let Some((_, rank)) = is_number_tile(tile) else {
         return;
     };
     if rank > 7 {
@@ -1125,16 +1071,6 @@ fn search_melds(
     let next1 = i + 1;
     let next2 = i + 2;
 
-    let Some((s1, r1)) = is_number_tile(TileName::from_usize(next1)) else {
-        return;
-    };
-    let Some((s2, r2)) = is_number_tile(TileName::from_usize(next2)) else {
-        return;
-    };
-
-    if s1 != suit || s2 != suit || r1 != rank + 1 || r2 != rank + 2 {
-        return;
-    }
     if counts[next1] == 0 || counts[next2] == 0 {
         return;
     }

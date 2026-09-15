@@ -1,53 +1,56 @@
 use crate::tile::TileName;
 
+const DORA_INDICATOR_TABLE: [TileName; 35] = [
+    TileName::None,
+    // 萬子 (1m..=9m) -> 2m..=9m, 1m
+    TileName::TwoM,
+    TileName::ThreeM,
+    TileName::FourM,
+    TileName::FiveM,
+    TileName::SixM,
+    TileName::SevenM,
+    TileName::EightM,
+    TileName::NineM,
+    TileName::OneM,
+    // 筒子 (1p..=9p) -> 2p..=9p, 1p
+    TileName::TwoP,
+    TileName::ThreeP,
+    TileName::FourP,
+    TileName::FiveP,
+    TileName::SixP,
+    TileName::SevenP,
+    TileName::EightP,
+    TileName::NineP,
+    TileName::OneP,
+    // 索子 (1s..=9s) -> 2s..=9s, 1s
+    TileName::TwoS,
+    TileName::ThreeS,
+    TileName::FourS,
+    TileName::FiveS,
+    TileName::SixS,
+    TileName::SevenS,
+    TileName::EightS,
+    TileName::NineS,
+    TileName::OneS,
+    // 風牌 (東 -> 南 -> 西 -> 北 -> 東)
+    TileName::South,
+    TileName::West,
+    TileName::North,
+    TileName::East,
+    // 三元牌 (白 -> 發 -> 中 -> 白)
+    TileName::White, // Red(32: 中) -> White(34: 白)
+    TileName::Red,   // Green(33: 發) -> Red(32: 中)
+    TileName::Green, // White(34: 白) -> Green(33: 發)
+];
+
 /// ドラ表示牌に対応するドラ牌を返します。
+#[inline]
 pub fn indicator_to_dora(indicator: TileName) -> TileName {
-    match indicator {
-        // 萬子 (1m -> 2m -> ... -> 9m -> 1m)
-        TileName::OneM => TileName::TwoM,
-        TileName::TwoM => TileName::ThreeM,
-        TileName::ThreeM => TileName::FourM,
-        TileName::FourM => TileName::FiveM,
-        TileName::FiveM => TileName::SixM,
-        TileName::SixM => TileName::SevenM,
-        TileName::SevenM => TileName::EightM,
-        TileName::EightM => TileName::NineM,
-        TileName::NineM => TileName::OneM,
-
-        // 筒子 (1p -> 2p -> ... -> 9p -> 1p)
-        TileName::OneP => TileName::TwoP,
-        TileName::TwoP => TileName::ThreeP,
-        TileName::ThreeP => TileName::FourP,
-        TileName::FourP => TileName::FiveP,
-        TileName::FiveP => TileName::SixP,
-        TileName::SixP => TileName::SevenP,
-        TileName::SevenP => TileName::EightP,
-        TileName::EightP => TileName::NineP,
-        TileName::NineP => TileName::OneP,
-
-        // 索子 (1s -> 2s -> ... -> 9s -> 1s)
-        TileName::OneS => TileName::TwoS,
-        TileName::TwoS => TileName::ThreeS,
-        TileName::ThreeS => TileName::FourS,
-        TileName::FourS => TileName::FiveS,
-        TileName::FiveS => TileName::SixS,
-        TileName::SixS => TileName::SevenS,
-        TileName::SevenS => TileName::EightS,
-        TileName::EightS => TileName::NineS,
-        TileName::NineS => TileName::OneS,
-
-        // 風牌 (東 -> 南 -> 西 -> 北 -> 東)
-        TileName::East => TileName::South,
-        TileName::South => TileName::West,
-        TileName::West => TileName::North,
-        TileName::North => TileName::East,
-
-        // 三元牌 (白 -> 發 -> 中 -> 白)
-        TileName::White => TileName::Green,
-        TileName::Green => TileName::Red,
-        TileName::Red => TileName::White,
-
-        TileName::None => TileName::None,
+    let idx = indicator as usize;
+    if idx < DORA_INDICATOR_TABLE.len() {
+        DORA_INDICATOR_TABLE[idx]
+    } else {
+        TileName::None
     }
 }
 
