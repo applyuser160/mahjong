@@ -2,49 +2,318 @@ use std::collections::{HashMap, HashSet};
 
 use crate::tile::TileName;
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum YakuId {
-    Riichi,
-    MenzenTsumo,
-    Tanyao,
-    Pinfu,
-    Ipeiko,
-    YakuhaiHaku,
-    YakuhaiHatsu,
-    YakuhaiChun,
-    YakuhaiJikaze,
-    YakuhaiBakaze,
-    Chitoitsu,
-    Toitoi,
-    Sanankou,
-    Shousangen,
-    Chantaiyao,
-    Ryanpeiko,
-    SanshokuDoujun,
-    SanshokuDoukou,
-    Honitsu,
-    Junchan,
-    Chinitsu,
-    Chinroutou,
-    Honroutou,
-    Sankantsu,
-    KokushiMusou,
-    Suuankou,
-    Daisangen,
-    Shousuushi,
-    Daisuushi,
-    Suukantsu,
-    Tsuuiisou,
-    Ryuuiisou,
-    ChuurenPoutou,
-    Tenhou,
-    Chiihou,
-    RinshanKaihou,
-    Chankan,
-    HaiteiRaoyue,
-    HouteiRaoyui,
-    DoubleRiichi,
-    Ippatsu,
+    Riichi = 0,
+    MenzenTsumo = 1,
+    Tanyao = 2,
+    Pinfu = 3,
+    Ipeiko = 4,
+    YakuhaiHaku = 5,
+    YakuhaiHatsu = 6,
+    YakuhaiChun = 7,
+    YakuhaiJikaze = 8,
+    YakuhaiBakaze = 9,
+    Chitoitsu = 10,
+    Toitoi = 11,
+    Sanankou = 12,
+    Shousangen = 13,
+    Chantaiyao = 14,
+    Ryanpeiko = 15,
+    SanshokuDoujun = 16,
+    SanshokuDoukou = 17,
+    Honitsu = 18,
+    Junchan = 19,
+    Chinitsu = 20,
+    Chinroutou = 21,
+    Honroutou = 22,
+    Sankantsu = 23,
+    KokushiMusou = 24,
+    Suuankou = 25,
+    Daisangen = 26,
+    Shousuushi = 27,
+    Daisuushi = 28,
+    Suukantsu = 29,
+    Tsuuiisou = 30,
+    Ryuuiisou = 31,
+    ChuurenPoutou = 32,
+    Tenhou = 33,
+    Chiihou = 34,
+    RinshanKaihou = 35,
+    Chankan = 36,
+    HaiteiRaoyue = 37,
+    HouteiRaoyui = 38,
+    DoubleRiichi = 39,
+    Ippatsu = 40,
+}
+
+pub const ALL_YAKU_IDS: [YakuId; 41] = [
+    YakuId::Riichi,
+    YakuId::MenzenTsumo,
+    YakuId::Tanyao,
+    YakuId::Pinfu,
+    YakuId::Ipeiko,
+    YakuId::YakuhaiHaku,
+    YakuId::YakuhaiHatsu,
+    YakuId::YakuhaiChun,
+    YakuId::YakuhaiJikaze,
+    YakuId::YakuhaiBakaze,
+    YakuId::Chitoitsu,
+    YakuId::Toitoi,
+    YakuId::Sanankou,
+    YakuId::Shousangen,
+    YakuId::Chantaiyao,
+    YakuId::Ryanpeiko,
+    YakuId::SanshokuDoujun,
+    YakuId::SanshokuDoukou,
+    YakuId::Honitsu,
+    YakuId::Junchan,
+    YakuId::Chinitsu,
+    YakuId::Chinroutou,
+    YakuId::Honroutou,
+    YakuId::Sankantsu,
+    YakuId::KokushiMusou,
+    YakuId::Suuankou,
+    YakuId::Daisangen,
+    YakuId::Shousuushi,
+    YakuId::Daisuushi,
+    YakuId::Suukantsu,
+    YakuId::Tsuuiisou,
+    YakuId::Ryuuiisou,
+    YakuId::ChuurenPoutou,
+    YakuId::Tenhou,
+    YakuId::Chiihou,
+    YakuId::RinshanKaihou,
+    YakuId::Chankan,
+    YakuId::HaiteiRaoyue,
+    YakuId::HouteiRaoyui,
+    YakuId::DoubleRiichi,
+    YakuId::Ippatsu,
+];
+
+impl YakuId {
+    #[inline]
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        if (val as usize) < ALL_YAKU_IDS.len() {
+            Some(ALL_YAKU_IDS[val as usize])
+        } else {
+            None
+        }
+    }
+}
+
+pub const YAKUMAN_MASK: u64 = (1u64 << (YakuId::Chinroutou as u8))
+    | (1u64 << (YakuId::KokushiMusou as u8))
+    | (1u64 << (YakuId::Suuankou as u8))
+    | (1u64 << (YakuId::Daisangen as u8))
+    | (1u64 << (YakuId::Shousuushi as u8))
+    | (1u64 << (YakuId::Daisuushi as u8))
+    | (1u64 << (YakuId::Suukantsu as u8))
+    | (1u64 << (YakuId::Tsuuiisou as u8))
+    | (1u64 << (YakuId::Ryuuiisou as u8))
+    | (1u64 << (YakuId::ChuurenPoutou as u8))
+    | (1u64 << (YakuId::Tenhou as u8))
+    | (1u64 << (YakuId::Chiihou as u8));
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct YakuSet(pub u64);
+
+impl std::fmt::Debug for YakuSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut list = f.debug_set();
+        for yaku in *self {
+            list.entry(&yaku);
+        }
+        list.finish()
+    }
+}
+
+impl YakuSet {
+    #[inline]
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    #[inline]
+    pub const fn from_raw(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    #[inline]
+    pub const fn as_raw(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    pub fn insert(&mut self, id: YakuId) {
+        self.0 |= 1u64 << (id as u8);
+    }
+
+    #[inline]
+    pub fn remove(&mut self, id: YakuId) {
+        self.0 &= !(1u64 << (id as u8));
+    }
+
+    #[inline]
+    pub const fn contains(&self, id: &YakuId) -> bool {
+        (self.0 & (1u64 << (*id as u8))) != 0
+    }
+
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.0.count_ones() as usize
+    }
+
+    #[inline]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    #[inline]
+    pub const fn intersection(self, other: Self) -> Self {
+        Self(self.0 & other.0)
+    }
+
+    #[inline]
+    pub const fn is_subset(&self, other: &Self) -> bool {
+        (self.0 & !other.0) == 0
+    }
+
+    #[inline]
+    pub fn iter(&self) -> YakuSetIter {
+        self.into_iter()
+    }
+
+    #[inline]
+    pub fn retain_yakuman_only(&mut self) {
+        if (self.0 & YAKUMAN_MASK) != 0 {
+            self.0 &= YAKUMAN_MASK;
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct YakuSetIter {
+    bits: u64,
+}
+
+impl Iterator for YakuSetIter {
+    type Item = YakuId;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bits == 0 {
+            None
+        } else {
+            let trailing = self.bits.trailing_zeros();
+            self.bits &= self.bits - 1;
+            YakuId::from_u8(trailing as u8)
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let count = self.bits.count_ones() as usize;
+        (count, Some(count))
+    }
+}
+
+impl ExactSizeIterator for YakuSetIter {}
+
+impl IntoIterator for YakuSet {
+    type Item = YakuId;
+    type IntoIter = YakuSetIter;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        YakuSetIter { bits: self.0 }
+    }
+}
+
+impl IntoIterator for &YakuSet {
+    type Item = YakuId;
+    type IntoIter = YakuSetIter;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        YakuSetIter { bits: self.0 }
+    }
+}
+
+impl Extend<YakuId> for YakuSet {
+    #[inline]
+    fn extend<T: IntoIterator<Item = YakuId>>(&mut self, iter: T) {
+        for id in iter {
+            self.insert(id);
+        }
+    }
+}
+
+impl FromIterator<YakuId> for YakuSet {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = YakuId>>(iter: T) -> Self {
+        let mut set = Self::empty();
+        set.extend(iter);
+        set
+    }
+}
+
+impl<const N: usize> From<[YakuId; N]> for YakuSet {
+    #[inline]
+    fn from(arr: [YakuId; N]) -> Self {
+        let mut set = Self::empty();
+        for id in arr {
+            set.insert(id);
+        }
+        set
+    }
+}
+
+impl From<&[YakuId]> for YakuSet {
+    #[inline]
+    fn from(slice: &[YakuId]) -> Self {
+        let mut set = Self::empty();
+        for &id in slice {
+            set.insert(id);
+        }
+        set
+    }
+}
+
+impl std::ops::BitOr for YakuSet {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        self.union(rhs)
+    }
+}
+
+impl std::ops::BitOrAssign for YakuSet {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl std::ops::BitAnd for YakuSet {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        self.intersection(rhs)
+    }
+}
+
+impl std::ops::BitAndAssign for YakuSet {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -481,8 +750,8 @@ pub fn judge_yaku(
     closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
     mut ctx: WinContext,
-) -> HashSet<YakuId> {
-    let mut result = HashSet::new();
+) -> YakuSet {
+    let mut result = YakuSet::empty();
 
     let tiles_len = closed_counts.iter().map(|&c| c as usize).sum::<usize>();
     if tiles_len == 0 {
@@ -565,12 +834,12 @@ pub fn judge_yaku(
     // そうしないと、副露した牌を再度パースしようとしてしまいます。
     let patterns = generate_patterns(closed_counts, &open_melds, &closed_melds);
 
-    result.extend(check_situational_yaku(&ctx));
+    result |= check_situational_yaku(&ctx);
 
-    let yakuman_list = check_yakuman_yaku(&counts, tiles_len);
-    if !yakuman_list.is_empty() {
-        result.extend(yakuman_list);
-        retain_yakuman_only(&mut result);
+    let yakuman_set = check_yakuman_yaku(&counts, tiles_len);
+    if !yakuman_set.is_empty() {
+        result |= yakuman_set;
+        result.retain_yakuman_only();
         return result;
     }
 
@@ -662,7 +931,7 @@ pub fn judge_yaku(
     if is_honroutou(&counts) {
         result.insert(YakuId::Honroutou);
     }
-    retain_yakuman_only(&mut result);
+    result.retain_yakuman_only();
 
     result
 }
@@ -1301,91 +1570,74 @@ fn is_chuuren_poutou(counts: &[u8; 35], tiles_len: usize) -> bool {
     false
 }
 
-fn check_situational_yaku(ctx: &WinContext) -> Vec<YakuId> {
-    let mut yaku = Vec::new();
+fn check_situational_yaku(ctx: &WinContext) -> YakuSet {
+    let mut yaku = YakuSet::empty();
     if ctx.is_double_riichi && ctx.is_closed {
-        yaku.push(YakuId::DoubleRiichi);
+        yaku.insert(YakuId::DoubleRiichi);
     } else if ctx.riichi && ctx.is_closed {
-        yaku.push(YakuId::Riichi);
+        yaku.insert(YakuId::Riichi);
     }
 
     if ctx.is_ippatsu && ctx.is_closed && (ctx.riichi || ctx.is_double_riichi) {
-        yaku.push(YakuId::Ippatsu);
+        yaku.insert(YakuId::Ippatsu);
     }
 
     if ctx.is_rinshan && ctx.is_tsumo {
-        yaku.push(YakuId::RinshanKaihou);
+        yaku.insert(YakuId::RinshanKaihou);
     }
 
     if ctx.is_chankan && !ctx.is_tsumo {
-        yaku.push(YakuId::Chankan);
+        yaku.insert(YakuId::Chankan);
     }
 
     if ctx.is_haitei && ctx.is_tsumo {
-        yaku.push(YakuId::HaiteiRaoyue);
+        yaku.insert(YakuId::HaiteiRaoyue);
     }
 
     if ctx.is_houtei && !ctx.is_tsumo {
-        yaku.push(YakuId::HouteiRaoyui);
+        yaku.insert(YakuId::HouteiRaoyui);
     }
 
     if ctx.is_closed && ctx.is_tsumo {
-        yaku.push(YakuId::MenzenTsumo);
+        yaku.insert(YakuId::MenzenTsumo);
     }
 
     if ctx.tenhou {
-        yaku.push(YakuId::Tenhou);
+        yaku.insert(YakuId::Tenhou);
     }
     if ctx.chiihou {
-        yaku.push(YakuId::Chiihou);
+        yaku.insert(YakuId::Chiihou);
     }
     yaku
 }
 
-fn check_yakuman_yaku(counts: &[u8; 35], tiles_len: usize) -> Vec<YakuId> {
-    let mut yaku = Vec::new();
+fn check_yakuman_yaku(counts: &[u8; 35], tiles_len: usize) -> YakuSet {
+    let mut yaku = YakuSet::empty();
     if is_kokushi(counts) {
-        yaku.push(YakuId::KokushiMusou);
+        yaku.insert(YakuId::KokushiMusou);
     }
     if is_chinroutou(counts) {
-        yaku.push(YakuId::Chinroutou);
+        yaku.insert(YakuId::Chinroutou);
     }
     if is_daisangen(counts) {
-        yaku.push(YakuId::Daisangen);
+        yaku.insert(YakuId::Daisangen);
     }
     if let Some((small, big)) = detect_suushi(counts) {
         if big {
-            yaku.push(YakuId::Daisuushi);
+            yaku.insert(YakuId::Daisuushi);
         }
         if small {
-            yaku.push(YakuId::Shousuushi);
+            yaku.insert(YakuId::Shousuushi);
         }
     }
     if is_tsuuiisou(counts) {
-        yaku.push(YakuId::Tsuuiisou);
+        yaku.insert(YakuId::Tsuuiisou);
     }
     if is_ryuuiisou(counts) {
-        yaku.push(YakuId::Ryuuiisou);
+        yaku.insert(YakuId::Ryuuiisou);
     }
     if is_chuuren_poutou(counts, tiles_len) {
-        yaku.push(YakuId::ChuurenPoutou);
+        yaku.insert(YakuId::ChuurenPoutou);
     }
     yaku
-}
-
-fn retain_yakuman_only(result: &mut std::collections::HashSet<YakuId>) {
-    let has_yakuman = result.iter().any(|&id| {
-        ALL_YAKU
-            .iter()
-            .find(|y| y.id == id)
-            .is_some_and(|y| y.yakuman)
-    });
-    if has_yakuman {
-        result.retain(|&id| {
-            ALL_YAKU
-                .iter()
-                .find(|y| y.id == id)
-                .is_some_and(|y| y.yakuman)
-        });
-    }
 }

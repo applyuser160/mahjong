@@ -78,7 +78,7 @@ pub use tile::{
     Tile, TileCategory, TileName, TileType, TILE_NAME_NUMBER, TILE_PER_KIND, TILE_WALL_CAPACITY,
 };
 pub use wall::Wall;
-pub use yaku::{judge_yaku, WinContext, Yaku, YakuId, ALL_YAKU};
+pub use yaku::{judge_yaku, WinContext, Yaku, YakuId, YakuSet, ALL_YAKU};
 
 pub mod python_api;
 

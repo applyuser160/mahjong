@@ -10,10 +10,8 @@ macro_rules! to_counts {
 }
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use mahjong::tile::TileName::*;
-    use mahjong::yaku::{judge_yaku, WinContext, YakuId};
+    use mahjong::yaku::{judge_yaku, WinContext, YakuId, YakuSet};
 
     #[test]
     fn detect_pinfu_and_tanyao() {
@@ -32,8 +30,7 @@ mod tests {
             ..Default::default()
         };
         let result = judge_yaku(&to_counts!(&tiles), &[], ctx);
-        let expected: HashSet<YakuId> =
-            HashSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
+        let expected = YakuSet::from([YakuId::Pinfu, YakuId::Tanyao, YakuId::MenzenTsumo]);
         assert!(expected.is_subset(&result));
     }
 
@@ -467,7 +464,7 @@ mod tests {
 mod tests_kan {
     use mahjong::hand::Meld;
     use mahjong::tile::TileName::*;
-    use mahjong::yaku::{judge_yaku, WinContext, YakuId};
+    use mahjong::yaku::{judge_yaku, WinContext, YakuId, YakuSet};
 
     #[test]
     fn detect_sanankou_passes_with_ankan() {
@@ -528,5 +525,60 @@ mod tests_kan {
 
         assert!(result.contains(&YakuId::KokushiMusou));
         assert!(!result.contains(&YakuId::Riichi));
+    }
+
+    #[test]
+    fn test_yakuset_operations() {
+        let mut set = YakuSet::empty();
+        assert!(set.is_empty());
+        assert_eq!(set.len(), 0);
+
+        set.insert(YakuId::Riichi);
+        set.insert(YakuId::Tanyao);
+        assert!(!set.is_empty());
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(&YakuId::Riichi));
+        assert!(set.contains(&YakuId::Tanyao));
+        assert!(!set.contains(&YakuId::Pinfu));
+
+        set.remove(YakuId::Riichi);
+        assert_eq!(set.len(), 1);
+        assert!(!set.contains(&YakuId::Riichi));
+        assert!(set.contains(&YakuId::Tanyao));
+
+        // Union & Intersection
+        let set_a = YakuSet::from([YakuId::Riichi, YakuId::Ippatsu]);
+        let set_b = YakuSet::from([YakuId::Ippatsu, YakuId::Tanyao]);
+        let union_set = set_a | set_b;
+        assert_eq!(union_set.len(), 3);
+        assert!(union_set.contains(&YakuId::Riichi));
+        assert!(union_set.contains(&YakuId::Ippatsu));
+        assert!(union_set.contains(&YakuId::Tanyao));
+
+        let inter_set = set_a & set_b;
+        assert_eq!(inter_set.len(), 1);
+        assert!(inter_set.contains(&YakuId::Ippatsu));
+
+        // Subset
+        assert!(inter_set.is_subset(&set_a));
+        assert!(inter_set.is_subset(&set_b));
+        assert!(!set_a.is_subset(&inter_set));
+
+        // Iteration
+        let collected: Vec<YakuId> = union_set.into_iter().collect();
+        assert_eq!(collected.len(), 3);
+
+        // All 41 Yaku IDs roundtrip
+        for (i, &yaku_id) in mahjong::yaku::ALL_YAKU_IDS.iter().enumerate() {
+            assert_eq!(yaku_id as u8, i as u8);
+            assert_eq!(YakuId::from_u8(i as u8), Some(yaku_id));
+        }
+
+        // Yakuman retain
+        let mut mixed = YakuSet::from([YakuId::Riichi, YakuId::Daisangen, YakuId::Tanyao]);
+        mixed.retain_yakuman_only();
+        assert_eq!(mixed.len(), 1);
+        assert!(mixed.contains(&YakuId::Daisangen));
+        assert!(!mixed.contains(&YakuId::Riichi));
     }
 }
