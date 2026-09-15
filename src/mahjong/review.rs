@@ -1,5 +1,6 @@
 use crate::expectation::CandidateEvaluation;
 use crate::tile::TileName;
+use rayon::prelude::*;
 
 /// 悪手・疑問手の深刻度区分
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,46 +120,57 @@ impl ReviewTracker {
             };
         }
 
-        let mut optimal_picks_count = 0;
-        let mut total_ev_loss = 0.0;
-        let mut blunders = Vec::new();
+        let (optimal_picks_count, total_ev_loss, mut blunders) = self
+            .records
+            .par_iter()
+            .fold(
+                || (0usize, 0.0f64, Vec::new()),
+                |(mut opt, mut loss, mut blunders), rec| {
+                    if rec.is_optimal {
+                        opt += 1;
+                    }
+                    loss += rec.ev_loss;
 
-        for rec in &self.records {
-            if rec.is_optimal {
-                optimal_picks_count += 1;
-            }
-            total_ev_loss += rec.ev_loss;
+                    // 損失 150点以上を疑問手・悪手として抽出
+                    if rec.ev_loss >= 150.0 {
+                        let severity = if rec.ev_loss >= 1000.0 {
+                            BlunderSeverity::Blunder
+                        } else if rec.ev_loss >= 400.0 {
+                            BlunderSeverity::Mistake
+                        } else {
+                            BlunderSeverity::Inaccuracy
+                        };
 
-            // 損失 150点以上を疑問手・悪手として抽出
-            if rec.ev_loss >= 150.0 {
-                let severity = if rec.ev_loss >= 1000.0 {
-                    BlunderSeverity::Blunder
-                } else if rec.ev_loss >= 400.0 {
-                    BlunderSeverity::Mistake
-                } else {
-                    BlunderSeverity::Inaccuracy
-                };
+                        let explanation = Self::diagnose_loss_reason(rec);
 
-                let explanation = Self::diagnose_loss_reason(rec);
+                        blunders.push(BlunderRecord {
+                            turn: rec.turn,
+                            chosen_tile: rec.chosen_tile,
+                            chosen_ev: rec.chosen_ev,
+                            best_tile: rec.best_tile,
+                            best_ev: rec.best_ev,
+                            ev_loss: rec.ev_loss,
+                            severity,
+                            explanation,
+                        });
+                    }
+                    (opt, loss, blunders)
+                },
+            )
+            .reduce(
+                || (0usize, 0.0f64, Vec::new()),
+                |(opt1, loss1, mut blunders1), (opt2, loss2, blunders2)| {
+                    blunders1.extend(blunders2);
+                    (opt1 + opt2, loss1 + loss2, blunders1)
+                },
+            );
 
-                blunders.push(BlunderRecord {
-                    turn: rec.turn,
-                    chosen_tile: rec.chosen_tile,
-                    chosen_ev: rec.chosen_ev,
-                    best_tile: rec.best_tile,
-                    best_ev: rec.best_ev,
-                    ev_loss: rec.ev_loss,
-                    severity,
-                    explanation,
-                });
-            }
-        }
-
-        // EV損失が大きい順にソート
+        // EV損失が大きい順にソート（同値時は巡目昇順で決定論的安定性を確保）
         blunders.sort_by(|a, b| {
             b.ev_loss
                 .partial_cmp(&a.ev_loss)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.turn.cmp(&b.turn))
         });
 
         let accuracy_rate = optimal_picks_count as f64 / total_turns as f64;

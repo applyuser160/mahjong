@@ -1,6 +1,7 @@
 use crate::expectation::{AnalysisContext, CandidateEvaluation};
 use crate::hand::Hand;
 use crate::tile::TileName;
+use rayon::prelude::*;
 
 /// 順位点ルール設定（ウマ・オカ・原点・返し点）
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -303,58 +304,64 @@ pub fn evaluate_hand_discards_with_placement(
     // 放銃シナリオにおける想定失点額を動的に推定 (Issue #79: 親12000点 vs 子8000点、本場・ドラ補正)
     let deal_loss = estimate_expected_deal_loss(match_ctx, analysis_ctx, player_idx);
 
-    let mut placement_evals = Vec::new();
+    let mut placement_evals: Vec<PlacementCandidateEvaluation> = raw_evaluations
+        .into_par_iter()
+        .map(|ev| {
+            let win_p = ev.speed.win_probability;
+            let deal_p = ev.safety.risk_score * 0.4; // 簡易放銃確率
+            let other_p = (1.0 - win_p - deal_p).max(0.0);
 
-    for ev in raw_evaluations {
-        let win_p = ev.speed.win_probability;
-        let deal_p = ev.safety.risk_score * 0.4; // 簡易放銃確率
-        let other_p = (1.0 - win_p - deal_p).max(0.0);
+            // 各シナリオにおける局後スコアの予測
+            let score_on_win = match_ctx.scores[player_idx] + ev.value.expected_score as i32;
+            let score_on_deal = match_ctx.scores[player_idx] - deal_loss;
+            let score_on_other = match_ctx.scores[player_idx];
 
-        // 各シナリオにおける局後スコアの予測
-        let score_on_win = match_ctx.scores[player_idx] + ev.value.expected_score as i32;
-        let score_on_deal = match_ctx.scores[player_idx] - deal_loss;
-        let score_on_other = match_ctx.scores[player_idx];
+            // 各シナリオでの着順確率分布をシミュレーション
+            let probs_win = estimate_rank_probabilities(match_ctx, player_idx, score_on_win);
+            let probs_deal = estimate_rank_probabilities(match_ctx, player_idx, score_on_deal);
+            let probs_other = estimate_rank_probabilities(match_ctx, player_idx, score_on_other);
 
-        // 各シナリオでの着順確率分布をシミュレーション
-        let probs_win = estimate_rank_probabilities(match_ctx, player_idx, score_on_win);
-        let probs_deal = estimate_rank_probabilities(match_ctx, player_idx, score_on_deal);
-        let probs_other = estimate_rank_probabilities(match_ctx, player_idx, score_on_other);
+            let mut final_probs = [0.0; 4];
+            for r in 0..4 {
+                final_probs[r] =
+                    win_p * probs_win[r] + deal_p * probs_deal[r] + other_p * probs_other[r];
+            }
 
-        let mut final_probs = [0.0; 4];
-        for r in 0..4 {
-            final_probs[r] =
-                win_p * probs_win[r] + deal_p * probs_deal[r] + other_p * probs_other[r];
-        }
+            // 期待順位Pt (Placement EV) の算出
+            let mut pt_ev = 0.0;
+            let mut exp_rank = 0.0;
+            for (r_idx, &p) in final_probs.iter().enumerate() {
+                let rank = r_idx + 1;
+                let est_final_score = match_ctx.scores[player_idx] + ev.ev as i32;
+                let pt = match_ctx.rule.calculate_point(rank, est_final_score);
+                pt_ev += p * pt;
+                exp_rank += p * (rank as f64);
+            }
 
-        // 期待順位Pt (Placement EV) の算出
-        let mut pt_ev = 0.0;
-        let mut exp_rank = 0.0;
-        for (r_idx, &p) in final_probs.iter().enumerate() {
-            let rank = r_idx + 1;
-            let est_final_score = match_ctx.scores[player_idx] + ev.ev as i32;
-            let pt = match_ctx.rule.calculate_point(rank, est_final_score);
-            pt_ev += p * pt;
-            exp_rank += p * (rank as f64);
-        }
+            // 点況戦術解説文
+            let note = generate_situational_note(
+                current_rank,
+                is_orasu,
+                match_ctx.scores[player_idx],
+                &ev,
+            );
 
-        // 点況戦術解説文
-        let note =
-            generate_situational_note(current_rank, is_orasu, match_ctx.scores[player_idx], &ev);
+            PlacementCandidateEvaluation {
+                base: ev,
+                placement_ev: pt_ev,
+                expected_rank: exp_rank,
+                rank_probabilities: final_probs,
+                situational_note: note,
+            }
+        })
+        .collect();
 
-        placement_evals.push(PlacementCandidateEvaluation {
-            base: ev,
-            placement_ev: pt_ev,
-            expected_rank: exp_rank,
-            rank_probabilities: final_probs,
-            situational_note: note,
-        });
-    }
-
-    // 順位EV降順でソート
+    // 順位EV降順でソート（同値時は牌種ID昇順で決定論的安定性を確保）
     placement_evals.sort_by(|a, b| {
         b.placement_ev
             .partial_cmp(&a.placement_ev)
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| (a.base.discard_tile as usize).cmp(&(b.base.discard_tile as usize)))
     });
 
     placement_evals
