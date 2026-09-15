@@ -97,264 +97,115 @@ pub fn calculate_kokushi_shanten(counts: &[u8; 35]) -> i8 {
     13 - kinds - if has_pair { 1 } else { 0 }
 }
 
+use crate::suit_table::{encode_suit_key, get_suit_table};
+
 /// 一般手（4面子1雀頭）の向聴数を計算します。
 /// 和了形は -1、テンパイは 0。
+///
+/// 各数牌スーツ（萬子・筒子・索子）の事前計算済みルックアップテーブル（LUT）を参照し、
+/// 字牌の O(7) 簡易走査と雀頭候補の探索を行うことで O(1) で高速に算出します。
 pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
     let target_melds = 4 - open_melds_count;
-    let mut best_shanten = 8 - 2 * open_melds_count as i8;
+    let table = get_suit_table();
+    let m_entry = table[encode_suit_key(&counts[1..=9])];
+    let p_entry = table[encode_suit_key(&counts[10..=18])];
+    let s_entry = table[encode_suit_key(&counts[19..=27])];
 
-    let total_tiles: usize = counts.iter().map(|&c| c as usize).sum();
-    let mut working = *counts;
-
-    // 1. 雀頭ありのケースを探索（対子を1つ雀頭として固定する）
-    for i in 1..=34 {
-        if working[i] >= 2 {
-            working[i] -= 2;
-            let shanten = search_normal(
-                &mut working,
-                1,
-                true,
-                0,
-                0,
-                target_melds,
-                total_tiles - 2,
-                &mut best_shanten,
-            );
-            best_shanten = best_shanten.min(shanten);
-            working[i] += 2;
-
-            if best_shanten == -1 {
-                return -1;
-            }
+    // 字牌 (28..=34) の刻子・対子を集計
+    let mut z_melds = 0;
+    let mut z_pairs = 0;
+    for &c in &counts[28..=34] {
+        if c >= 3 {
+            z_melds += 1;
+        } else if c == 2 {
+            z_pairs += 1;
         }
     }
 
-    // 2. 雀頭なしのケースを探索（搭子・面子のみで構成）
-    let shanten = search_normal(
-        &mut working,
-        1,
-        false,
-        0,
-        0,
-        target_melds,
-        total_tiles,
-        &mut best_shanten,
-    );
-    best_shanten = best_shanten.min(shanten);
+    let mut best_shanten = 8 - 2 * open_melds_count as i8;
+    let suits = [m_entry, p_entry, s_entry];
+
+    // 雀頭候補の走査:
+    // 0: 萬子に雀頭, 1: 筒子に雀頭, 2: 索子に雀頭,
+    // 3: 字牌対子を雀頭, 4: 字牌刻子を崩して雀頭, 5: 雀頭なし
+    for head_choice in 0..6 {
+        let (has_head, cur_z_melds, cur_z_taatsu) = match head_choice {
+            3 => {
+                if z_pairs > 0 {
+                    (true, z_melds, z_pairs - 1)
+                } else {
+                    continue;
+                }
+            }
+            4 => {
+                if z_melds > 0 {
+                    (true, z_melds - 1, z_pairs)
+                } else {
+                    continue;
+                }
+            }
+            5 => (false, z_melds, z_pairs),
+            _ => (true, z_melds, z_pairs),
+        };
+
+        let mut suit_taatsu = [[-1i8; 5]; 3];
+        let mut possible = true;
+        for (s, taatsu) in suit_taatsu.iter_mut().enumerate() {
+            if head_choice == s {
+                *taatsu = suits[s].with_head;
+                if taatsu.iter().all(|&t| t == -1) {
+                    possible = false;
+                    break;
+                }
+            } else {
+                *taatsu = suits[s].no_head;
+            }
+        }
+        if !possible {
+            continue;
+        }
+
+        // 3スーツで作る面子数 (m0, m1, m2) の組み合わせを探索
+        for m0 in 0..=4 {
+            let t0 = suit_taatsu[0][m0];
+            if t0 == -1 {
+                continue;
+            }
+            for m1 in 0..=4 - m0 {
+                let t1 = suit_taatsu[1][m1];
+                if t1 == -1 {
+                    continue;
+                }
+                let max_m2 = 4 - m0 - m1;
+                for (m2, &t2) in suit_taatsu[2].iter().enumerate().take(max_m2 + 1) {
+                    if t2 == -1 {
+                        continue;
+                    }
+
+                    let total_melds = cur_z_melds + m0 + m1 + m2;
+                    let total_taatsu = cur_z_taatsu + (t0 + t1 + t2) as usize;
+
+                    let shanten =
+                        evaluate_normal_shanten(has_head, total_melds, total_taatsu, target_melds);
+                    if shanten < best_shanten {
+                        best_shanten = shanten;
+                        if best_shanten == -1 {
+                            return -1;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     best_shanten
 }
-
-/// 一般手の再帰的探索（深さ優先探索）
-fn search_normal(
-    counts: &mut [u8; 35],
-    index: usize,
-    has_head: bool,
-    melds: usize,
-    taatsu: usize,
-    target_melds: usize,
-    remaining_tiles: usize,
-    current_best: &mut i8,
-) -> i8 {
-    // 次の牌があるインデックスを探す
-    let mut next_idx = index;
-    while next_idx <= 34 && counts[next_idx] == 0 {
-        next_idx += 1;
-    }
-
-    // すべての牌を走査し終えた場合、シャンテン数を算出
-    if next_idx > 34 {
-        let s = evaluate_normal_shanten(has_head, melds, taatsu, target_melds);
-        *current_best = (*current_best).min(s);
-        return s;
-    }
-
-    // 下限バウンド枝刈り（残りの牌から作れる理論上の最大面子・搭子数から算出）
-    let max_add_melds = (remaining_tiles / 3).min(target_melds.saturating_sub(melds));
-    let rem_after_melds = remaining_tiles - max_add_melds * 3;
-    let max_add_taatsu =
-        (rem_after_melds / 2).min(target_melds.saturating_sub(melds + max_add_melds));
-    let min_possible_shanten = evaluate_normal_shanten(
-        has_head,
-        melds + max_add_melds,
-        taatsu + max_add_taatsu,
-        target_melds,
-    );
-    if min_possible_shanten >= *current_best {
-        return min_possible_shanten;
-    }
-
-    let mut min_shanten = 8;
-    let i = next_idx;
-
-    // --- A. 字牌 (28..=34): 順子・搭子を作れないため、刻子のみ ---
-    if i >= 28 {
-        if counts[i] >= 3 {
-            counts[i] -= 3;
-            let s = search_normal(
-                counts,
-                i,
-                has_head,
-                melds + 1,
-                taatsu,
-                target_melds,
-                remaining_tiles - 3,
-                current_best,
-            );
-            min_shanten = min_shanten.min(s);
-            counts[i] += 3;
-            if min_shanten == -1 {
-                return -1;
-            }
-        }
-        // 刻子にしない場合はスキップして次へ
-        let s = search_normal(
-            counts,
-            i + 1,
-            has_head,
-            melds,
-            taatsu,
-            target_melds,
-            remaining_tiles - counts[i] as usize,
-            current_best,
-        );
-        return min_shanten.min(s);
-    }
-
-    // --- B. 数牌 (萬子 1..=9, 筒子 10..=18, 索子 19..=27) ---
-    let rank = (i - 1) % 9 + 1; // 1..=9
-
-    // 1. 刻子 (AAA)
-    if counts[i] >= 3 {
-        counts[i] -= 3;
-        let s = search_normal(
-            counts,
-            i,
-            has_head,
-            melds + 1,
-            taatsu,
-            target_melds,
-            remaining_tiles - 3,
-            current_best,
-        );
-        min_shanten = min_shanten.min(s);
-        counts[i] += 3;
-        if min_shanten == -1 {
-            return -1;
-        }
-    }
-
-    // 2. 順子 (ABC)
-    if rank <= 7 && counts[i + 1] > 0 && counts[i + 2] > 0 {
-        counts[i] -= 1;
-        counts[i + 1] -= 1;
-        counts[i + 2] -= 1;
-        let s = search_normal(
-            counts,
-            i,
-            has_head,
-            melds + 1,
-            taatsu,
-            target_melds,
-            remaining_tiles - 3,
-            current_best,
-        );
-        min_shanten = min_shanten.min(s);
-        counts[i] += 1;
-        counts[i + 1] += 1;
-        counts[i + 2] += 1;
-        if min_shanten == -1 {
-            return -1;
-        }
-    }
-
-    // 3. 対子 (AA) - 雀頭が既に決まっている場合の搭子候補
-    if counts[i] >= 2 {
-        counts[i] -= 2;
-        let s = search_normal(
-            counts,
-            i,
-            has_head,
-            melds,
-            taatsu + 1,
-            target_melds,
-            remaining_tiles - 2,
-            current_best,
-        );
-        min_shanten = min_shanten.min(s);
-        counts[i] += 2;
-        if min_shanten == -1 {
-            return -1;
-        }
-    }
-
-    // 4. 両面・辺張搭子 (AB)
-    if rank <= 8 && counts[i + 1] > 0 {
-        counts[i] -= 1;
-        counts[i + 1] -= 1;
-        let s = search_normal(
-            counts,
-            i,
-            has_head,
-            melds,
-            taatsu + 1,
-            target_melds,
-            remaining_tiles - 2,
-            current_best,
-        );
-        min_shanten = min_shanten.min(s);
-        counts[i] += 1;
-        counts[i + 1] += 1;
-        if min_shanten == -1 {
-            return -1;
-        }
-    }
-
-    // 5. 嵌張搭子 (AC)
-    if rank <= 7 && counts[i + 2] > 0 {
-        counts[i] -= 1;
-        counts[i + 2] -= 1;
-        let s = search_normal(
-            counts,
-            i,
-            has_head,
-            melds,
-            taatsu + 1,
-            target_melds,
-            remaining_tiles - 2,
-            current_best,
-        );
-        min_shanten = min_shanten.min(s);
-        counts[i] += 1;
-        counts[i + 2] += 1;
-        if min_shanten == -1 {
-            return -1;
-        }
-    }
-
-    // 6. この牌を孤立牌として残し、次の牌の走査へ進む
-    let s = search_normal(
-        counts,
-        i + 1,
-        has_head,
-        melds,
-        taatsu,
-        target_melds,
-        remaining_tiles - counts[i] as usize,
-        current_best,
-    );
-    min_shanten.min(s)
-}
-
 /// 面子数・搭子数・雀頭の有無からシャンテン数を評価
+#[inline(always)]
 fn evaluate_normal_shanten(has_head: bool, melds: usize, taatsu: usize, target_melds: usize) -> i8 {
-    // 面子と搭子の合計が目標面子数を超えないよう搭子を制限
     let max_taatsu = target_melds.saturating_sub(melds);
     let valid_taatsu = taatsu.min(max_taatsu);
-
-    // 基本向聴数: (目標面子数 * 2) - (面子数 * 2) - 有効搭子数 - (雀頭があれば1)
     let base = (target_melds as i8) * 2;
-
     base - (melds as i8) * 2 - (valid_taatsu as i8) - if has_head { 1 } else { 0 }
 }
 
@@ -534,5 +385,74 @@ mod tests {
         assert_eq!(res.chitoitsu, 99); // 鳴きがあるので七対子は不可
         assert_eq!(res.kokushi, 99); // 鳴きがあるので国士は不可
         assert_eq!(res.min_shanten, 0);
+    }
+
+    #[test]
+    fn test_chinitsu_chuuren_shanten() {
+        // 1112345678999m (九蓮宝燈テンパイ: 0向聴)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::OneM,
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourM,
+            TileName::FiveM,
+            TileName::SixM,
+            TileName::SevenM,
+            TileName::EightM,
+            TileName::NineM,
+            TileName::NineM,
+            TileName::NineM,
+        ] {
+            hand.push(t);
+        }
+        let res = calculate_shanten(&hand);
+        assert_eq!(res.normal, 0);
+        assert_eq!(res.min_shanten, 0);
+
+        // 1mツモで和了形: -1向聴
+        hand.push(TileName::OneM);
+        let res_agari = calculate_shanten(&hand);
+        assert_eq!(res_agari.normal, -1);
+        assert_eq!(res_agari.min_shanten, -1);
+    }
+
+    #[test]
+    fn test_honor_pairs_as_taatsu() {
+        // 東東(雀頭) 白白(搭子) 1m2m(搭子) 4p5p(搭子) 7s8s(搭子) -> 一向聴 (1)
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::East,
+            TileName::East,
+            TileName::White,
+            TileName::White,
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::ThreeS,
+            TileName::ThreeS,
+            TileName::ThreeS,
+        ] {
+            hand.push(t);
+        }
+        // 3s3s3s(1面子), 東東(雀頭), 白白/1m2m/4p5p/7s8s(搭子4組 -> 有効3組)
+        // 向聴数 = 8 - 2*1 - 3 - 1 = 2 (向聴数 2)
+        let res = calculate_shanten(&hand);
+        assert_eq!(res.normal, 2);
+    }
+
+    #[test]
+    fn test_identical_tiles_overflow_does_not_panic() {
+        // 同一牌が5枚以上の異常入力（例: 9mが5枚）でもパニック（out of bounds）せず安全に処理されること
+        let mut counts = [0u8; 35];
+        counts[TileName::NineM as usize] = 5;
+        let res = calculate_shanten_from_counts(&counts, 0);
+        // パニックせず結果が返ること
+        assert!(res.min_shanten >= 0);
     }
 }

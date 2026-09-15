@@ -1014,17 +1014,23 @@ pub fn py_calculate_shanten(
     py: Python<'_>,
     tiles: Vec<PyTileName>,
     open_melds_count: usize,
-) -> PyShantenResult {
+) -> PyResult<PyShantenResult> {
     let mut counts = [0u8; 35];
     for py_tile in tiles {
         let rs_tile: TileName = py_tile.into();
         let idx = rs_tile as usize;
         if idx < counts.len() {
+            if counts[idx] >= 4 {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Tile {:?} appears more than 4 times",
+                    rs_tile
+                )));
+            }
             counts[idx] += 1;
         }
     }
-    py.allow_threads(|| calculate_shanten_from_counts(&counts, open_melds_count))
-        .into()
+    let res = py.allow_threads(|| calculate_shanten_from_counts(&counts, open_melds_count));
+    Ok(res.into())
 }
 
 // ==========================================
