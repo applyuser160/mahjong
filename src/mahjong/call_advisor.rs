@@ -1,6 +1,19 @@
 use crate::expectation::{evaluate_hand_discards, evaluate_standing_hand, AnalysisContext};
 use crate::hand::{Hand, Meld};
 use crate::tile::TileName;
+use rayon::prelude::*;
+
+enum CallCandidateTask {
+    Pass,
+    Pon,
+    Chii {
+        idx1: usize,
+        idx2: usize,
+        meld: Meld,
+        t1: TileName,
+        t2: TileName,
+    },
+}
 
 /// 鳴きのアクション種別
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,56 +96,18 @@ impl CallAdvisor {
         is_kamicha: bool,
         ctx: &AnalysisContext<'_>,
     ) -> Option<CallAdvice> {
-        let mut choices = Vec::new();
-
-        // 1. スルー（門前維持）の評価（13枚手牌の受け入れ・打点・和了期待値を直接算出）
-        let standing_eval = evaluate_standing_hand(hand, None, ctx);
-
-        choices.push(CallChoice {
-            action: CallAction::Pass,
-            meld: None,
-            post_shanten: standing_eval.shanten,
-            post_acceptance: standing_eval.speed.remaining_count,
-            estimated_score: standing_eval.value.expected_score,
-            ev: standing_eval.ev,
-        });
+        let mut tasks = Vec::with_capacity(5);
+        tasks.push(CallCandidateTask::Pass);
 
         // 2. ポン判定（同種牌が2枚以上手牌にあるか）
         let target_idx = target_tile as usize;
         if hand.counts[target_idx] >= 2 {
-            let mut post_hand = hand.clone();
-            // 2枚取り除く
-            post_hand.counts[target_idx] -= 2;
-            let meld = Meld::Pon(target_tile);
-            post_hand.open_melds.push(meld);
-
-            // ポン後の最善打牌を評価（手牌は副露で2枚減って11枚、他家牌加えて12枚から1枚切る状態）
-            let post_evals = evaluate_hand_discards(&post_hand, None, ctx);
-            if !post_evals.is_empty() {
-                let best_post = &post_evals[0];
-                // 三元牌、または自風・場風に一致する牌のみ役牌としてボーナスを付与
-                let is_yakuhai = matches!(
-                    target_tile,
-                    TileName::Red | TileName::Green | TileName::White
-                ) || ctx.seat_wind == Some(target_tile)
-                    || ctx.round_wind == Some(target_tile);
-                let bonus = if is_yakuhai { 600.0 } else { 0.0 };
-
-                choices.push(CallChoice {
-                    action: CallAction::Pon,
-                    meld: Some(meld),
-                    post_shanten: best_post.shanten_after,
-                    post_acceptance: best_post.speed.remaining_count,
-                    estimated_score: best_post.value.expected_score,
-                    ev: best_post.ev + bonus,
-                });
-            }
+            tasks.push(CallCandidateTask::Pon);
         }
 
         // 3. チー判定（上家かつ数牌の場合）
         if is_kamicha && target_idx < 28 {
             let rank = (target_idx - 1) % 9 + 1; // 1..=9
-            let _suit_base = target_idx - rank; // 0: 萬子, 9: 筒子, 18: 索子
 
             // パターン A: [target - 2, target - 1] (例: 3 に対して 1, 2)
             if rank >= 3 && hand.counts[target_idx - 2] > 0 && hand.counts[target_idx - 1] > 0 {
@@ -142,11 +117,13 @@ impl CallAdvisor {
                     called: target_tile,
                     consumed: [t1, t2],
                 };
-                if let Some(c) =
-                    Self::eval_chii_choice(hand, target_idx - 2, target_idx - 1, meld, t1, t2, ctx)
-                {
-                    choices.push(c);
-                }
+                tasks.push(CallCandidateTask::Chii {
+                    idx1: target_idx - 2,
+                    idx2: target_idx - 1,
+                    meld,
+                    t1,
+                    t2,
+                });
             }
 
             // パターン B: [target - 1, target + 1] (例: 3 に対して 2, 4)
@@ -160,11 +137,13 @@ impl CallAdvisor {
                     called: target_tile,
                     consumed: [t1, t2],
                 };
-                if let Some(c) =
-                    Self::eval_chii_choice(hand, target_idx - 1, target_idx + 1, meld, t1, t2, ctx)
-                {
-                    choices.push(c);
-                }
+                tasks.push(CallCandidateTask::Chii {
+                    idx1: target_idx - 1,
+                    idx2: target_idx + 1,
+                    meld,
+                    t1,
+                    t2,
+                });
             }
 
             // パターン C: [target + 1, target + 2] (例: 3 に対して 4, 5)
@@ -175,18 +154,73 @@ impl CallAdvisor {
                     called: target_tile,
                     consumed: [t1, t2],
                 };
-                if let Some(c) =
-                    Self::eval_chii_choice(hand, target_idx + 1, target_idx + 2, meld, t1, t2, ctx)
-                {
-                    choices.push(c);
-                }
+                tasks.push(CallCandidateTask::Chii {
+                    idx1: target_idx + 1,
+                    idx2: target_idx + 2,
+                    meld,
+                    t1,
+                    t2,
+                });
             }
         }
 
         // 鳴ける選択肢がスルー以外にない場合は None
-        if choices.len() <= 1 {
+        if tasks.len() <= 1 {
             return None;
         }
+
+        // 各候補（スルー・ポン・チー）を並列評価
+        let mut choices: Vec<CallChoice> = tasks
+            .into_par_iter()
+            .filter_map(|task| match task {
+                CallCandidateTask::Pass => {
+                    let standing_eval = evaluate_standing_hand(hand, None, ctx);
+                    Some(CallChoice {
+                        action: CallAction::Pass,
+                        meld: None,
+                        post_shanten: standing_eval.shanten,
+                        post_acceptance: standing_eval.speed.remaining_count,
+                        estimated_score: standing_eval.value.expected_score,
+                        ev: standing_eval.ev,
+                    })
+                }
+                CallCandidateTask::Pon => {
+                    let mut post_hand = hand.clone();
+                    post_hand.counts[target_idx] -= 2;
+                    let meld = Meld::Pon(target_tile);
+                    post_hand.open_melds.push(meld);
+
+                    let post_evals = evaluate_hand_discards(&post_hand, None, ctx);
+                    if !post_evals.is_empty() {
+                        let best_post = &post_evals[0];
+                        let is_yakuhai = matches!(
+                            target_tile,
+                            TileName::Red | TileName::Green | TileName::White
+                        ) || ctx.seat_wind == Some(target_tile)
+                            || ctx.round_wind == Some(target_tile);
+                        let bonus = if is_yakuhai { 600.0 } else { 0.0 };
+
+                        Some(CallChoice {
+                            action: CallAction::Pon,
+                            meld: Some(meld),
+                            post_shanten: best_post.shanten_after,
+                            post_acceptance: best_post.speed.remaining_count,
+                            estimated_score: best_post.value.expected_score,
+                            ev: best_post.ev + bonus,
+                        })
+                    } else {
+                        None
+                    }
+                }
+                CallCandidateTask::Chii {
+                    idx1,
+                    idx2,
+                    meld,
+                    t1,
+                    t2,
+                } => Self::eval_chii_choice(hand, idx1, idx2, meld, t1, t2, ctx),
+            })
+            .collect();
 
         // 最善アクションの決定（EV最大）
         choices.sort_by(|a, b| b.ev.partial_cmp(&a.ev).unwrap_or(std::cmp::Ordering::Equal));

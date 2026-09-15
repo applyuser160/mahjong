@@ -4,6 +4,7 @@ use crate::hand::Hand;
 use crate::score::{calculate_hand_fu, calculate_score};
 use crate::tile::TileName;
 use crate::yaku::{judge_yaku, WinContext, YakuId, ALL_YAKU};
+use rayon::prelude::*;
 
 /// 速度指標
 #[derive(Debug, Clone, PartialEq)]
@@ -91,8 +92,6 @@ pub fn evaluate_hand_discards(
     ctx: &AnalysisContext<'_>,
 ) -> Vec<CandidateEvaluation> {
     let open_melds_count = hand.open_melds.len();
-    let mut working = hand.counts;
-    let mut evaluations = Vec::new();
 
     // 候補評価では、打牌前の14枚の手牌（および外部指定の可視牌）をすべて可視牌として含める
     let mut base_visible = [0u8; 35];
@@ -107,85 +106,84 @@ pub fn evaluate_hand_discards(
     let remaining_turns = (18usize.saturating_sub(ctx.turn_number)).max(1) as f64;
     let wall_remaining = (ctx.remaining_wall_tiles).max(1) as f64;
 
-    for i in 1..=34 {
-        if working[i] == 0 {
-            continue;
-        }
-
-        let discard_tile = TileName::from_usize(i);
-        working[i] -= 1;
-
-        // 打牌した牌を含む base_visible を可視牌として渡す
-        let acceptance = calculate_acceptance(&working, open_melds_count, Some(&base_visible));
-        let shanten_after = acceptance.current_shanten;
-        let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
-
-        // 1. 速度評価（和了確率） - 待ち形・巡目・脅威度を反映
-        let win_probability = estimate_win_probability(
-            shanten_after,
-            acceptance.total_remaining,
-            accepted_tiles.len(),
-            remaining_turns,
-            wall_remaining,
-            ctx,
-        );
-
-        let speed = SpeedMetric {
-            accepted_tiles: accepted_tiles.clone(),
-            remaining_count: acceptance.total_remaining,
-            win_probability,
-        };
-
-        // 2. 打点評価（テンパイ・1向聴・2向聴以上の正確な符計算とダマテン想定）
-        let value = estimate_hand_value(
-            &working,
-            shanten_after,
-            &accepted_tiles,
-            &hand.open_melds,
-            ctx,
-        );
-
-        // 3. 安全度評価（現物・スジ・生牌・カベ・リーチ状況を反映）
-        let safety = evaluate_tile_safety(discard_tile, ctx, &base_visible);
-
-        // 4. 総合期待値 (EV)
-        // 相手にリーチ者がいる場合は放銃失点ペナルティを重くし（ベタオリの優位性）、
-        // リーチ者がいない平時は手作りを阻害しないようペナルティを抑制
-        let has_riichi_threat = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
-
-        let deal_loss_penalty = if has_riichi_threat {
-            let dealer_riichi = (0..4)
-                .any(|p| p != ctx.target_player && ctx.riichi_status[p] && ctx.player_is_dealer[p]);
-            if dealer_riichi {
-                6500.0 // 親リーチに対する失点期待値ペナルティ
-            } else {
-                5000.0 // 子リーチに対する失点期待値ペナルティ
-            }
+    // 相手にリーチ者がいる場合は放銃失点ペナルティを重くし（ベタオリの優位性）、
+    // リーチ者がいない平時は手作りを阻害しないようペナルティを抑制
+    let has_riichi_threat = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
+    let deal_loss_penalty = if has_riichi_threat {
+        let dealer_riichi = (0..4)
+            .any(|p| p != ctx.target_player && ctx.riichi_status[p] && ctx.player_is_dealer[p]);
+        if dealer_riichi {
+            6500.0 // 親リーチに対する失点期待値ペナルティ
         } else {
-            let turn_factor = (ctx.turn_number as f64 / 18.0).clamp(0.25, 1.0);
-            turn_factor * 600.0 // 平時序盤〜中盤の緩やかな失点リスク
-        };
+            5000.0 // 子リーチに対する失点期待値ペナルティ
+        }
+    } else {
+        let turn_factor = (ctx.turn_number as f64 / 18.0).clamp(0.25, 1.0);
+        turn_factor * 600.0 // 平時序盤〜中盤の緩やかな失点リスク
+    };
 
-        let ev = win_probability * value.expected_score - safety.risk_score * deal_loss_penalty;
+    let mut evaluations: Vec<CandidateEvaluation> = (1..=34)
+        .into_par_iter()
+        .filter(|&i| hand.counts[i] > 0)
+        .map(|i| {
+            let discard_tile = TileName::from_usize(i);
+            let mut working = hand.counts;
+            working[i] -= 1;
 
-        evaluations.push(CandidateEvaluation {
-            discard_tile,
-            shanten_after,
-            ev,
-            speed,
-            value,
-            safety,
-        });
+            // 打牌した牌を含む base_visible を可視牌として渡す
+            let acceptance = calculate_acceptance(&working, open_melds_count, Some(&base_visible));
+            let shanten_after = acceptance.current_shanten;
+            let accepted_tiles: Vec<TileName> = acceptance.waits.iter().map(|w| w.tile).collect();
 
-        working[i] += 1;
-    }
+            // 1. 速度評価（和了確率） - 待ち形・巡目・脅威度を反映
+            let win_probability = estimate_win_probability(
+                shanten_after,
+                acceptance.total_remaining,
+                accepted_tiles.len(),
+                remaining_turns,
+                wall_remaining,
+                ctx,
+            );
 
-    // 期待値降順にソート
+            let speed = SpeedMetric {
+                accepted_tiles: accepted_tiles.clone(),
+                remaining_count: acceptance.total_remaining,
+                win_probability,
+            };
+
+            // 2. 打点評価（テンパイ・1向聴・2向聴以上の正確な符計算とダマテン想定）
+            let value = estimate_hand_value(
+                &working,
+                shanten_after,
+                &accepted_tiles,
+                &hand.open_melds,
+                ctx,
+            );
+
+            // 3. 安全度評価（現物・スジ・生牌・カベ・リーチ状況を反映）
+            let safety = evaluate_tile_safety(discard_tile, ctx, &base_visible);
+
+            // 4. 総合期待値 (EV)
+            let ev = win_probability * value.expected_score - safety.risk_score * deal_loss_penalty;
+
+            CandidateEvaluation {
+                discard_tile,
+                shanten_after,
+                ev,
+                speed,
+                value,
+                safety,
+            }
+        })
+        .collect();
+
+    // 期待値降順にソート（同値時は向聴数昇順 -> 受入枚数降順 -> 牌種ID昇順で決定論的安定性を確保）
     evaluations.sort_by(|a, b| {
         b.ev.partial_cmp(&a.ev)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.shanten_after.cmp(&b.shanten_after))
             .then_with(|| b.speed.remaining_count.cmp(&a.speed.remaining_count))
+            .then_with(|| (a.discard_tile as usize).cmp(&(b.discard_tile as usize)))
     });
 
     evaluations
@@ -1229,5 +1227,43 @@ mod tests {
             cand_5m_p0.ev,
             cand_5m_self.ev
         );
+    }
+
+    #[test]
+    fn test_parallel_evaluate_hand_discards_deterministic() {
+        // 14種すべての候補が存在する手牌（最大並列度14タスク）
+        let mut hand = Hand::new();
+        for &t in &[
+            TileName::OneM,
+            TileName::NineM,
+            TileName::OneP,
+            TileName::NineP,
+            TileName::OneS,
+            TileName::NineS,
+            TileName::East,
+            TileName::South,
+            TileName::West,
+            TileName::North,
+            TileName::White,
+            TileName::Green,
+            TileName::Red,
+            TileName::FiveM,
+        ] {
+            hand.push(t);
+        }
+
+        let ctx = AnalysisContext::default();
+        let evs1 = evaluate_hand_discards(&hand, None, &ctx);
+        let evs2 = evaluate_hand_discards(&hand, None, &ctx);
+
+        assert_eq!(evs1.len(), 14);
+        assert_eq!(evs2.len(), 14);
+
+        for (e1, e2) in evs1.iter().zip(evs2.iter()) {
+            assert_eq!(e1.discard_tile, e2.discard_tile);
+            assert_eq!(e1.shanten_after, e2.shanten_after);
+            assert_eq!(e1.speed.remaining_count, e2.speed.remaining_count);
+            assert!((e1.ev - e2.ev).abs() < 1e-6);
+        }
     }
 }
