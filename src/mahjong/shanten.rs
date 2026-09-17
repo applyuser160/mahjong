@@ -97,33 +97,29 @@ pub fn calculate_kokushi_shanten(counts: &[u8; 35]) -> i8 {
     13 - kinds - if has_pair { 1 } else { 0 }
 }
 
-use crate::suit_table::{encode_suit_key, get_suit_table};
+use crate::suit_table::{encode_suit_key, get_suit_table, SuitEntry};
 
-/// 一般手（4面子1雀頭）の向聴数を計算します。
-/// 和了形は -1、テンパイは 0。
-///
-/// 各数牌スーツ（萬子・筒子・索子）の事前計算済みルックアップテーブル（LUT）を参照し、
-/// 字牌の O(7) 簡易走査と雀頭候補の探索を行うことで O(1) で高速に算出します。
-pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
+/// 5の累乗定数配列（0..=8）
+pub const POW5: [usize; 9] = [1, 5, 25, 125, 625, 3125, 15625, 78125, 390625];
+
+/// 么九牌判定
+#[inline(always)]
+pub fn is_terminal_or_honor(tile_idx: usize) -> bool {
+    matches!(
+        tile_idx,
+        1 | 9 | 10 | 18 | 19 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34
+    )
+}
+
+/// 各スーツの SuitEntry と字牌集計から通常形向聴数を計算
+pub fn eval_normal_shanten_from_suits(
+    suits: &[SuitEntry; 3],
+    z_melds: usize,
+    z_pairs: usize,
+    open_melds_count: usize,
+) -> i8 {
     let target_melds = 4 - open_melds_count;
-    let table = get_suit_table();
-    let m_entry = table[encode_suit_key(&counts[1..=9])];
-    let p_entry = table[encode_suit_key(&counts[10..=18])];
-    let s_entry = table[encode_suit_key(&counts[19..=27])];
-
-    // 字牌 (28..=34) の刻子・対子を集計
-    let mut z_melds = 0;
-    let mut z_pairs = 0;
-    for &c in &counts[28..=34] {
-        if c >= 3 {
-            z_melds += 1;
-        } else if c == 2 {
-            z_pairs += 1;
-        }
-    }
-
     let mut best_shanten = 8 - 2 * open_melds_count as i8;
-    let suits = [m_entry, p_entry, s_entry];
 
     // 雀頭候補の走査:
     // 0: 萬子に雀頭, 1: 筒子に雀頭, 2: 索子に雀頭,
@@ -200,6 +196,218 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
 
     best_shanten
 }
+
+/// 一般手（4面子1雀頭）の向聴数を計算します。
+/// 和了形は -1、テンパイは 0。
+pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
+    let table = get_suit_table();
+    let m_entry = table[encode_suit_key(&counts[1..=9])];
+    let p_entry = table[encode_suit_key(&counts[10..=18])];
+    let s_entry = table[encode_suit_key(&counts[19..=27])];
+
+    // 字牌 (28..=34) の刻子・対子を集計
+    let mut z_melds = 0;
+    let mut z_pairs = 0;
+    for &c in &counts[28..=34] {
+        if c >= 3 {
+            z_melds += 1;
+        } else if c == 2 {
+            z_pairs += 1;
+        }
+    }
+
+    eval_normal_shanten_from_suits(
+        &[m_entry, p_entry, s_entry],
+        z_melds,
+        z_pairs,
+        open_melds_count,
+    )
+}
+
+/// 手牌状態をキャッシュし、仮ツモによる向聴数を O(1) で差分計算する構造体
+#[derive(Clone, Debug)]
+pub struct ShantenState<'a> {
+    pub counts: &'a [u8; 35],
+    pub open_melds_count: usize,
+    pub is_closed: bool,
+
+    pub suit_keys: [usize; 3],
+    pub suit_entries: [SuitEntry; 3],
+    pub z_melds: usize,
+    pub z_pairs: usize,
+
+    pub chitoitsu_pairs: i8,
+    pub chitoitsu_kinds: i8,
+
+    pub kokushi_kinds: i8,
+    pub kokushi_has_pair: bool,
+
+    pub current_result: ShantenResult,
+}
+
+impl<'a> ShantenState<'a> {
+    pub fn new(counts: &'a [u8; 35], open_melds_count: usize) -> Self {
+        let is_closed = open_melds_count == 0;
+        let table = get_suit_table();
+
+        let m_key = encode_suit_key(&counts[1..=9]);
+        let p_key = encode_suit_key(&counts[10..=18]);
+        let s_key = encode_suit_key(&counts[19..=27]);
+
+        let suit_keys = [m_key, p_key, s_key];
+        let suit_entries = [table[m_key], table[p_key], table[s_key]];
+
+        let mut z_melds = 0;
+        let mut z_pairs = 0;
+        for &c in &counts[28..=34] {
+            if c >= 3 {
+                z_melds += 1;
+            } else if c == 2 {
+                z_pairs += 1;
+            }
+        }
+
+        let normal =
+            eval_normal_shanten_from_suits(&suit_entries, z_melds, z_pairs, open_melds_count);
+
+        let mut chitoitsu_pairs = 0;
+        let mut chitoitsu_kinds = 0;
+        let chitoitsu = if is_closed {
+            for &c in &counts[1..=34] {
+                if c >= 2 {
+                    chitoitsu_pairs += 1;
+                    chitoitsu_kinds += 1;
+                } else if c == 1 {
+                    chitoitsu_kinds += 1;
+                }
+            }
+            let mut s = 6 - chitoitsu_pairs;
+            if chitoitsu_kinds < 7 {
+                s += 7 - chitoitsu_kinds;
+            }
+            s
+        } else {
+            99
+        };
+
+        let mut kokushi_kinds = 0;
+        let mut kokushi_has_pair = false;
+        let kokushi = if is_closed {
+            for &idx in &TERMINAL_AND_HONOR_INDICES {
+                let c = counts[idx];
+                if c >= 1 {
+                    kokushi_kinds += 1;
+                }
+                if c >= 2 {
+                    kokushi_has_pair = true;
+                }
+            }
+            13 - kokushi_kinds - if kokushi_has_pair { 1 } else { 0 }
+        } else {
+            99
+        };
+
+        let min_shanten = normal.min(chitoitsu).min(kokushi);
+        let current_result = ShantenResult {
+            min_shanten,
+            normal,
+            chitoitsu,
+            kokushi,
+        };
+
+        Self {
+            counts,
+            open_melds_count,
+            is_closed,
+            suit_keys,
+            suit_entries,
+            z_melds,
+            z_pairs,
+            chitoitsu_pairs,
+            chitoitsu_kinds,
+            kokushi_kinds,
+            kokushi_has_pair,
+            current_result,
+        }
+    }
+
+    /// 牌 tile_idx を1枚仮ツモした後の向聴数を O(1) 差分計算
+    #[inline]
+    pub fn after_draw(&self, tile_idx: usize) -> ShantenResult {
+        let c = self.counts[tile_idx];
+        debug_assert!(c < 4);
+
+        let table = get_suit_table();
+
+        // 1. 通常形
+        let normal = if tile_idx <= 27 {
+            let suit = (tile_idx - 1) / 9;
+            let pos = (tile_idx - 1) % 9;
+            let new_key = self.suit_keys[suit] + POW5[pos];
+            let new_entry = table[new_key];
+
+            let mut suits = self.suit_entries;
+            suits[suit] = new_entry;
+            eval_normal_shanten_from_suits(
+                &suits,
+                self.z_melds,
+                self.z_pairs,
+                self.open_melds_count,
+            )
+        } else {
+            let (new_z_melds, new_z_pairs) = match c {
+                1 => (self.z_melds, self.z_pairs + 1),
+                2 => (self.z_melds + 1, self.z_pairs.saturating_sub(1)),
+                _ => (self.z_melds, self.z_pairs),
+            };
+            eval_normal_shanten_from_suits(
+                &self.suit_entries,
+                new_z_melds,
+                new_z_pairs,
+                self.open_melds_count,
+            )
+        };
+
+        // 2. 七対子
+        let chitoitsu = if self.is_closed {
+            let (new_pairs, new_kinds) = match c {
+                0 => (self.chitoitsu_pairs, self.chitoitsu_kinds + 1),
+                1 => (self.chitoitsu_pairs + 1, self.chitoitsu_kinds),
+                _ => (self.chitoitsu_pairs, self.chitoitsu_kinds),
+            };
+            let mut s = 6 - new_pairs;
+            if new_kinds < 7 {
+                s += 7 - new_kinds;
+            }
+            s
+        } else {
+            99
+        };
+
+        // 3. 国士無双
+        let kokushi = if self.is_closed && is_terminal_or_honor(tile_idx) {
+            let (new_kinds, new_pair) = match c {
+                0 => (self.kokushi_kinds + 1, self.kokushi_has_pair),
+                1 => (self.kokushi_kinds, true),
+                _ => (self.kokushi_kinds, self.kokushi_has_pair),
+            };
+            13 - new_kinds - if new_pair { 1 } else { 0 }
+        } else if self.is_closed {
+            self.current_result.kokushi
+        } else {
+            99
+        };
+
+        let min_shanten = normal.min(chitoitsu).min(kokushi);
+        ShantenResult {
+            min_shanten,
+            normal,
+            chitoitsu,
+            kokushi,
+        }
+    }
+}
+
 /// 面子数・搭子数・雀頭の有無からシャンテン数を評価
 #[inline(always)]
 fn evaluate_normal_shanten(has_head: bool, melds: usize, taatsu: usize, target_melds: usize) -> i8 {
