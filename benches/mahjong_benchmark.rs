@@ -378,11 +378,69 @@ fn bench_shanten_and_acceptance(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_expectation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Hand Discard Evaluation");
+
+    // 1. 一向聴14枚手牌の打牌評価 (平時)
+    let mut iishanten_hand = Hand::new();
+    for &t in &[
+        OneM, TwoM, ThreeM, FourP, FiveP, SixP, TwoS, ThreeS, SevenS, EightS, East, East, West,
+        NineM,
+    ] {
+        iishanten_hand.push(t);
+    }
+    let default_ctx = mahjong::expectation::AnalysisContext::default();
+
+    group.bench_function("evaluate_hand_discards (Iishanten Normal)", |b| {
+        b.iter(|| {
+            mahjong::expectation::evaluate_hand_discards(
+                black_box(&iishanten_hand),
+                black_box(std::option::Option::None),
+                black_box(&default_ctx),
+            )
+        })
+    });
+
+    // 2. 複数リーチ者 & 長い河を持つ局面での打牌評価 (安全度判定ホットパス)
+    let river1 = vec![
+        OneM, TwoM, ThreeM, FourM, East, South, FiveP, NineS, SevenM, TwoP,
+    ];
+    let river2 = vec![
+        TwoP, FiveP, EightP, East, White, OneS, SixS, EightS, NineP, ThreeS,
+    ];
+    let river3 = vec![OneP, FourP, SevenP, North, Green, TwoS, FiveS, West];
+    let player_rivers: Vec<&[mahjong::tile::TileName]> = vec![&[], &river1, &river2, &river3];
+
+    let riichi_ctx = mahjong::expectation::AnalysisContext {
+        turn_number: 14,
+        target_player: 0,
+        riichi_status: [false, true, true, true],
+        player_rivers: &player_rivers,
+        ..Default::default()
+    };
+
+    group.bench_function(
+        "evaluate_hand_discards (Multiple Riichi Long Rivers)",
+        |b| {
+            b.iter(|| {
+                mahjong::expectation::evaluate_hand_discards(
+                    black_box(&iishanten_hand),
+                    black_box(std::option::Option::None),
+                    black_box(&riichi_ctx),
+                )
+            })
+        },
+    );
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_yaku,
     bench_round_init,
     bench_game_simulation,
-    bench_shanten_and_acceptance
+    bench_shanten_and_acceptance,
+    bench_expectation
 );
 criterion_main!(benches);
