@@ -34,6 +34,24 @@ pub struct DiscardAnalysis {
     pub acceptance: AcceptanceResult,
 }
 
+/// 手牌に存在する牌 tile_idx に対し、面子・搭子を形成しうる周辺牌（数牌は同一スーツ内の ±2、字牌は同一牌）のビットマスクを返します。
+#[inline(always)]
+fn tile_neighbor_mask(tile_idx: usize) -> u64 {
+    if tile_idx <= 27 {
+        let suit_start = ((tile_idx - 1) / 9) * 9 + 1;
+        let suit_end = suit_start + 8;
+        let low = tile_idx.saturating_sub(2).max(suit_start);
+        let high = (tile_idx + 2).min(suit_end);
+        let mut mask = 0u64;
+        for idx in low..=high {
+            mask |= 1u64 << idx;
+        }
+        mask
+    } else {
+        1u64 << tile_idx
+    }
+}
+
 /// 手牌の枚数カウント配列から、シャンテン数を1歩進める有効牌（受け入れ牌）を探索します。
 pub fn calculate_acceptance(
     counts: &[u8; 35],
@@ -63,33 +81,9 @@ pub fn calculate_acceptance(
     let mut candidate_mask: u64 = 0;
 
     // 1. 通常形：手牌にある数牌の ±2 以内、および手牌にある字牌
-    for i in 1..=34 {
-        if counts[i] > 0 {
-            if i <= 9 {
-                // 萬子: 1..=9
-                let low = i.saturating_sub(2).max(1);
-                let high = (i + 2).min(9);
-                for idx in low..=high {
-                    candidate_mask |= 1u64 << idx;
-                }
-            } else if i <= 18 {
-                // 筒子: 10..=18
-                let low = i.saturating_sub(2).max(10);
-                let high = (i + 2).min(18);
-                for idx in low..=high {
-                    candidate_mask |= 1u64 << idx;
-                }
-            } else if i <= 27 {
-                // 索子: 19..=27
-                let low = i.saturating_sub(2).max(19);
-                let high = (i + 2).min(27);
-                for idx in low..=high {
-                    candidate_mask |= 1u64 << idx;
-                }
-            } else {
-                // 字牌: 28..=34
-                candidate_mask |= 1u64 << i;
-            }
+    for (i, &c) in counts.iter().enumerate().take(35).skip(1) {
+        if c > 0 {
+            candidate_mask |= tile_neighbor_mask(i);
         }
     }
 

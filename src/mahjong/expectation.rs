@@ -50,33 +50,16 @@ pub struct SafetyFeatures {
 impl SafetyFeatures {
     /// 対局コンテキストから安全度特徴量を事前構築
     pub fn from_context(ctx: &AnalysisContext<'_>) -> Self {
-        let mut riichi_opponents = [false; 4];
         let mut riichi_player_count = 0;
-        for p in 0..4 {
-            if p != ctx.target_player && ctx.riichi_status[p] {
-                riichi_opponents[p] = true;
-                riichi_player_count += 1;
-            }
-        }
-
-        if riichi_player_count == 0 {
-            return Self {
-                has_riichi_threat: false,
-                riichi_player_count: 0,
-                genbutsu_all_mask: 0,
-                genbutsu_any_mask: 0,
-                riichi_river_ranks: [0; 3],
-            };
-        }
-
         let mut genbutsu_all_mask = !0u64; // 全ビット1で開始し、各リーチ者の現物マスクとAND
         let mut genbutsu_any_mask = 0u64; // 各リーチ者の現物マスクとOR
         let mut riichi_river_ranks = [0u16; 3];
 
-        for (p, &is_riichi) in riichi_opponents.iter().enumerate() {
-            if !is_riichi {
+        for (p, &is_riichi) in ctx.riichi_status.iter().enumerate() {
+            if p == ctx.target_player || !is_riichi {
                 continue;
             }
+            riichi_player_count += 1;
 
             if let Some(river) = ctx.player_rivers.get(p) {
                 let mut player_mask = 0u64;
@@ -106,6 +89,16 @@ impl SafetyFeatures {
                 // is_genbutsu_all は false になる
                 genbutsu_all_mask = 0;
             }
+        }
+
+        if riichi_player_count == 0 {
+            return Self {
+                has_riichi_threat: false,
+                riichi_player_count: 0,
+                genbutsu_all_mask: 0,
+                genbutsu_any_mask: 0,
+                riichi_river_ranks: [0; 3],
+            };
         }
 
         Self {
