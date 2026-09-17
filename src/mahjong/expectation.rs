@@ -2,6 +2,7 @@ use crate::acceptance::calculate_acceptance;
 use crate::dora::count_dora;
 use crate::hand::Hand;
 use crate::score::{calculate_hand_fu, calculate_score};
+use crate::shanten::calculate_shanten_from_counts;
 use crate::tile::TileName;
 use crate::yaku::{judge_yaku_set, WinContext, YakuId, ALL_YAKU};
 use arrayvec::ArrayVec;
@@ -29,6 +30,92 @@ pub struct ValueMetric {
 pub struct SafetyMetric {
     pub risk_score: f64,
     pub is_safe: bool,
+}
+
+/// リーチおよび河状況から事前集計された安全度判定用特徴量 (Issue #104)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SafetyFeatures {
+    /// 相手プレイヤーにリーチ者が1人以上存在するか
+    pub has_riichi_threat: bool,
+    /// リーチ者数
+    pub riichi_player_count: usize,
+    /// 全リーチ者に対して現物である牌のビットマスク (1 << tile_idx)
+    pub genbutsu_all_mask: u64,
+    /// いずれかのリーチ者に対して現物である牌のビットマスク (1 << tile_idx)
+    pub genbutsu_any_mask: u64,
+    /// 各スーツ (0:萬, 1:筒, 2:索) における全リーチ者の河ランクビットマスク (1 << rank)
+    pub riichi_river_ranks: [u16; 3],
+}
+
+impl SafetyFeatures {
+    /// 対局コンテキストから安全度特徴量を事前構築
+    pub fn from_context(ctx: &AnalysisContext<'_>) -> Self {
+        let mut riichi_opponents = [false; 4];
+        let mut riichi_player_count = 0;
+        for p in 0..4 {
+            if p != ctx.target_player && ctx.riichi_status[p] {
+                riichi_opponents[p] = true;
+                riichi_player_count += 1;
+            }
+        }
+
+        if riichi_player_count == 0 {
+            return Self {
+                has_riichi_threat: false,
+                riichi_player_count: 0,
+                genbutsu_all_mask: 0,
+                genbutsu_any_mask: 0,
+                riichi_river_ranks: [0; 3],
+            };
+        }
+
+        let mut genbutsu_all_mask = !0u64; // 全ビット1で開始し、各リーチ者の現物マスクとAND
+        let mut genbutsu_any_mask = 0u64; // 各リーチ者の現物マスクとOR
+        let mut riichi_river_ranks = [0u16; 3];
+
+        for (p, &is_riichi) in riichi_opponents.iter().enumerate() {
+            if !is_riichi {
+                continue;
+            }
+
+            if let Some(river) = ctx.player_rivers.get(p) {
+                let mut player_mask = 0u64;
+                for &r_tile in *river {
+                    let r_idx = r_tile as usize;
+                    if (1..=34).contains(&r_idx) {
+                        player_mask |= 1u64 << r_idx;
+
+                        let (r_suit, r_rank) = if (1..=9).contains(&r_idx) {
+                            (0, r_idx)
+                        } else if (10..=18).contains(&r_idx) {
+                            (1, r_idx - 9)
+                        } else if (19..=27).contains(&r_idx) {
+                            (2, r_idx - 18)
+                        } else {
+                            (99, 99)
+                        };
+                        if r_suit < 3 {
+                            riichi_river_ranks[r_suit] |= 1 << r_rank;
+                        }
+                    }
+                }
+                genbutsu_all_mask &= player_mask;
+                genbutsu_any_mask |= player_mask;
+            } else {
+                // 河が存在しない（河欠損）場合、そのリーチ者の現物は存在しないため
+                // is_genbutsu_all は false になる
+                genbutsu_all_mask = 0;
+            }
+        }
+
+        Self {
+            has_riichi_threat: true,
+            riichi_player_count,
+            genbutsu_all_mask,
+            genbutsu_any_mask,
+            riichi_river_ranks,
+        }
+    }
 }
 
 /// 打牌候補の総合評価
@@ -107,9 +194,8 @@ pub fn evaluate_hand_discards(
     let remaining_turns = (18usize.saturating_sub(ctx.turn_number)).max(1) as f64;
     let wall_remaining = (ctx.remaining_wall_tiles).max(1) as f64;
 
-    // 相手にリーチ者がいる場合は放銃失点ペナルティを重くし（ベタオリの優位性）、
-    // リーチ者がいない平時は手作りを阻害しないようペナルティを抑制
-    let has_riichi_threat = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
+    let safety_features = SafetyFeatures::from_context(ctx);
+    let has_riichi_threat = safety_features.has_riichi_threat;
     let deal_loss_penalty = if has_riichi_threat {
         let dealer_riichi = (0..4)
             .any(|p| p != ctx.target_player && ctx.riichi_status[p] && ctx.player_is_dealer[p]);
@@ -162,8 +248,13 @@ pub fn evaluate_hand_discards(
                 ctx,
             );
 
-            // 3. 安全度評価（現物・スジ・生牌・カベ・リーチ状況を反映）
-            let safety = evaluate_tile_safety(discard_tile, ctx, &base_visible);
+            // 3. 安全度評価（事前集計された SafetyFeatures で O(1) 判定）
+            let safety = evaluate_tile_safety_with_features(
+                discard_tile,
+                ctx,
+                &base_visible,
+                &safety_features,
+            );
 
             // 4. 総合期待値 (EV)
             let ev = win_probability * value.expected_score - safety.risk_score * deal_loss_penalty;
@@ -461,18 +552,21 @@ fn estimate_hand_value(
         for &adv_tile in accepted_tiles.iter().take(sample_count) {
             working[adv_tile as usize] += 1;
 
-            // テンパイになる打牌を探す
+            // テンパイになる打牌を探す（Fast Check: calculate_shanten_from_counts でテンパイ判定し、成立時のみ待ち牌を取得）
             let mut best_move: Option<(usize, TileName)> = None;
             for d in 1..=34 {
                 if working[d] == 0 {
                     continue;
                 }
                 working[d] -= 1;
-                let sub_acc = calculate_acceptance(&working, open_melds.len(), None);
-                if sub_acc.current_shanten == 0 && !sub_acc.waits.is_empty() {
-                    best_move = Some((d, sub_acc.waits[0].tile));
-                    working[d] += 1;
-                    break;
+                let res = calculate_shanten_from_counts(&working, open_melds.len());
+                if res.min_shanten == 0 {
+                    let sub_acc = calculate_acceptance(&working, open_melds.len(), None);
+                    if !sub_acc.waits.is_empty() {
+                        best_move = Some((d, sub_acc.waits[0].tile));
+                        working[d] += 1;
+                        break;
+                    }
                 }
                 working[d] += 1;
             }
@@ -599,37 +693,32 @@ fn estimate_hand_value(
     }
 }
 
-/// 牌の安全度（現物・スジ・生牌・カベ・リーチ状況）を動的に評価 (Issue #78)
+/// 牌の安全度（現物・スジ・生牌・カベ・リーチ状況）を動的に評価 (Issue #78, 後方互換ラッパー)
 pub fn evaluate_tile_safety(
     tile: TileName,
     ctx: &AnalysisContext<'_>,
     visible_counts: &[u8; 35],
 ) -> SafetyMetric {
+    let features = SafetyFeatures::from_context(ctx);
+    evaluate_tile_safety_with_features(tile, ctx, visible_counts, &features)
+}
+
+/// 事前計算された SafetyFeatures を用いて牌の安全度を O(1) で高速評価 (Issue #104)
+pub fn evaluate_tile_safety_with_features(
+    tile: TileName,
+    ctx: &AnalysisContext<'_>,
+    visible_counts: &[u8; 35],
+    features: &SafetyFeatures,
+) -> SafetyMetric {
     let idx = tile as usize;
 
-    // 他家にリーチ者がいるか？
-    let has_riichi_opponents = (0..4).any(|p| p != ctx.target_player && ctx.riichi_status[p]);
-
-    if has_riichi_opponents {
+    if features.has_riichi_threat {
         // --- リーチ者がいる状況での安全度評価 ---
 
         // 1. 現物判定: 全リーチ者の河にこの牌が含まれているか
-        let mut is_genbutsu_all = true;
-        let mut is_genbutsu_any = false;
-
-        for p in 0..4 {
-            if p != ctx.target_player && ctx.riichi_status[p] {
-                if let Some(river) = ctx.player_rivers.get(p) {
-                    if river.contains(&tile) {
-                        is_genbutsu_any = true;
-                    } else {
-                        is_genbutsu_all = false;
-                    }
-                } else {
-                    is_genbutsu_all = false;
-                }
-            }
-        }
+        let tile_mask = 1u64 << idx;
+        let is_genbutsu_all = (features.genbutsu_all_mask & tile_mask) != 0;
+        let is_genbutsu_any = (features.genbutsu_any_mask & tile_mask) != 0;
 
         // 全リーチ者に対して現物であれば完全安全
         if is_genbutsu_all && is_genbutsu_any {
@@ -677,30 +766,8 @@ pub fn evaluate_tile_safety(
             (2, idx - 18)
         };
 
-        // リーチ者の河にある同色の数字を収集（rank 1-9 → bit 1-9 の u16 ビットマスク）
-        let mut riichi_river_ranks = 0u16;
-        for p in 0..4 {
-            if p != ctx.target_player && ctx.riichi_status[p] {
-                if let Some(river) = ctx.player_rivers.get(p) {
-                    for &r_tile in *river {
-                        let r_idx = r_tile as usize;
-                        let (r_suit, r_rank) = if (1..=9).contains(&r_idx) {
-                            (0, r_idx)
-                        } else if (10..=18).contains(&r_idx) {
-                            (1, r_idx - 9)
-                        } else if (19..=27).contains(&r_idx) {
-                            (2, r_idx - 18)
-                        } else {
-                            (99, 99)
-                        };
-                        if r_suit == suit {
-                            riichi_river_ranks |= 1 << r_rank;
-                        }
-                    }
-                }
-            }
-        }
-
+        // リーチ者の河にある同色の数字（事前集計済みビットマスク）
+        let riichi_river_ranks = features.riichi_river_ranks[suit];
         let has_rank = |r: usize| (riichi_river_ranks & (1 << r)) != 0;
 
         // スジ判定

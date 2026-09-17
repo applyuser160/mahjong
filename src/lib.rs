@@ -60,7 +60,8 @@ pub use call_advisor::{CallAction, CallAdvice, CallAdvisor, CallChoice, CallReco
 pub use dora::{count_dora, indicator_to_dora};
 pub use drill::{DrillAnswerResult, DrillEngine, DrillProblem, DrillSession, DrillSessionReport};
 pub use expectation::{
-    evaluate_hand_discards, evaluate_standing_hand, AnalysisContext, CandidateEvaluation,
+    evaluate_hand_discards, evaluate_standing_hand, evaluate_tile_safety,
+    evaluate_tile_safety_with_features, AnalysisContext, CandidateEvaluation, SafetyFeatures,
     SafetyMetric, SpeedMetric, StandingHandEvaluation, ValueMetric,
 };
 pub use explanation::Explainer;
