@@ -8,7 +8,7 @@ use mahjong::round::Round;
 use mahjong::shanten::calculate_shanten;
 use mahjong::tile::TileName::*;
 use mahjong::wall::Wall;
-use mahjong::yaku::{judge_yaku, WinContext};
+use mahjong::yaku::{judge_yaku, judge_yaku_set, WinContext};
 
 fn bench_yaku(c: &mut Criterion) {
     let mut group = c.benchmark_group("Yaku Evaluation");
@@ -150,6 +150,93 @@ fn bench_yaku(c: &mut Criterion) {
                 black_box(&no_yaku_hand.counts),
                 black_box(&[] as &[Meld]),
                 black_box(no_yaku_ctx),
+            )
+        })
+    });
+
+    group.finish();
+}
+
+fn bench_yaku_set(c: &mut Criterion) {
+    let mut group = c.benchmark_group("YakuSet Evaluation (Zero-alloc)");
+
+    let complex_tiles = vec![
+        OneM, OneM, OneM, TwoM, ThreeM, FourM, FiveM, SixM, SevenM, EightM, NineM, NineM, NineM,
+    ];
+    let complex_win_tile = OneM;
+    let mut complex_hand = Hand::new();
+    for t in complex_tiles {
+        complex_hand.push(t);
+    }
+    complex_hand.push(complex_win_tile);
+
+    let complex_ctx = WinContext {
+        is_closed: true,
+        is_tsumo: true,
+        win_tile: Some(complex_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("judge_yaku_set (Complex Chinitsu)", |b| {
+        b.iter(|| {
+            judge_yaku_set(
+                black_box(&complex_hand.counts),
+                black_box(&[] as &[Meld]),
+                black_box(complex_ctx),
+            )
+        })
+    });
+
+    let sanshoku_tiles = vec![
+        OneM, TwoM, ThreeM, OneP, TwoP, ThreeP, OneS, TwoS, ThreeS, East, East, FourP, FiveP,
+    ];
+    let sanshoku_win_tile = SixP;
+    let mut sanshoku_hand = Hand::new();
+    for t in sanshoku_tiles {
+        sanshoku_hand.push(t);
+    }
+    sanshoku_hand.push(sanshoku_win_tile);
+
+    let sanshoku_ctx = WinContext {
+        is_closed: true,
+        is_tsumo: true,
+        win_tile: Some(sanshoku_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("judge_yaku_set (Sanshoku & Pinfu)", |b| {
+        b.iter(|| {
+            judge_yaku_set(
+                black_box(&sanshoku_hand.counts),
+                black_box(&[] as &[Meld]),
+                black_box(sanshoku_ctx),
+            )
+        })
+    });
+
+    let worst_case_tiles = vec![
+        TwoP, TwoP, ThreeP, ThreeP, FourP, FourP, FiveP, FiveP, SixP, SixP, SevenP, SevenP, EightP,
+    ];
+    let worst_case_win_tile = EightP;
+    let mut worst_case_hand = Hand::new();
+    for t in worst_case_tiles {
+        worst_case_hand.push(t);
+    }
+    worst_case_hand.push(worst_case_win_tile);
+
+    let worst_case_ctx = WinContext {
+        is_closed: true,
+        is_tsumo: true,
+        win_tile: Some(worst_case_win_tile),
+        ..WinContext::default()
+    };
+
+    group.bench_function("judge_yaku_set (Worst Case Branching)", |b| {
+        b.iter(|| {
+            judge_yaku_set(
+                black_box(&worst_case_hand.counts),
+                black_box(&[] as &[Meld]),
+                black_box(worst_case_ctx),
             )
         })
     });
@@ -438,6 +525,7 @@ fn bench_expectation(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_yaku,
+    bench_yaku_set,
     bench_round_init,
     bench_game_simulation,
     bench_shanten_and_acceptance,

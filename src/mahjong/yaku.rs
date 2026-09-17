@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+
+use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 
 use crate::tile::TileName;
 
@@ -683,8 +686,8 @@ pub enum MeldKind {
 /// 手牌のパターン（雀頭と面子の組み合わせ）を表す構造体です。
 pub struct HandPattern {
     pub pair: TileName,
-    pub melds: Vec<MeldKind>,
-    pub open_melds: Vec<MeldKind>,
+    pub melds: ArrayVec<MeldKind, 4>,
+    pub open_melds: ArrayVec<MeldKind, 4>,
 }
 
 impl HandPattern {
@@ -742,8 +745,8 @@ pub fn get_hand_patterns(
     closed_counts: &[u8; 35],
     open_melds_input: &[crate::hand::Meld],
 ) -> Vec<HandPattern> {
-    let mut open_melds = Vec::new();
-    let mut closed_melds = Vec::new();
+    let mut open_melds = ArrayVec::<MeldKind, 4>::new();
+    let mut closed_melds = ArrayVec::<MeldKind, 4>::new();
 
     open_melds_input.iter().for_each(|meld| match meld {
         crate::hand::Meld::Chii { called, .. } => open_melds.push(MeldKind::Sequence(*called)),
@@ -756,7 +759,7 @@ pub fn get_hand_patterns(
         }
     });
 
-    generate_patterns(closed_counts, &open_melds, &closed_melds)
+    generate_patterns(closed_counts, &open_melds, &closed_melds).into_vec()
 }
 
 pub fn judge_yaku_set(
@@ -821,8 +824,8 @@ pub fn judge_yaku_set(
         }
     }
 
-    let mut open_melds = Vec::new();
-    let mut closed_melds = Vec::new();
+    let mut open_melds = ArrayVec::<MeldKind, 4>::new();
+    let mut closed_melds = ArrayVec::<MeldKind, 4>::new();
     let mut kan_count = 0;
 
     open_melds_input.iter().for_each(|meld| match meld {
@@ -1001,9 +1004,9 @@ fn generate_patterns(
     counts: &[u8; 35],
     open_melds: &[MeldKind],
     closed_melds: &[MeldKind],
-) -> Vec<HandPattern> {
-    let mut patterns = Vec::new();
-    let mut current_melds = Vec::new();
+) -> SmallVec<[HandPattern; 8]> {
+    let mut patterns = SmallVec::new();
+    let mut current_melds = ArrayVec::<MeldKind, 4>::new();
 
     for i in 1..counts.len() {
         if counts[i] < 2 {
@@ -1028,8 +1031,8 @@ fn generate_patterns(
 
 fn search_melds(
     counts: &mut [u8; 35],
-    melds: &mut Vec<MeldKind>,
-    patterns: &mut Vec<HandPattern>,
+    melds: &mut ArrayVec<MeldKind, 4>,
+    patterns: &mut SmallVec<[HandPattern; 8]>,
     pair: TileName,
     open_melds: &[MeldKind],
     closed_melds: &[MeldKind],
@@ -1041,12 +1044,21 @@ fn search_melds(
         .position(|(_, &c)| c > 0)
         .map(|p| p + 1)
     else {
-        let mut all_melds = closed_melds.to_vec();
-        all_melds.extend_from_slice(melds);
+        let mut all_melds = ArrayVec::<MeldKind, 4>::new();
+        for &m in closed_melds {
+            all_melds.push(m);
+        }
+        for &m in melds.iter() {
+            all_melds.push(m);
+        }
+        let mut open_melds_arr = ArrayVec::<MeldKind, 4>::new();
+        for &m in open_melds {
+            open_melds_arr.push(m);
+        }
         patterns.push(HandPattern {
             pair,
             melds: all_melds,
-            open_melds: open_melds.to_vec(),
+            open_melds: open_melds_arr,
         });
         return;
     };
@@ -1096,13 +1108,16 @@ fn is_tanyao(counts: &[u8; 35]) -> bool {
 
 fn has_ipeiko(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
-        let mut sequences: HashMap<TileName, usize> = HashMap::new();
+        let mut seq_counts = [0u8; 35];
         for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
-                *sequences.entry(*tile).or_default() += 1;
+                let idx = *tile as usize;
+                if idx < 35 {
+                    seq_counts[idx] += 1;
+                }
             }
         }
-        sequences.values().any(|v| *v >= 2)
+        seq_counts.iter().any(|&v| v >= 2)
     })
 }
 
@@ -1114,14 +1129,17 @@ fn has_ryanpeiko(patterns: &[HandPattern]) -> bool {
         {
             return false;
         }
-        let mut sequences: HashMap<TileName, usize> = HashMap::new();
+        let mut seq_counts = [0u8; 35];
         for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
-                *sequences.entry(*tile).or_default() += 1;
+                let idx = *tile as usize;
+                if idx < 35 {
+                    seq_counts[idx] += 1;
+                }
             }
         }
         let mut pairs = 0;
-        for value in sequences.values() {
+        for &value in &seq_counts {
             pairs += value / 2;
         }
         pairs >= 2
@@ -1325,32 +1343,36 @@ fn is_chantaiyao(patterns: &[HandPattern]) -> bool {
 
 fn has_sanshoku_doujun(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
-        let mut map: HashMap<usize, HashSet<usize>> = HashMap::new();
+        let mut suit_masks = [0u8; 8];
         for meld in pattern.all_melds() {
             if let MeldKind::Sequence(tile) = meld {
                 if let Some((suit, rank)) = is_number_tile(*tile) {
-                    map.entry(rank).or_default().insert(suit);
+                    if (1..=7).contains(&rank) && suit < 3 {
+                        suit_masks[rank] |= 1 << suit;
+                    }
                 }
             }
         }
-        map.values().any(|set| set.len() == 3)
+        suit_masks[1..=7].iter().any(|&m| (m & 0b111) == 0b111)
     })
 }
 
 fn has_sanshoku_doukou(patterns: &[HandPattern]) -> bool {
     patterns.iter().any(|pattern| {
-        let mut map: HashMap<usize, HashSet<usize>> = HashMap::new();
+        let mut suit_masks = [0u8; 10];
         for meld in pattern.all_melds() {
             match meld {
                 MeldKind::Triplet(tile) | MeldKind::Quad(tile) => {
                     if let Some((suit, rank)) = is_number_tile(*tile) {
-                        map.entry(rank).or_default().insert(suit);
+                        if (1..=9).contains(&rank) && suit < 3 {
+                            suit_masks[rank] |= 1 << suit;
+                        }
                     }
                 }
                 _ => {}
             }
         }
-        map.values().any(|set| set.len() == 3)
+        suit_masks[1..=9].iter().any(|&m| (m & 0b111) == 0b111)
     })
 }
 
