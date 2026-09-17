@@ -261,15 +261,9 @@ pub fn eval_normal_shanten_from_suits(
     best_shanten
 }
 
-/// 一般手（4面子1雀頭）の向聴数を計算します。
-/// 和了形は -1、テンパイは 0。
-pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
-    let table = get_suit_table();
-    let m_entry = table[encode_suit_key(&counts[1..=9])];
-    let p_entry = table[encode_suit_key(&counts[10..=18])];
-    let s_entry = table[encode_suit_key(&counts[19..=27])];
-
-    // 字牌 (28..=34) の刻子・対子を集計
+/// 字牌 (28..=34) の刻子・対子を集計します。
+#[inline(always)]
+pub fn count_honor_melds_and_pairs(counts: &[u8; 35]) -> (usize, usize) {
     let mut z_melds = 0;
     let mut z_pairs = 0;
     for &c in &counts[28..=34] {
@@ -279,6 +273,18 @@ pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i
             z_pairs += 1;
         }
     }
+    (z_melds, z_pairs)
+}
+
+/// 一般手（4面子1雀頭）の向聴数を計算します。
+/// 和了形は -1、テンパイは 0。
+pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
+    let table = get_suit_table();
+    let m_entry = table[encode_suit_key(&counts[1..=9])];
+    let p_entry = table[encode_suit_key(&counts[10..=18])];
+    let s_entry = table[encode_suit_key(&counts[19..=27])];
+
+    let (z_melds, z_pairs) = count_honor_melds_and_pairs(counts);
 
     eval_normal_shanten_from_suits(
         &[m_entry, p_entry, s_entry],
@@ -321,54 +327,46 @@ impl<'a> ShantenState<'a> {
         let suit_keys = [m_key, p_key, s_key];
         let suit_entries = [table[m_key], table[p_key], table[s_key]];
 
-        let mut z_melds = 0;
-        let mut z_pairs = 0;
-        for &c in &counts[28..=34] {
-            if c >= 3 {
-                z_melds += 1;
-            } else if c == 2 {
-                z_pairs += 1;
-            }
-        }
+        let (z_melds, z_pairs) = count_honor_melds_and_pairs(counts);
 
         let normal =
             eval_normal_shanten_from_suits(&suit_entries, z_melds, z_pairs, open_melds_count);
 
-        let mut chitoitsu_pairs = 0;
-        let mut chitoitsu_kinds = 0;
-        let chitoitsu = if is_closed {
+        let (chitoitsu, chitoitsu_pairs, chitoitsu_kinds) = if is_closed {
+            let mut pairs = 0;
+            let mut kinds = 0;
             for &c in &counts[1..=34] {
                 if c >= 2 {
-                    chitoitsu_pairs += 1;
-                    chitoitsu_kinds += 1;
+                    pairs += 1;
+                    kinds += 1;
                 } else if c == 1 {
-                    chitoitsu_kinds += 1;
+                    kinds += 1;
                 }
             }
-            let mut s = 6 - chitoitsu_pairs;
-            if chitoitsu_kinds < 7 {
-                s += 7 - chitoitsu_kinds;
+            let mut s = 6 - pairs;
+            if kinds < 7 {
+                s += 7 - kinds;
             }
-            s
+            (s, pairs, kinds)
         } else {
-            99
+            (99, 0, 0)
         };
 
-        let mut kokushi_kinds = 0;
-        let mut kokushi_has_pair = false;
-        let kokushi = if is_closed {
+        let (kokushi, kokushi_kinds, kokushi_has_pair) = if is_closed {
+            let mut kinds = 0;
+            let mut has_pair = false;
             for &idx in &TERMINAL_AND_HONOR_INDICES {
                 let c = counts[idx];
                 if c >= 1 {
-                    kokushi_kinds += 1;
+                    kinds += 1;
                 }
                 if c >= 2 {
-                    kokushi_has_pair = true;
+                    has_pair = true;
                 }
             }
-            13 - kokushi_kinds - if kokushi_has_pair { 1 } else { 0 }
+            (13 - kinds - if has_pair { 1 } else { 0 }, kinds, has_pair)
         } else {
-            99
+            (99, 0, false)
         };
 
         let min_shanten = normal.min(chitoitsu).min(kokushi);
