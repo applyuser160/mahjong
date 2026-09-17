@@ -26,6 +26,70 @@ impl Default for SuitEntry {
     }
 }
 
+/// 30bit にパックされたスーツ別面子・搭子数エントリ (4バイト)
+///
+/// 面子数 m (0..=4) に対する搭子数を min(taatsu, 4 - m) に丸め、
+/// -1..=4 の 6 値（3bit: 0=作成不可, 1..=5 = 搭子数 0..=4）として 10 セル（計 30bit）を保持。
+/// アライメントを 1 に保つため [u8; 4] の透過ラッパーとして定義。
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct PackedSuitEntry(pub [u8; 4]);
+
+impl PackedSuitEntry {
+    /// 32bit 整数値を取得
+    #[inline(always)]
+    pub fn as_u32(self) -> u32 {
+        u32::from_le_bytes(self.0)
+    }
+
+    /// 30bit のパック値から SuitEntry をブランチレスに復元
+    #[inline(always)]
+    pub fn unpack(self) -> SuitEntry {
+        let val = self.as_u32();
+        #[inline(always)]
+        fn decode(val: u32, shift: u32) -> i8 {
+            (((val >> shift) & 0b111) as i8) - 1
+        }
+
+        SuitEntry {
+            no_head: [
+                decode(val, 0),
+                decode(val, 3),
+                decode(val, 6),
+                decode(val, 9),
+                decode(val, 12),
+            ],
+            with_head: [
+                decode(val, 15),
+                decode(val, 18),
+                decode(val, 21),
+                decode(val, 24),
+                decode(val, 27),
+            ],
+        }
+    }
+
+    /// SuitEntry から PackedSuitEntry を生成
+    #[inline(always)]
+    pub fn pack(entry: &SuitEntry) -> Self {
+        let encode = |val: i8, m: usize| -> u32 {
+            if val < 0 {
+                0
+            } else {
+                let clamped = (val as usize).min(4 - m) as u32;
+                clamped + 1
+            }
+        };
+
+        let mut packed = 0u32;
+        for m in 0..5 {
+            packed |= encode(entry.no_head[m], m) << (m * 3);
+            packed |= encode(entry.with_head[m], m) << (15 + m * 3);
+        }
+        Self(packed.to_le_bytes())
+    }
+}
+
 /// 9要素の牌カウントスライスから 5進数（Base-5）エンコーディングキーを算出します。
 /// 各牌の枚数を最大4枚に飽和（`min(4)`）させるため、同一牌が5枚以上の異常値でも
 /// 配列境界外アクセス（panic）が発生せず安全に `0 <= key < 1,953,125` のキーを返します。
@@ -41,26 +105,36 @@ pub fn encode_suit_key(counts: &[u8]) -> usize {
     key
 }
 
-// build.rs で生成された 1,953,125 * 10 バイトのバイナリを埋め込み
+// build.rs で生成された 1,953,125 * 4 バイト (約 7.45 MiB) のバイナリを埋め込み
 static RAW_TABLE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/suit_table.bin"));
 
-/// ルックアップテーブルの参照を取得します（静的埋め込みのため初期化コストは 0.00ms）。
+/// パック済みルックアップテーブルの参照を取得します（静的埋め込みのため初期化コストは 0.00ms）。
 #[inline(always)]
-pub fn get_suit_table() -> &'static [SuitEntry] {
-    // SuitEntry は [i8; 5] が2つの 10バイト構造体で、アライメントは 1 (パディングなし)。
-    // そのため未定義動作なく安全に &[SuitEntry] にキャスト可能。
+pub fn get_packed_suit_table() -> &'static [PackedSuitEntry] {
     unsafe {
         std::slice::from_raw_parts(
-            RAW_TABLE_BYTES.as_ptr() as *const SuitEntry,
+            RAW_TABLE_BYTES.as_ptr() as *const PackedSuitEntry,
             SUIT_PATTERN_COUNT,
         )
     }
 }
 
+/// 指定したキーの SuitEntry を取得します（30bit から高速アンパック）。
+#[inline(always)]
+pub fn get_suit_entry(key: usize) -> SuitEntry {
+    get_packed_suit_table()[key].unpack()
+}
+
+/// 後方互換性用テーブル参照関数
+#[inline(always)]
+pub fn get_suit_table() -> &'static [PackedSuitEntry] {
+    get_packed_suit_table()
+}
+
 /// ルックアップテーブルの先行ウォームアップ（後方互換性のため提供）。
 #[inline(always)]
 pub fn warmup_suit_table() {
-    let _ = get_suit_table();
+    let _ = get_packed_suit_table();
 }
 
 #[cfg(test)]
@@ -100,13 +174,12 @@ mod tests {
 
     #[test]
     fn test_suit_entry_pure_sequence() {
-        let table = get_suit_table();
         // 123m (1m:1, 2m:1, 3m:1)
         let mut counts = [0u8; 9];
         counts[0] = 1;
         counts[1] = 1;
         counts[2] = 1;
-        let entry = table[encode_suit_key(&counts)];
+        let entry = get_suit_entry(encode_suit_key(&counts));
         // 雀頭なし: m=1 のとき t=0, m=0 のとき t=1 (12m/23m 等の搭子)
         assert_eq!(entry.no_head[1], 0);
         assert_eq!(entry.no_head[0], 1);
@@ -116,12 +189,11 @@ mod tests {
 
     #[test]
     fn test_suit_entry_triplet_and_pair() {
-        let table = get_suit_table();
         // 11122m (1m:3, 2m:2)
         let mut counts = [0u8; 9];
         counts[0] = 3;
         counts[1] = 2;
-        let entry = table[encode_suit_key(&counts)];
+        let entry = get_suit_entry(encode_suit_key(&counts));
         // 雀頭なし: 111m(刻子1) + 22m(対子1) -> m=1, t=1
         assert_eq!(entry.no_head[1], 1);
         // 雀頭あり: 22mを雀頭固定 -> 111m(刻子1) -> m=1, t=0
@@ -129,10 +201,43 @@ mod tests {
     }
 
     #[test]
+    fn test_packed_suit_entry_roundtrip() {
+        let original = SuitEntry {
+            no_head: [3, 2, 1, 0, -1],
+            with_head: [-1, 2, 1, 0, -1],
+        };
+        let packed = PackedSuitEntry::pack(&original);
+        let unpacked = packed.unpack();
+        // m=0 のとき 3 <= 4 なので 3
+        assert_eq!(unpacked.no_head[0], 3);
+        assert_eq!(unpacked.no_head[1], 2);
+        assert_eq!(unpacked.no_head[2], 1);
+        assert_eq!(unpacked.no_head[3], 0);
+        assert_eq!(unpacked.no_head[4], -1);
+        assert_eq!(unpacked.with_head[0], -1);
+        assert_eq!(unpacked.with_head[1], 2);
+        assert_eq!(unpacked.with_head[2], 1);
+        assert_eq!(unpacked.with_head[3], 0);
+        assert_eq!(unpacked.with_head[4], -1);
+
+        // 4 - m を超える搭子数が正しく丸められることの検証 (例: m=3 で taatsu=2 -> min(2, 4-3) = 1)
+        let excess = SuitEntry {
+            no_head: [5, 5, 5, 5, 5],
+            with_head: [5, 5, 5, 5, 5],
+        };
+        let packed_excess = PackedSuitEntry::pack(&excess);
+        let unpacked_excess = packed_excess.unpack();
+        for m in 0..5 {
+            assert_eq!(unpacked_excess.no_head[m], (4 - m) as i8);
+            assert_eq!(unpacked_excess.with_head[m], (4 - m) as i8);
+        }
+    }
+
+    #[test]
     fn test_cold_start_latency() {
         // 初回呼び出しでも 1ms 未満（実際は数ナノ秒）で即座に応答することを検証
         let start = std::time::Instant::now();
-        let table = get_suit_table();
+        let table = get_packed_suit_table();
         let elapsed = start.elapsed();
         assert_eq!(table.len(), SUIT_PATTERN_COUNT);
         assert!(

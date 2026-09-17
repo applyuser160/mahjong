@@ -116,6 +116,31 @@ fn compute_suit_entry(counts: &mut [u8; 9]) -> SuitEntry {
     SuitEntry { no_head, with_head }
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Default)]
+struct PackedSuitEntry([u8; 4]);
+
+impl PackedSuitEntry {
+    #[inline(always)]
+    fn pack(entry: &SuitEntry) -> Self {
+        let encode = |val: i8, m: usize| -> u32 {
+            if val < 0 {
+                0
+            } else {
+                let clamped = (val as usize).min(4 - m) as u32;
+                clamped + 1
+            }
+        };
+
+        let mut packed = 0u32;
+        for m in 0..5 {
+            packed |= encode(entry.no_head[m], m) << (m * 3);
+            packed |= encode(entry.with_head[m], m) << (15 + m * 3);
+        }
+        Self(packed.to_le_bytes())
+    }
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -123,18 +148,18 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("suit_table.bin");
 
     // すでに存在していればスキップ（サイズが正しい場合）
-    let expected_len = SUIT_PATTERN_COUNT * std::mem::size_of::<SuitEntry>();
+    let expected_len = SUIT_PATTERN_COUNT * std::mem::size_of::<PackedSuitEntry>();
     if let Ok(metadata) = std::fs::metadata(&dest_path) {
         if metadata.len() == expected_len as u64 {
             return;
         }
     }
 
-    let mut table = vec![SuitEntry::default(); SUIT_PATTERN_COUNT];
+    let mut table = vec![PackedSuitEntry::default(); SUIT_PATTERN_COUNT];
 
     // 最上位桁 c8 (5^8 = 390,625) の 5分割で並列処理
     let chunk_size = SUIT_PATTERN_COUNT / 5;
-    let chunks: Vec<&mut [SuitEntry]> = table.chunks_mut(chunk_size).collect();
+    let chunks: Vec<&mut [PackedSuitEntry]> = table.chunks_mut(chunk_size).collect();
 
     std::thread::scope(|s| {
         for (c8, chunk) in chunks.into_iter().enumerate() {
@@ -147,10 +172,10 @@ fn main() {
                     sum: u8,
                     local_key: usize,
                     counts: &mut [u8; 9],
-                    chunk: &mut [SuitEntry],
+                    chunk: &mut [PackedSuitEntry],
                 ) {
                     if idx == 8 {
-                        chunk[local_key] = compute_suit_entry(counts);
+                        chunk[local_key] = PackedSuitEntry::pack(&compute_suit_entry(counts));
                         return;
                     }
                     let mut mult = 1;
@@ -183,7 +208,7 @@ fn main() {
     let bytes: &[u8] = unsafe {
         std::slice::from_raw_parts(
             table.as_ptr() as *const u8,
-            SUIT_PATTERN_COUNT * std::mem::size_of::<SuitEntry>(),
+            SUIT_PATTERN_COUNT * std::mem::size_of::<PackedSuitEntry>(),
         )
     };
     writer

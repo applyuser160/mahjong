@@ -97,7 +97,7 @@ pub fn calculate_kokushi_shanten(counts: &[u8; 35]) -> i8 {
     13 - kinds - if has_pair { 1 } else { 0 }
 }
 
-use crate::suit_table::{encode_suit_key, get_suit_table};
+use crate::suit_table::{encode_suit_key, get_suit_entry};
 
 /// 一般手（4面子1雀頭）の向聴数を計算します。
 /// 和了形は -1、テンパイは 0。
@@ -106,10 +106,9 @@ use crate::suit_table::{encode_suit_key, get_suit_table};
 /// 字牌の O(7) 簡易走査と雀頭候補の探索を行うことで O(1) で高速に算出します。
 pub fn calculate_normal_shanten(counts: &[u8; 35], open_melds_count: usize) -> i8 {
     let target_melds = 4 - open_melds_count;
-    let table = get_suit_table();
-    let m_entry = table[encode_suit_key(&counts[1..=9])];
-    let p_entry = table[encode_suit_key(&counts[10..=18])];
-    let s_entry = table[encode_suit_key(&counts[19..=27])];
+    let m_entry = get_suit_entry(encode_suit_key(&counts[1..=9]));
+    let p_entry = get_suit_entry(encode_suit_key(&counts[10..=18]));
+    let s_entry = get_suit_entry(encode_suit_key(&counts[19..=27]));
 
     // 字牌 (28..=34) の刻子・対子を集計
     let mut z_melds = 0;
