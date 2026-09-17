@@ -477,7 +477,9 @@ def test_hud_data_exact_equivalence():
         assert cand_dict["placement_ev"] == pytest.approx(ev_dict["placement_ev"])
         assert cand_dict["expected_rank"] == pytest.approx(ev_dict["expected_rank"])
         assert len(cand_dict["rank_probabilities"]) == 4
-        for p_hud, p_ev in zip(cand_dict["rank_probabilities"], ev_dict["rank_probabilities"]):
+        for p_hud, p_ev in zip(
+            cand_dict["rank_probabilities"], ev_dict["rank_probabilities"]
+        ):
             assert p_hud == pytest.approx(p_ev)
         assert cand_dict["situational_note"] == ev_dict["situational_note"]
         assert cand_dict["shanten_after"] == ev_dict["shanten_after"]
