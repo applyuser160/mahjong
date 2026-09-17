@@ -1,11 +1,7 @@
-﻿use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use mahjong::hand::Hand;
-use mahjong::shanten::{
-    calculate_chitoitsu_shanten, calculate_chitoitsu_shanten_scalar,
-};
-use mahjong::suit_table::{
-    encode_suit_key, encode_suit_key_scalar,
-};
+use mahjong::shanten::{calculate_chitoitsu_shanten, calculate_chitoitsu_shanten_scalar};
+use mahjong::suit_table::{encode_suit_key, encode_suit_key_scalar};
 use mahjong::tile::TileName::*;
 
 #[cfg(target_arch = "x86_64")]
