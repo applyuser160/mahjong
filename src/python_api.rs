@@ -2069,24 +2069,8 @@ impl PyTableState {
     }
 }
 
-#[pyfunction]
-#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
-#[pyo3(signature = (
-    tiles,
-    match_context,
-    player_idx=0,
-    is_dealer=None,
-    dora_indicators=None,
-    turn_number=None,
-    remaining_wall_tiles=None,
-    seat_wind=None,
-    visible_tiles=None,
-    riichi_status=None,
-    player_rivers=None,
-    player_melds=None,
-    player_is_dealer=None,
-))]
-pub fn py_evaluate_placement_discards(
+#[allow(clippy::too_many_arguments)]
+fn evaluate_placement_discards_internal(
     py: Python<'_>,
     tiles: Vec<PyTileName>,
     match_context: &PyMatchContext,
@@ -2101,7 +2085,7 @@ pub fn py_evaluate_placement_discards(
     player_rivers: Option<Vec<Vec<PyTileName>>>,
     player_melds: Option<Vec<Vec<PyMeld>>>,
     player_is_dealer: Option<[bool; 4]>,
-) -> PyResult<Vec<PyPlacementEvaluation>> {
+) -> PyResult<(MatchContext, Vec<PlacementCandidateEvaluation>)> {
     if player_idx >= 4 {
         return Err(PyValueError::new_err("player_idx must be in range 0..4"));
     }
@@ -2182,6 +2166,58 @@ pub fn py_evaluate_placement_discards(
     let evs = py.allow_threads(|| {
         evaluate_hand_discards_with_placement(&hand, visible_opt, &ctx, &rs_match, player_idx)
     });
+    Ok((rs_match, evs))
+}
+
+#[pyfunction]
+#[allow(clippy::too_many_arguments)] // PyO3 entry point exposing keyword arguments for granular analysis context
+#[pyo3(signature = (
+    tiles,
+    match_context,
+    player_idx=0,
+    is_dealer=None,
+    dora_indicators=None,
+    turn_number=None,
+    remaining_wall_tiles=None,
+    seat_wind=None,
+    visible_tiles=None,
+    riichi_status=None,
+    player_rivers=None,
+    player_melds=None,
+    player_is_dealer=None,
+))]
+pub fn py_evaluate_placement_discards(
+    py: Python<'_>,
+    tiles: Vec<PyTileName>,
+    match_context: &PyMatchContext,
+    player_idx: usize,
+    is_dealer: Option<bool>,
+    dora_indicators: Option<Vec<PyTileName>>,
+    turn_number: Option<usize>,
+    remaining_wall_tiles: Option<usize>,
+    seat_wind: Option<PyTileName>,
+    visible_tiles: Option<Vec<PyTileName>>,
+    riichi_status: Option<[bool; 4]>,
+    player_rivers: Option<Vec<Vec<PyTileName>>>,
+    player_melds: Option<Vec<Vec<PyMeld>>>,
+    player_is_dealer: Option<[bool; 4]>,
+) -> PyResult<Vec<PyPlacementEvaluation>> {
+    let (_, evs) = evaluate_placement_discards_internal(
+        py,
+        tiles,
+        match_context,
+        player_idx,
+        is_dealer,
+        dora_indicators,
+        turn_number,
+        remaining_wall_tiles,
+        seat_wind,
+        visible_tiles,
+        riichi_status,
+        player_rivers,
+        player_melds,
+        player_is_dealer,
+    )?;
     Ok(evs.into_iter().map(|e| e.into()).collect())
 }
 
@@ -2235,13 +2271,7 @@ pub fn py_get_ai_hud_data(
     player_melds: Option<Vec<Vec<PyMeld>>>,
     player_is_dealer: Option<[bool; 4]>,
 ) -> PyResult<Py<PyDict>> {
-    if player_idx >= 4 {
-        return Err(PyValueError::new_err("player_idx must be in range 0..4"));
-    }
-    if match_context.dealer_idx >= 4 {
-        return Err(PyValueError::new_err("dealer_idx must be in range 0..4"));
-    }
-    let evs = py_evaluate_placement_discards(
+    let (rs_match, evs) = evaluate_placement_discards_internal(
         py,
         tiles,
         match_context,
@@ -2259,30 +2289,53 @@ pub fn py_get_ai_hud_data(
     )?;
     let dict = PyDict::new(py);
 
-    let ranks = match_context.current_ranks();
+    let ranks = rs_match.current_ranks();
     dict.set_item("current_rank", ranks[player_idx])?;
-    dict.set_item("current_score", match_context.scores[player_idx])?;
-    dict.set_item("is_orasu", match_context.is_orasu())?;
+    dict.set_item("current_score", rs_match.scores[player_idx])?;
+    dict.set_item("is_orasu", rs_match.is_orasu())?;
 
     let cand_list = PyList::empty(py);
     for e in &evs {
-        cand_list.append(e.to_dict(py)?)?;
+        let c_dict = PyDict::new(py);
+        let py_tile = PyTileName::from(e.base.discard_tile);
+        c_dict.set_item("discard_tile", py_tile.as_str())?;
+        c_dict.set_item("mpsz", py_tile.mpsz())?;
+        c_dict.set_item("raw_ev", e.base.ev)?;
+        c_dict.set_item("placement_ev", e.placement_ev)?;
+        c_dict.set_item("expected_rank", e.expected_rank)?;
+        c_dict.set_item("rank_probabilities", e.rank_probabilities.to_vec())?;
+        c_dict.set_item("situational_note", &e.situational_note)?;
+        c_dict.set_item("shanten_after", e.base.shanten_after)?;
+        c_dict.set_item("remaining_count", e.base.speed.remaining_count)?;
+        c_dict.set_item("expected_score", e.base.value.expected_score)?;
+        c_dict.set_item("risk_score", e.base.safety.risk_score)?;
+        c_dict.set_item("is_safe", e.base.safety.is_safe)?;
+        cand_list.append(c_dict)?;
     }
     dict.set_item("candidates", cand_list)?;
 
     if let Some(best) = evs.first() {
-        dict.set_item("best_tile", best.discard_tile.as_str())?;
-        dict.set_item("best_mpsz", best.discard_tile.mpsz())?;
+        let best_tile = PyTileName::from(best.base.discard_tile);
+        dict.set_item("best_tile", best_tile.as_str())?;
+        dict.set_item("best_mpsz", best_tile.mpsz())?;
         dict.set_item("best_placement_ev", best.placement_ev)?;
-        dict.set_item("best_raw_ev", best.raw_ev)?;
+        dict.set_item("best_raw_ev", best.base.ev)?;
         dict.set_item("best_note", &best.situational_note)?;
     }
 
-    if match_context.is_orasu() {
-        let conds = py_calculate_orasu_conditions(match_context, player_idx)?;
+    if rs_match.is_orasu() {
+        let conds = calculate_orasu_conditions(&rs_match, player_idx);
         let cond_list = PyList::empty(py);
         for c in conds {
-            cond_list.append(c.to_dict(py)?)?;
+            let c_dict = PyDict::new(py);
+            c_dict.set_item("target_rank", c.target_rank)?;
+            c_dict.set_item("target_player", c.target_player)?;
+            c_dict.set_item("diff", c.diff)?;
+            c_dict.set_item("ron_direct_req", c.ron_direct_req)?;
+            c_dict.set_item("tsumo_req", c.tsumo_req)?;
+            c_dict.set_item("ron_other_req", c.ron_other_req)?;
+            c_dict.set_item("summary", &c.summary)?;
+            cond_list.append(c_dict)?;
         }
         dict.set_item("orasu_conditions", cond_list)?;
     }

@@ -304,6 +304,17 @@ pub fn evaluate_hand_discards_with_placement(
     // 放銃シナリオにおける想定失点額を動的に推定 (Issue #79: 親12000点 vs 子8000点、本場・ドラ補正)
     let deal_loss = estimate_expected_deal_loss(match_ctx, analysis_ctx, player_idx);
 
+    // 他家3名のスコアを抽出して降順ソート（Issue #106: 候補ごとの再確保・再ソートを全廃）
+    let mut sorted_other_scores = [0i32; 3];
+    let mut other_idx = 0;
+    for p in 0..4 {
+        if p != player_idx {
+            sorted_other_scores[other_idx] = match_ctx.scores[p];
+            other_idx += 1;
+        }
+    }
+    sorted_other_scores.sort_by(|a, b| b.cmp(a)); // 降順
+
     let mut placement_evals: Vec<PlacementCandidateEvaluation> = raw_evaluations
         .into_par_iter()
         .map(|ev| {
@@ -317,9 +328,9 @@ pub fn evaluate_hand_discards_with_placement(
             let score_on_other = match_ctx.scores[player_idx];
 
             // 各シナリオでの着順確率分布をシミュレーション
-            let probs_win = estimate_rank_probabilities(match_ctx, player_idx, score_on_win);
-            let probs_deal = estimate_rank_probabilities(match_ctx, player_idx, score_on_deal);
-            let probs_other = estimate_rank_probabilities(match_ctx, player_idx, score_on_other);
+            let probs_win = estimate_rank_probabilities(&sorted_other_scores, score_on_win);
+            let probs_deal = estimate_rank_probabilities(&sorted_other_scores, score_on_deal);
+            let probs_other = estimate_rank_probabilities(&sorted_other_scores, score_on_other);
 
             let mut final_probs = [0.0; 4];
             for r in 0..4 {
@@ -367,20 +378,12 @@ pub fn evaluate_hand_discards_with_placement(
     placement_evals
 }
 
-/// 局後スコアから着順確率（1位〜4位）をロジスティック近似で推定
-fn estimate_rank_probabilities(
-    ctx: &MatchContext,
-    player_idx: usize,
+/// 局後スコアから着順確率（1位〜4位）をロジスティック近似で推定 (Issue #106: ゼロアロケーション化)
+#[inline]
+pub fn estimate_rank_probabilities(
+    sorted_other_scores: &[i32; 3],
     my_predicted_score: i32,
 ) -> [f64; 4] {
-    let mut other_scores = Vec::new();
-    for p in 0..4 {
-        if p != player_idx {
-            other_scores.push(ctx.scores[p]);
-        }
-    }
-    other_scores.sort_by(|a, b| b.cmp(a)); // 降順
-
     // 点差に応じた他家との勝率 (ロジスティック関数)
     // 10,000点差で約88%勝率、0点差で50%
     let win_vs = |s_my: i32, s_other: i32| -> f64 {
@@ -388,9 +391,9 @@ fn estimate_rank_probabilities(
         1.0 / (1.0 + (-diff / 5000.0).exp())
     };
 
-    let p_vs_0 = win_vs(my_predicted_score, other_scores[0]);
-    let p_vs_1 = win_vs(my_predicted_score, other_scores[1]);
-    let p_vs_2 = win_vs(my_predicted_score, other_scores[2]);
+    let p_vs_0 = win_vs(my_predicted_score, sorted_other_scores[0]);
+    let p_vs_1 = win_vs(my_predicted_score, sorted_other_scores[1]);
+    let p_vs_2 = win_vs(my_predicted_score, sorted_other_scores[2]);
 
     // 1位率: 3人全員に勝つ
     let p_1st = (p_vs_0 * p_vs_1 * p_vs_2).clamp(0.01, 0.97);
@@ -550,12 +553,10 @@ mod tests {
 
     #[test]
     fn test_estimate_rank_probabilities_sigmoid_regression() {
+        let other_scores = [25000, 25000, 25000];
+
         // 0点差 (全員25,000点)
-        let ctx_even = MatchContext {
-            scores: [25000, 25000, 25000, 25000],
-            ..Default::default()
-        };
-        let p_even = estimate_rank_probabilities(&ctx_even, 0, 25000);
+        let p_even = estimate_rank_probabilities(&other_scores, 25000);
         assert!(
             (p_even[0] - 0.125).abs() < 1e-3,
             "0点差での1位率は 0.5^3 = 12.5%"
@@ -566,11 +567,7 @@ mod tests {
         );
 
         // +10,000点差 (自分35,000点、他家25,000点)
-        let ctx_10k = MatchContext {
-            scores: [35000, 25000, 25000, 25000],
-            ..Default::default()
-        };
-        let p_10k = estimate_rank_probabilities(&ctx_10k, 0, 35000);
+        let p_10k = estimate_rank_probabilities(&other_scores, 35000);
         // exp(2) / (1 + exp(2)) ≈ 0.8808, 0.8808^3 ≈ 0.683
         assert!(
             (p_10k[0] - 0.683).abs() < 5e-3,
@@ -580,11 +577,7 @@ mod tests {
         assert_eq!(p_10k[3], 0.01, "10,000点差での4位率は下限クランプの 0.01");
 
         // +20,000点差 (自分45,000点、他家25,000点)
-        let ctx_20k = MatchContext {
-            scores: [45000, 25000, 25000, 25000],
-            ..Default::default()
-        };
-        let p_20k = estimate_rank_probabilities(&ctx_20k, 0, 45000);
+        let p_20k = estimate_rank_probabilities(&other_scores, 45000);
         // exp(4) / (1 + exp(4)) ≈ 0.9820, 0.9820^3 ≈ 0.947
         assert!(
             (p_20k[0] - 0.947).abs() < 5e-3,

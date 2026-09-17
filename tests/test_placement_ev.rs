@@ -236,3 +236,31 @@ fn test_placement_ev_dealer_riichi_defense() {
         eval_4m.rank_probabilities[3]
     );
 }
+
+#[test]
+fn test_estimate_rank_probabilities_equivalence() {
+    use mahjong::placement_ev::estimate_rank_probabilities;
+
+    let other_scores = [35000, 25000, 15000]; // 降順
+    let my_score = 30000;
+
+    let probs = estimate_rank_probabilities(&other_scores, my_score);
+    let sum: f64 = probs.iter().sum();
+    assert!(
+        (sum - 1.0).abs() < 1e-6,
+        "Probabilities sum must be 1.0: {}",
+        sum
+    );
+
+    // 2位位置（35000 > 30000 > 25000 > 15000）なので2位率が高くなるべき
+    assert!(probs[1] > probs[0]);
+    assert!(probs[1] > probs[3]);
+
+    // 大差トップ
+    let probs_top = estimate_rank_probabilities(&other_scores, 60000);
+    assert!(probs_top[0] > 0.85);
+
+    // 大差ラス
+    let probs_last = estimate_rank_probabilities(&other_scores, 5000);
+    assert!(probs_last[3] > 0.85);
+}
