@@ -1,4 +1,4 @@
-﻿use mahjong::hand::Hand;
+use mahjong::hand::Hand;
 use mahjong::shanten::{calculate_chitoitsu_shanten, calculate_chitoitsu_shanten_scalar};
 use mahjong::suit_table::{encode_suit_key, encode_suit_key_scalar};
 use rand::rngs::SmallRng;
@@ -25,15 +25,15 @@ fn test_chitoitsu_scalar_vs_avx2_edge_cases() {
 
         // 2. 7対子 (和了形: shanten = -1)
         let mut c = [0u8; 35];
-        for i in 1..=7 {
-            c[i] = 2;
+        for item in &mut c[1..=7] {
+            *item = 2;
         }
         test_cases.push(c);
 
         // 3. 6対子 (テンパイ: shanten = 0)
         let mut c = [0u8; 35];
-        for i in 1..=6 {
-            c[i] = 2;
+        for item in &mut c[1..=6] {
+            *item = 2;
         }
         c[8] = 1;
         test_cases.push(c);
@@ -41,8 +41,8 @@ fn test_chitoitsu_scalar_vs_avx2_edge_cases() {
         // 4. 同一牌4枚を含む七対子形 (1枚のみ対子として有効)
         let mut c = [0u8; 35];
         c[1] = 4;
-        for i in 2..=6 {
-            c[i] = 2;
+        for item in &mut c[2..=6] {
+            *item = 2;
         }
         test_cases.push(c);
 
@@ -50,22 +50,22 @@ fn test_chitoitsu_scalar_vs_avx2_edge_cases() {
         let mut c = [0u8; 35];
         c[33] = 2;
         c[34] = 2;
-        for i in 1..=5 {
-            c[i] = 2;
+        for item in &mut c[1..=5] {
+            *item = 2;
         }
         test_cases.push(c);
 
         // 6. 全牌1枚 (13種類: 6 - 0 + (7 - 7) = 6)
         let mut c = [0u8; 35];
-        for i in 1..=13 {
-            c[i] = 1;
+        for item in &mut c[1..=13] {
+            *item = 1;
         }
         test_cases.push(c);
 
         // 7. 4枚持ちが多数
         let mut c = [0u8; 35];
-        for i in 1..=8 {
-            c[i] = 4;
+        for item in &mut c[1..=8] {
+            *item = 4;
         }
         test_cases.push(c);
 
@@ -145,8 +145,8 @@ fn test_encode_suit_key_scalar_vs_avx2_exhaustive() {
         // 100,000 パターンのランダムスーツキー検証（オーバーフローケース含む）
         for _ in 0..100_000 {
             let mut counts = [0u8; 9];
-            for i in 0..9 {
-                counts[i] = rng.gen_range(0..=6);
+            for item in &mut counts {
+                *item = rng.gen_range(0..=6);
             }
 
             let scalar = encode_suit_key_scalar(&counts);
