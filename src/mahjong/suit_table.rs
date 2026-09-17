@@ -26,11 +26,9 @@ impl Default for SuitEntry {
     }
 }
 
-/// 9要素の牌カウントスライスから 5進数（Base-5）エンコーディングキーを算出します。
-/// 各牌の枚数を最大4枚に飽和（`min(4)`）させるため、同一牌が5枚以上の異常値でも
-/// 配列境界外アクセス（panic）が発生せず安全に `0 <= key < 1,953,125` のキーを返します。
+/// 9要素の牌カウントスライスから 5進数（Base-5）エンコーディングキーを算出します（スカラー実装）。
 #[inline(always)]
-pub fn encode_suit_key(counts: &[u8]) -> usize {
+pub fn encode_suit_key_scalar(counts: &[u8]) -> usize {
     let mut key = 0;
     let mut mult = 1;
     for &c in counts {
@@ -39,6 +37,80 @@ pub fn encode_suit_key(counts: &[u8]) -> usize {
         mult *= 5;
     }
     key
+}
+
+/// 9要素の牌カウントスライスから 5進数（Base-5）エンコーディングキーを算出します（x86_64 AVX2 実装）。
+///
+/// Base-5 重みのうち $5^7 = 78,125$ は `i16` 範囲外となるため、
+/// 256bit レジスタ上の 8 個の 32bit レーン（`_mm256_mullo_epi32`）を用いて先頭 8 要素を並列積和し、
+/// 9 番目の要素（$c_8 \times 390,625$）を加算します。
+///
+/// # Safety
+/// 呼び出し元で CPU の AVX2 命令セットサポート、および `counts.len() >= 9` が保証されている必要があります。
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+pub unsafe fn encode_suit_key_avx2(counts: &[u8]) -> usize {
+    use std::arch::x86_64::*;
+
+    // counts[0..8] の 8 バイトをロード
+    let v8 = _mm_loadu_si64(counts.as_ptr());
+
+    // 8 個の u8 を 8 個の i32 に符号なし拡張
+    let v32 = _mm256_cvtepu8_epi32(v8);
+
+    // 各牌の枚数を最大 4 枚に飽和 (min(4))
+    let four = _mm256_set1_epi32(4);
+    let clamped = _mm256_min_epi32(v32, four);
+
+    // 重み定数 [5^0, 5^1, ..., 5^7]
+    // 5^7 = 78,125 は i32 の表現範囲に安全に収まる
+    let weights = _mm256_setr_epi32(1, 5, 25, 125, 625, 3125, 15625, 78125);
+
+    // 32bit レーン単位の並列乗算
+    let prod = _mm256_mullo_epi32(clamped, weights);
+
+    // 8 レーンの水平加算: 256bit -> 128bit
+    let low128 = _mm256_castsi256_si128(prod);
+    let high128 = _mm256_extracti128_si256(prod, 1);
+    let sum128 = _mm_add_epi32(low128, high128);
+
+    // 4 個の i32 を加算
+    let hi64 = _mm_unpackhi_epi64(sum128, sum128);
+    let sum64 = _mm_add_epi32(sum128, hi64);
+    let hi32 = _mm_shuffle_epi32(sum64, 1);
+    let sum32 = _mm_add_epi32(sum64, hi32);
+    let sum = _mm_cvtsi128_si32(sum32) as usize;
+
+    // 9 番目の要素 (重み 5^8 = 390,625) を加算
+    let c8 = (*counts.get_unchecked(8)).min(4) as usize;
+    sum + c8 * 390625
+}
+
+/// 9要素の牌カウントスライスから 5進数（Base-5）エンコーディングキーを算出します。
+/// 各牌の枚数を最大4枚に飽和（`min(4)`）させるため、同一牌が5枚以上の異常値でも
+/// 配列境界外アクセス（panic）が発生せず安全に `0 <= key < 1,953,125` のキーを返します。
+#[inline(always)]
+pub fn encode_suit_key(counts: &[u8]) -> usize {
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    {
+        if counts.len() >= 9 {
+            unsafe { encode_suit_key_avx2(counts) }
+        } else {
+            encode_suit_key_scalar(counts)
+        }
+    }
+    #[cfg(all(target_arch = "x86_64", not(target_feature = "avx2")))]
+    {
+        if counts.len() >= 9 && is_x86_feature_detected!("avx2") {
+            unsafe { encode_suit_key_avx2(counts) }
+        } else {
+            encode_suit_key_scalar(counts)
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        encode_suit_key_scalar(counts)
+    }
 }
 
 // build.rs で生成された 1,953,125 * 10 バイトのバイナリを埋め込み

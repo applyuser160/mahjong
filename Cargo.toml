@@ -24,6 +24,10 @@ harness = false
 name = "mahjong_benchmark"
 harness = false
 
+[[bench]]
+name = "simd_benchmark"
+harness = false
+
 [profile.release]
 lto = "fat"           # クロスクレートのインライン化・デッドコード除去を有効化
 codegen-units = 1     # 単一コード生成ユニットで最大最適化（コンパイル時間増加とトレード）
