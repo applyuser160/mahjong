@@ -54,9 +54,9 @@ pub fn calculate_shanten_from_counts(counts: &[u8; 35], open_melds_count: usize)
     }
 }
 
-/// 七対子の向聴数を計算します。
-/// 7種類の対子が必要。同一牌が4枚ある場合は1組のみカウント可能。
-pub fn calculate_chitoitsu_shanten(counts: &[u8; 35]) -> i8 {
+/// 七対子の向聴数を計算します（スカラー実装）。
+#[inline]
+pub fn calculate_chitoitsu_shanten_scalar(counts: &[u8; 35]) -> i8 {
     let mut pairs = 0;
     let mut kinds = 0;
 
@@ -75,6 +75,70 @@ pub fn calculate_chitoitsu_shanten(counts: &[u8; 35]) -> i8 {
         shanten += 7 - kinds;
     }
     shanten
+}
+
+/// 七対子の向聴数を計算します（x86_64 AVX2 実装）。
+///
+/// # Safety
+/// 呼び出し元で CPU の AVX2 命令セットサポートが保証されている必要があります。
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+pub unsafe fn calculate_chitoitsu_shanten_avx2(counts: &[u8; 35]) -> i8 {
+    use std::arch::x86_64::*;
+
+    // counts[1..=32] の 32 バイトを一括ロード (萬子9, 筒子9, 索子9, 東南西北白)
+    // [u8; 35] のアライメントは 1 なので未整列ロード _mm256_loadu_si256 を使用
+    let ptr = counts.as_ptr().add(1) as *const __m256i;
+    let v = _mm256_loadu_si256(ptr);
+
+    // c >= 1: 0 より大きい要素のバイトマスク (0xFF where c > 0)
+    let zero = _mm256_setzero_si256();
+    let mask_kinds = _mm256_cmpgt_epi8(v, zero);
+    let kinds_bits = _mm256_movemask_epi8(mask_kinds) as u32;
+
+    // c >= 2: 1 より大きい要素のバイトマスク (0xFF where c > 1)
+    let one = _mm256_set1_epi8(1);
+    let mask_pairs = _mm256_cmpgt_epi8(v, one);
+    let pairs_bits = _mm256_movemask_epi8(mask_pairs) as u32;
+
+    // POPCNT 命令により 1 サイクルでビット数を集計
+    let mut kinds = kinds_bits.count_ones() as i8;
+    let mut pairs = pairs_bits.count_ones() as i8;
+
+    // 残り 2 要素 (33: 発, 34: 中) をスカラー加算
+    let c33 = *counts.get_unchecked(33);
+    let c34 = *counts.get_unchecked(34);
+
+    kinds += (c33 >= 1) as i8 + (c34 >= 1) as i8;
+    pairs += (c33 >= 2) as i8 + (c34 >= 2) as i8;
+
+    let mut shanten = 6 - pairs;
+    if kinds < 7 {
+        shanten += 7 - kinds;
+    }
+    shanten
+}
+
+/// 七対子の向聴数を計算します。
+/// 7種類の対子が必要。同一牌が4枚ある場合は1組のみカウント可能。
+#[inline(always)]
+pub fn calculate_chitoitsu_shanten(counts: &[u8; 35]) -> i8 {
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    {
+        unsafe { calculate_chitoitsu_shanten_avx2(counts) }
+    }
+    #[cfg(all(target_arch = "x86_64", not(target_feature = "avx2")))]
+    {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { calculate_chitoitsu_shanten_avx2(counts) }
+        } else {
+            calculate_chitoitsu_shanten_scalar(counts)
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        calculate_chitoitsu_shanten_scalar(counts)
+    }
 }
 
 /// 国士無双の向聴数を計算します。
