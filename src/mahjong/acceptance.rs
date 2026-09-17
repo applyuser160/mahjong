@@ -1,5 +1,5 @@
 use crate::hand::Hand;
-use crate::shanten::calculate_shanten_from_counts;
+use crate::shanten::{ShantenState, TERMINAL_AND_HONOR_INDICES};
 use crate::tile::TileName;
 use arrayvec::ArrayVec;
 
@@ -34,15 +34,14 @@ pub struct DiscardAnalysis {
     pub acceptance: AcceptanceResult,
 }
 
-/// 13枚の手牌（または手牌カウント）に対して、向聴数を進める有効牌を算出します。
-/// `visible_counts`: 手牌・河・副露・ドラ表示牌などですでに見えている牌の枚数（1..=34）。Noneの場合は手牌自身の枚数のみを見えているものとします。
+/// 手牌の枚数カウント配列から、シャンテン数を1歩進める有効牌（受け入れ牌）を探索します。
 pub fn calculate_acceptance(
     counts: &[u8; 35],
     open_melds_count: usize,
     visible_counts: Option<&[u8; 35]>,
 ) -> AcceptanceResult {
-    let current_res = calculate_shanten_from_counts(counts, open_melds_count);
-    let current_shanten = current_res.min_shanten;
+    let state = ShantenState::new(counts, open_melds_count);
+    let current_shanten = state.current_result.min_shanten;
 
     let mut waits = ArrayVec::<WaitTile, 34>::new();
     let mut total_remaining = 0;
@@ -60,18 +59,65 @@ pub fn calculate_acceptance(
     let default_visible = *counts;
     let visible = visible_counts.unwrap_or(&default_visible);
 
-    let mut working = *counts;
+    // 有効牌探索候補マスク (bit 1..=34)
+    let mut candidate_mask: u64 = 0;
 
-    // 全34種の牌を1枚ずつ仮ツモしてシャンテン数を判定
+    // 1. 通常形：手牌にある数牌の ±2 以内、および手牌にある字牌
     for i in 1..=34 {
-        if working[i] >= 4 {
+        if counts[i] > 0 {
+            if i <= 9 {
+                // 萬子: 1..=9
+                let low = i.saturating_sub(2).max(1);
+                let high = (i + 2).min(9);
+                for idx in low..=high {
+                    candidate_mask |= 1u64 << idx;
+                }
+            } else if i <= 18 {
+                // 筒子: 10..=18
+                let low = i.saturating_sub(2).max(10);
+                let high = (i + 2).min(18);
+                for idx in low..=high {
+                    candidate_mask |= 1u64 << idx;
+                }
+            } else if i <= 27 {
+                // 索子: 19..=27
+                let low = i.saturating_sub(2).max(19);
+                let high = (i + 2).min(27);
+                for idx in low..=high {
+                    candidate_mask |= 1u64 << idx;
+                }
+            } else {
+                // 字牌: 28..=34
+                candidate_mask |= 1u64 << i;
+            }
+        }
+    }
+
+    // 2. 特殊形（門前のみ）：七対子・国士無双が現在向聴数以下の場合
+    if state.is_closed {
+        // 七対子が進みうる場合: 7種類未満なら新規種（counts[i] == 0）も有効
+        if state.current_result.chitoitsu <= current_shanten && state.chitoitsu_kinds < 7 {
+            candidate_mask |= (1u64 << 35) - 2; // 全34種
+        }
+
+        // 国士無双が進みうる場合: 13種の么九牌
+        if state.current_result.kokushi <= current_shanten {
+            for &idx in &TERMINAL_AND_HONOR_INDICES {
+                candidate_mask |= 1u64 << idx;
+            }
+        }
+    }
+
+    // 候補牌のみ仮ツモ判定（O(1) 差分シャンテン判定）
+    for i in 1..=34 {
+        if (candidate_mask & (1u64 << i)) == 0 {
+            continue; // 枝刈り
+        }
+        if counts[i] >= 4 {
             continue; // 手牌に既に4枚ある場合はツモれない
         }
 
-        working[i] += 1;
-        let next_res = calculate_shanten_from_counts(&working, open_melds_count);
-        working[i] -= 1;
-
+        let next_res = state.after_draw(i);
         if next_res.min_shanten < current_shanten {
             let seen = visible[i];
             let remaining = 4u8.saturating_sub(seen);

@@ -130,3 +130,103 @@ fn test_ryanpeiko_form() {
     assert_eq!(res.chitoitsu, -1); // 7対子でもある
     assert_eq!(res.min_shanten, -1);
 }
+
+#[test]
+fn test_shanten_state_after_draw_equivalence() {
+    use mahjong::shanten::{calculate_shanten_from_counts, ShantenState};
+
+    let test_hands: Vec<Vec<TileName>> = vec![
+        // 1. 完全一向聴
+        vec![
+            TileName::TwoM,
+            TileName::ThreeM,
+            TileName::FourP,
+            TileName::FiveP,
+            TileName::SixS,
+            TileName::SevenS,
+            TileName::EightS,
+            TileName::NineS,
+            TileName::NineS,
+            TileName::NineS,
+            TileName::East,
+            TileName::East,
+            TileName::OneS,
+        ],
+        // 2. 七対子一向聴
+        vec![
+            TileName::OneM,
+            TileName::OneM,
+            TileName::TwoM,
+            TileName::TwoM,
+            TileName::ThreeP,
+            TileName::ThreeP,
+            TileName::FourP,
+            TileName::FourP,
+            TileName::FiveS,
+            TileName::FiveS,
+            TileName::SixS,
+            TileName::SevenS,
+            TileName::EightS,
+        ],
+        // 3. 国士無双テンパイ (13面待ち)
+        vec![
+            TileName::OneM,
+            TileName::NineM,
+            TileName::OneP,
+            TileName::NineP,
+            TileName::OneS,
+            TileName::NineS,
+            TileName::East,
+            TileName::South,
+            TileName::West,
+            TileName::North,
+            TileName::White,
+            TileName::Green,
+            TileName::Red,
+        ],
+        // 4. 二向聴・愚形
+        vec![
+            TileName::OneM,
+            TileName::ThreeM,
+            TileName::FiveM,
+            TileName::TwoP,
+            TileName::FourP,
+            TileName::EightP,
+            TileName::OneS,
+            TileName::FourS,
+            TileName::SevenS,
+            TileName::East,
+            TileName::South,
+            TileName::White,
+            TileName::Green,
+        ],
+    ];
+
+    for (h_idx, hand_tiles) in test_hands.iter().enumerate() {
+        let mut counts = [0u8; 35];
+        for &t in hand_tiles {
+            counts[t as usize] += 1;
+        }
+
+        let state = ShantenState::new(&counts, 0);
+
+        // 全34牌に対して仮ツモを行い、完全再計算と完全一致することを検証
+        for draw in 1..=34 {
+            if counts[draw] >= 4 {
+                continue;
+            }
+
+            let inc_res = state.after_draw(draw);
+
+            let mut working = counts;
+            working[draw] += 1;
+            let full_res = calculate_shanten_from_counts(&working, 0);
+
+            assert_eq!(
+                inc_res, full_res,
+                "Hand {}, Draw {}: ShantenState::after_draw must match calculate_shanten_from_counts. inc: {:?}, full: {:?}",
+                h_idx, draw, inc_res, full_res
+            );
+        }
+    }
+}
