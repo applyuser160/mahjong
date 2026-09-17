@@ -415,3 +415,129 @@ def test_get_ai_hud_data_with_context():
     )
     assert "candidates" in hud
     assert "best_tile" in hud
+
+
+def test_hud_data_exact_equivalence():
+    hand = [
+        TileName.OneM,
+        TileName.TwoM,
+        TileName.ThreeM,
+        TileName.FourP,
+        TileName.FiveP,
+        TileName.SixP,
+        TileName.SevenS,
+        TileName.EightS,
+        TileName.NineS,
+        TileName.East,
+        TileName.East,
+        TileName.White,
+        TileName.White,
+        TileName.NineM,
+    ]
+    # オーラス局面 (南4局)
+    ctx = MatchContext(
+        scores=[31000, 25000, 24000, 20000],
+        round_wind=TileName.South,
+        round_number=4,
+        dealer_idx=0,
+    )
+
+    evs = evaluate_placement_discards(hand, ctx, player_idx=1)
+    hud = get_ai_hud_data(hand, ctx, player_idx=1)
+
+    # 1. 基本ステータスの一致
+    ranks = ctx.current_ranks()
+    assert hud["current_rank"] == ranks[1]
+    assert hud["current_score"] == 25000
+    assert hud["is_orasu"] is True
+
+    # 2. 候補リストの完全同値検証
+    assert len(hud["candidates"]) == len(evs)
+    expected_keys = {
+        "discard_tile",
+        "mpsz",
+        "raw_ev",
+        "placement_ev",
+        "expected_rank",
+        "rank_probabilities",
+        "situational_note",
+        "shanten_after",
+        "remaining_count",
+        "expected_score",
+        "risk_score",
+        "is_safe",
+    }
+    for cand_dict, ev in zip(hud["candidates"], evs):
+        ev_dict = ev.to_dict()
+        assert set(cand_dict.keys()) == expected_keys
+        assert set(cand_dict.keys()) == set(ev_dict.keys())
+        assert cand_dict["discard_tile"] == ev_dict["discard_tile"]
+        assert cand_dict["mpsz"] == ev_dict["mpsz"]
+        assert cand_dict["raw_ev"] == pytest.approx(ev_dict["raw_ev"])
+        assert cand_dict["placement_ev"] == pytest.approx(ev_dict["placement_ev"])
+        assert cand_dict["expected_rank"] == pytest.approx(ev_dict["expected_rank"])
+        assert len(cand_dict["rank_probabilities"]) == 4
+        for p_hud, p_ev in zip(cand_dict["rank_probabilities"], ev_dict["rank_probabilities"]):
+            assert p_hud == pytest.approx(p_ev)
+        assert cand_dict["situational_note"] == ev_dict["situational_note"]
+        assert cand_dict["shanten_after"] == ev_dict["shanten_after"]
+        assert cand_dict["remaining_count"] == ev_dict["remaining_count"]
+        assert cand_dict["expected_score"] == pytest.approx(ev_dict["expected_score"])
+        assert cand_dict["risk_score"] == pytest.approx(ev_dict["risk_score"])
+        assert cand_dict["is_safe"] == ev_dict["is_safe"]
+
+    # 3. best_* フィールドの検証
+    assert len(evs) > 0
+    best_ev = evs[0]
+    assert hud["best_tile"] == best_ev.discard_tile.as_str()
+    assert hud["best_mpsz"] == best_ev.discard_tile.mpsz()
+    assert hud["best_placement_ev"] == pytest.approx(best_ev.placement_ev)
+    assert hud["best_raw_ev"] == pytest.approx(best_ev.raw_ev)
+    assert hud["best_note"] == best_ev.situational_note
+
+    # 4. orasu_conditions の完全同値検証
+    conds = calculate_orasu_conditions(ctx, player_idx=1)
+    assert "orasu_conditions" in hud
+    assert len(hud["orasu_conditions"]) == len(conds)
+    cond_keys = {
+        "target_rank",
+        "target_player",
+        "diff",
+        "ron_direct_req",
+        "tsumo_req",
+        "ron_other_req",
+        "summary",
+    }
+    for c_hud, c in zip(hud["orasu_conditions"], conds):
+        c_dict = c.to_dict()
+        assert set(c_hud.keys()) == cond_keys
+        assert set(c_hud.keys()) == set(c_dict.keys())
+        assert c_hud["target_rank"] == c_dict["target_rank"]
+        assert c_hud["target_player"] == c_dict["target_player"]
+        assert c_hud["diff"] == c_dict["diff"]
+        assert c_hud["ron_direct_req"] == c_dict["ron_direct_req"]
+        assert c_hud["tsumo_req"] == c_dict["tsumo_req"]
+        assert c_hud["ron_other_req"] == c_dict["ron_other_req"]
+        assert c_hud["summary"] == c_dict["summary"]
+
+
+def test_hud_data_exception_parity():
+    hand = [TileName.OneM] * 14
+    valid_ctx = MatchContext(dealer_idx=0)
+
+    # 1. player_idx out of range (>= 4)
+    with pytest.raises(ValueError, match="player_idx must be in range 0..4"):
+        evaluate_placement_discards(hand, valid_ctx, player_idx=4)
+
+    with pytest.raises(ValueError, match="player_idx must be in range 0..4"):
+        get_ai_hud_data(hand, valid_ctx, player_idx=4)
+
+    with pytest.raises(ValueError, match="player_idx must be in range 0..4"):
+        calculate_orasu_conditions(valid_ctx, player_idx=4)
+
+    # 2. dealer_idx out of range (>= 4) in MatchContext constructor & setters
+    with pytest.raises(ValueError, match="dealer_idx must be in range 0..4"):
+        MatchContext(dealer_idx=4)
+
+    with pytest.raises(ValueError, match="dealer_idx must be in range 0..4"):
+        valid_ctx.dealer_idx = 4
